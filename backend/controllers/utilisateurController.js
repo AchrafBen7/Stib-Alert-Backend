@@ -1,8 +1,11 @@
 const Utilisateur = require("../models/Utilisateur");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
+const redis = require("../config/redis");
+const sendMail = require("../config/Mail");
+const crypto = require("crypto");
 
-// ✅ Inscription d'un utilisateur
+// ✅ Inscription avec Code d'Activation
 exports.inscription = async (req, res) => {
 	try {
 		const { nom, email, motDePasse } = req.body;
@@ -13,13 +16,54 @@ exports.inscription = async (req, res) => {
 		}
 
 		const hashedPassword = await bcrypt.hash(motDePasse, 10);
-		const utilisateur = await Utilisateur.create({ nom, email, motDePasse: hashedPassword });
+		const activationCode = Math.floor(1000 + Math.random() * 9000).toString(); // Code à 4 chiffres
+		const activationToken = jwt.sign(
+			{ nom, email, motDePasse: hashedPassword, activationCode },
+			process.env.ACTIVATION_SECRET,
+			{ expiresIn: "10m" } // Expire en 10 minutes
+		);
+
+		// Stocker le code OTP dans Redis (expire en 10 min)
+		await redis.setex(`activation:${email}`, 600, activationCode);
+
+		// Envoyer l'email avec le code OTP
+		const emailContent = `<h1>Votre code d'activation : ${activationCode}</h1>`;
+		await sendMail(email, "Activation de votre compte STIB Alert", emailContent);
 
 		res.status(201).json({
-			message: "Inscription réussie",
-			utilisateur,
-			token: jwt.sign({ userId: utilisateur._id }, process.env.JWT_SECRET, { expiresIn: "7d" }),
+			message: `Code d'activation envoyé à ${email}`,
+			activationToken,
 		});
+	} catch (error) {
+		res.status(500).json({ message: error.message });
+	}
+};
+
+// ✅ Activer le compte avec le Code OTP
+exports.activerCompte = async (req, res) => {
+	try {
+		const { activationToken, activationCode } = req.body;
+		const decoded = jwt.verify(activationToken, process.env.ACTIVATION_SECRET);
+
+		// Vérifier le code OTP dans Redis
+		const storedCode = await redis.get(`activation:${decoded.email}`);
+		if (!storedCode || storedCode !== activationCode) {
+			return res.status(400).json({ message: "Code d'activation incorrect ou expiré." });
+		}
+
+		const { nom, email, motDePasse } = decoded;
+		const utilisateurExiste = await Utilisateur.findOne({ email });
+
+		if (utilisateurExiste) {
+			return res.status(400).json({ message: "Utilisateur déjà activé." });
+		}
+
+		const utilisateur = await Utilisateur.create({ nom, email, motDePasse });
+
+		// Supprimer le code OTP après activation
+		await redis.del(`activation:${email}`);
+
+		res.status(201).json({ message: "Compte activé avec succès !" });
 	} catch (error) {
 		res.status(500).json({ message: error.message });
 	}
@@ -35,10 +79,15 @@ exports.connexion = async (req, res) => {
 			return res.status(401).json({ message: "Email ou mot de passe incorrect." });
 		}
 
+		const token = jwt.sign({ userId: utilisateur._id }, process.env.JWT_SECRET, { expiresIn: "7d" });
+
+		// Stocker le token dans Redis
+		await redis.setex(`auth:${token}`, 604800, JSON.stringify({ userId: utilisateur._id }));
+
 		res.json({
 			message: "Connexion réussie",
 			utilisateur,
-			token: jwt.sign({ userId: utilisateur._id }, process.env.JWT_SECRET, { expiresIn: "7d" }),
+			token,
 		});
 	} catch (error) {
 		res.status(500).json({ message: error.message });
