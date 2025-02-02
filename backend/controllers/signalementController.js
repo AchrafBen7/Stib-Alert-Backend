@@ -4,42 +4,50 @@ const { analyserSignalement } = require("../config/openai");
 
 exports.ajouterSignalement = async (req, res) => {
 	try {
-		const { arretId, ligne, typeProbleme, description, photo } = req.body;
+		const { nomArret, ligne, typeProbleme, description, photo } = req.body;
 
-		// Vérification IA pour éviter le spam / fake news
+		// 🔹 Vérifier si l'arrêt existe par son nom
+		let arret = await Arret.findOne({ nom: nomArret });
+
+		// 🔹 Si l'arrêt n'existe pas, retourner une erreur
+		if (!arret) {
+			return res.status(404).json({ message: `L'arrêt "${nomArret}" n'existe pas.` });
+		}
+
+		// 🔹 Vérification IA pour éviter le spam / fake news
 		const estValide = await analyserSignalement(description);
 		if (!estValide) {
 			return res.status(400).json({ message: "Ce signalement ne respecte pas les règles." });
 		}
 
+		// 🔹 Création du signalement avec l'ID de l'arrêt trouvé
 		const signalement = await Signalement.create({
-			arretId,
+			arretId: arret._id,
 			ligne,
 			typeProbleme,
 			description,
 			photo,
 		});
 
-		res.status(201).json({ message: "Signalement ajouté et en cours de traitement.", signalement });
+		res.status(201).json({
+			message: "Signalement ajouté avec succès.",
+			signalement,
+		});
 	} catch (error) {
-		res.status(400).json({ message: error.message });
+		res.status(500).json({ message: error.message });
 	}
 };
 
 // ✅ Ajout de la pagination (optionnelle)
 exports.voirSignalements = async (req, res) => {
 	try {
-		const { page = 1, limit = 10 } = req.query;
-		const signalements = await Signalement.find()
-			.populate("arretId")
-			.limit(limit * 1) // Convertit en nombre
-			.skip((page - 1) * limit);
-
+		const signalements = await Signalement.find().populate("arretId");
 		res.json(signalements);
 	} catch (error) {
 		res.status(500).json({ message: error.message });
 	}
 };
+
 
 // ✅ Voir les signalements d’un arrêt spécifique
 exports.voirSignalementsParArret = async (req, res) => {
