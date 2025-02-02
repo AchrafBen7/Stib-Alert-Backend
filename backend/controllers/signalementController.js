@@ -57,8 +57,27 @@ exports.voterSignalement = async (req, res) => {
 		const signalement = await Signalement.findById(req.params.id);
 		if (!signalement) return res.status(404).json({ message: "Signalement introuvable" });
 
+		// Vérifie si l'utilisateur est connecté
+		if (!req.user) {
+			return res.status(401).json({ message: "Vous devez être connecté pour voter." });
+		}
+
+		const utilisateur = await Utilisateur.findById(req.user.userId);
+		if (!utilisateur) return res.status(404).json({ message: "Utilisateur introuvable" });
+
+		// Vérifie si l'utilisateur a déjà voté pour ce signalement
+		if (utilisateur.votes.includes(signalement._id)) {
+			return res.status(400).json({ message: "Vous avez déjà voté pour ce signalement." });
+		}
+
+		// Ajoute le signalement à la liste des votes de l'utilisateur
+		utilisateur.votes.push(signalement._id);
+		await utilisateur.save();
+
+		// Augmente le nombre de votes sur le signalement
 		signalement.votes += 1;
 		await signalement.save();
+
 		res.json({ message: "Vote ajouté !" });
 	} catch (error) {
 		res.status(500).json({ message: error.message });

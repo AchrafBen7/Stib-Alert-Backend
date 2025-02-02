@@ -10,6 +10,7 @@ const utilisateurSchema = new mongoose.Schema(
 		langue: { type: String, enum: ["FR", "NL", "EN"], default: "FR" },
 		notifications: { type: Boolean, default: true },
 		role: { type: String, enum: ["Utilisateur", "Admin"], default: "Utilisateur" },
+		votes: [{ type: mongoose.Schema.Types.ObjectId, ref: "Signalement" }], // ✅ Liste des signalements votés
 	},
 	{ timestamps: true }
 );
