@@ -94,6 +94,19 @@ exports.connexion = async (req, res) => {
 	}
 };
 
+exports.deconnexion = async (req, res) => {
+	try {
+		if (!req.headers.authorization) {
+			return res.status(400).json({ message: "Aucun token fourni." });
+		}
+		const token = req.headers.authorization.split(" ")[1];
+		await redis.del(`auth:${token}`);
+		res.json({ message: "Déconnexion réussie !" });
+	} catch (error) {
+		res.status(500).json({ message: error.message });
+	}
+};
+
 // ✅ Voir le profil d'un utilisateur
 exports.voirProfil = async (req, res) => {
 	try {

@@ -1,6 +1,7 @@
 const mongoose = require("mongoose");
 
 const arretSchema = new mongoose.Schema({
+	stop_id: { type: String, required: true, unique: true }, // ID unique de l'arrêt
 	nom: { type: String, required: true },
 	latitude: { type: Number, required: true },
 	longitude: { type: Number, required: true },

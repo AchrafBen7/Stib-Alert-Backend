@@ -6,21 +6,25 @@ exports.ajouterSignalement = async (req, res) => {
 	try {
 		const { nomArret, ligne, typeProbleme, description, photo } = req.body;
 
-		// 🔹 Vérifier si l'arrêt existe par son nom
+		// Trouver l'arrêt par son nom
 		let arret = await Arret.findOne({ nom: nomArret });
 
-		// 🔹 Si l'arrêt n'existe pas, retourner une erreur
 		if (!arret) {
 			return res.status(404).json({ message: `L'arrêt "${nomArret}" n'existe pas.` });
 		}
 
-		// 🔹 Vérification IA pour éviter le spam / fake news
+		console.log(`🔍 Vérification de ${nomArret} - Lignes associées: `, arret.lignesDesservies);
+
+		// Vérifier que l’arrêt dessert bien la ligne indiquée
+		if (!arret.lignesDesservies.includes(ligne)) {
+			return res.status(400).json({ message: `L'arrêt "${nomArret}" ne dessert pas la ligne "${ligne}".` });
+		}
+
 		const estValide = await analyserSignalement(description);
 		if (!estValide) {
 			return res.status(400).json({ message: "Ce signalement ne respecte pas les règles." });
 		}
 
-		// 🔹 Création du signalement avec l'ID de l'arrêt trouvé
 		const signalement = await Signalement.create({
 			arretId: arret._id,
 			ligne,
@@ -29,10 +33,7 @@ exports.ajouterSignalement = async (req, res) => {
 			photo,
 		});
 
-		res.status(201).json({
-			message: "Signalement ajouté avec succès.",
-			signalement,
-		});
+		res.status(201).json({ message: "Signalement ajouté avec succès.", signalement });
 	} catch (error) {
 		res.status(500).json({ message: error.message });
 	}
@@ -48,12 +49,22 @@ exports.voirSignalements = async (req, res) => {
 	}
 };
 
-
 // ✅ Voir les signalements d’un arrêt spécifique
 exports.voirSignalementsParArret = async (req, res) => {
 	try {
-		const signalements = await Signalement.find({ arretId: req.params.id });
-		res.json(signalements);
+		const signalements = await Signalement.find({ arretId: req.params.id }).populate("arretId");
+
+		const result = signalements.map((s) => ({
+			id: s._id,
+			ligne: s.ligne,
+			typeProbleme: s.typeProbleme,
+			description: s.description,
+			photo: s.photo,
+			date: s.dateSignalement,
+			arret: s.arretId.nom, // ✅ Ajoute le nom de l'arrêt
+		}));
+
+		res.json(result);
 	} catch (error) {
 		res.status(500).json({ message: error.message });
 	}
@@ -119,6 +130,23 @@ exports.voirSignalementsParLigneEtArret = async (req, res) => {
 		const { ligne, arretId } = req.params;
 		const signalements = await Signalement.find({ ligne, arretId }).populate("arretId");
 		res.json(signalements);
+	} catch (error) {
+		res.status(500).json({ message: error.message });
+	}
+};
+exports.supprimerSignalement = async (req, res) => {
+	try {
+		const signalement = await Signalement.findById(req.params.id);
+
+		if (!signalement) return res.status(404).json({ message: "Signalement introuvable" });
+
+		// Vérifier si l'utilisateur est bien l'auteur du signalement
+		if (signalement.utilisateurId.toString() !== req.user.userId) {
+			return res.status(403).json({ message: "Vous ne pouvez pas supprimer ce signalement." });
+		}
+
+		await signalement.deleteOne();
+		res.json({ message: "Signalement supprimé avec succès." });
 	} catch (error) {
 		res.status(500).json({ message: error.message });
 	}
