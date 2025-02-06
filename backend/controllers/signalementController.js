@@ -1,35 +1,28 @@
 const Signalement = require("../models/Signalement");
 const Arret = require("../models/Arret");
-const { analyserSignalement } = require("../config/openai");
+const { analyserSignalement, genererResumeSignalements, traduireSignalement } = require("../config/openai");
 
 exports.ajouterSignalement = async (req, res) => {
 	try {
 		const { nomArret, ligne, typeProbleme, description, photo } = req.body;
-
-		// Trouver l'arrêt par son nom
 		let arret = await Arret.findOne({ nom: nomArret });
 
-		if (!arret) {
-			return res.status(404).json({ message: `L'arrêt "${nomArret}" n'existe pas.` });
-		}
+		if (!arret) return res.status(404).json({ message: `L'arrêt "${nomArret}" n'existe pas.` });
 
-		console.log(`🔍 Vérification de ${nomArret} - Lignes associées: `, arret.lignesDesservies);
-
-		// Vérifier que l’arrêt dessert bien la ligne indiquée
 		if (!arret.lignesDesservies.includes(ligne)) {
 			return res.status(400).json({ message: `L'arrêt "${nomArret}" ne dessert pas la ligne "${ligne}".` });
 		}
 
+		// 🔹 Vérification OpenAI pour éviter le spam
 		const estValide = await analyserSignalement(description);
-		if (!estValide) {
-			return res.status(400).json({ message: "Ce signalement ne respecte pas les règles." });
-		}
+		if (!estValide) return res.status(400).json({ message: "Ce signalement ne respecte pas les règles." });
 
+		// 🔹 Création du signalement sans traduction stockée
 		const signalement = await Signalement.create({
 			arretId: arret._id,
 			ligne,
 			typeProbleme,
-			description,
+			description, // ✅ On stocke uniquement le texte original
 			photo,
 		});
 
@@ -52,19 +45,30 @@ exports.voirSignalements = async (req, res) => {
 // ✅ Voir les signalements d’un arrêt spécifique
 exports.voirSignalementsParArret = async (req, res) => {
 	try {
+		// 🔹 Récupérer l'arrêt spécifique
+		const arret = await Arret.findById(req.params.id);
+		if (!arret) {
+			return res.status(404).json({ message: "Arrêt introuvable." });
+		}
+
+		// 🔹 Récupérer les signalements pour cet arrêt
 		const signalements = await Signalement.find({ arretId: req.params.id }).populate("arretId");
 
-		const result = signalements.map((s) => ({
-			id: s._id,
-			ligne: s.ligne,
-			typeProbleme: s.typeProbleme,
-			description: s.description,
-			photo: s.photo,
-			date: s.dateSignalement,
-			arret: s.arretId.nom, // ✅ Ajoute le nom de l'arrêt
-		}));
+		// 🔹 Générer le résumé
+		const resume = await genererResumeSignalements(signalements, arret.nom, signalements.length > 0 ? signalements[0].ligne : "N/A");
 
-		res.json(result);
+		res.json({
+			resume,
+			signalements: signalements.map((s) => ({
+				id: s._id,
+				ligne: s.ligne,
+				typeProbleme: s.typeProbleme,
+				description: s.description,
+				photo: s.photo,
+				date: s.dateSignalement,
+				arret: arret.nom, // ✅ Correction ici pour bien afficher l'arrêt
+			})),
+		});
 	} catch (error) {
 		res.status(500).json({ message: error.message });
 	}
@@ -147,6 +151,27 @@ exports.supprimerSignalement = async (req, res) => {
 
 		await signalement.deleteOne();
 		res.json({ message: "Signalement supprimé avec succès." });
+	} catch (error) {
+		res.status(500).json({ message: error.message });
+	}
+};
+
+exports.traduireSignalement = async (req, res) => {
+	try {
+		const { id } = req.params; // ID du signalement à traduire
+		const signalement = await Signalement.findById(id);
+
+		if (!signalement) {
+			return res.status(404).json({ message: "Signalement introuvable" });
+		}
+
+		// 🔹 Traduire la description à la demande
+		const traduction = await traduireSignalement(signalement.description);
+
+		res.json({
+			original: signalement.description,
+			traductions: traduction, // ✅ Retourne FR, NL, EN
+		});
 	} catch (error) {
 		res.status(500).json({ message: error.message });
 	}

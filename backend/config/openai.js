@@ -94,7 +94,8 @@ exports.repondreQuestionChatbot = async (question) => {
  */
 exports.traduireSignalement = async (texte) => {
 	try {
-		const prompt = `Traduire ce texte en français, néerlandais et anglais : "${texte}". Réponds sous la forme : "FR: ..., NL: ..., EN: ..."`;
+		const prompt = `Traduire ce texte en trois langues. Réponds strictement sous cette forme JSON : 
+		{"fr": "Texte en français", "nl": "Texte en néerlandais", "en": "Texte en anglais"}. Voici le texte à traduire : "${texte}".`;
 
 		const response = await openai.chat.completions.create({
 			model: "gpt-4o",
@@ -102,13 +103,23 @@ exports.traduireSignalement = async (texte) => {
 			max_tokens: 100,
 		});
 
-		const traduction = response.choices[0].message.content.trim();
-		const [fr, nl, en] = traduction.split(", ").map((s) => s.split(": ")[1]);
+		// 🔹 Tenter de parser la réponse en JSON directement
+		let traduction;
+		try {
+			traduction = JSON.parse(response.choices[0].message.content.trim());
+		} catch (error) {
+			console.warn("⚠️ Format incorrect reçu d'OpenAI. Réponse brute :", response.choices[0].message.content);
+			traduction = { fr: texte, nl: texte, en: texte }; // 🔹 Sécurité : Retourne le texte original en cas d'erreur
+		}
 
-		return { fr, nl, en };
+		return {
+			fr: traduction.fr || texte,
+			nl: traduction.nl || texte,
+			en: traduction.en || texte,
+		};
 	} catch (error) {
 		console.error("Erreur OpenAI :", error);
-		return { fr: texte, nl: texte, en: texte }; // Retourne le texte original en cas d'erreur
+		return { fr: texte, nl: texte, en: texte }; // 🔹 Sécurité : Évite `undefined`
 	}
 };
 

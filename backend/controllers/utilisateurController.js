@@ -3,6 +3,7 @@ const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const redis = require("../config/redis");
 const sendMail = require("../config/Mail");
+const { predireTendances } = require("../config/openai");
 const crypto = require("crypto");
 
 // ✅ Inscription avec Code d'Activation
@@ -136,6 +137,40 @@ exports.voirVotesUtilisateur = async (req, res) => {
 		if (!utilisateur) return res.status(404).json({ message: "Utilisateur introuvable." });
 
 		res.json(utilisateur.votes);
+	} catch (error) {
+		res.status(500).json({ message: error.message });
+	}
+};
+
+exports.modifierLangueUtilisateur = async (req, res) => {
+	try {
+		const utilisateur = await Utilisateur.findByIdAndUpdate(req.params.id, req.body, { new: true });
+
+		if (!utilisateur) return res.status(404).json({ message: "Utilisateur introuvable." });
+
+		res.json({ message: "Langue mise à jour.", utilisateur });
+	} catch (error) {
+		res.status(500).json({ message: error.message });
+	}
+};
+
+exports.predireEtNotifier = async (req, res) => {
+	try {
+		// Récupérer les signalements des dernières 24h
+		const signalementsRecent = await Signalement.find({ dateSignalement: { $gte: new Date(Date.now() - 24 * 60 * 60 * 1000) } });
+
+		// 🔹 Générer une prévision avec OpenAI
+		const prediction = await predireTendances(signalementsRecent);
+
+		// Récupérer les utilisateurs abonnés aux notifications
+		const utilisateurs = await Utilisateur.find({ notifications: true });
+
+		// Simulation d'envoi des notifications
+		utilisateurs.forEach((user) => {
+			console.log(`📢 Notification envoyée à ${user.email} : ${prediction}`);
+		});
+
+		res.json({ message: "Prédiction envoyée aux abonnés.", prediction });
 	} catch (error) {
 		res.status(500).json({ message: error.message });
 	}
