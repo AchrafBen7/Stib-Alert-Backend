@@ -10,8 +10,6 @@ router.get("/", voirToutesLesLignes);
 router.get("/:id/trace", voirTraceParLigne);
 
 router.get("/:id/perturbations", ligneController.voirPerturbationsParLigne);
-router.get("/:ligne/:arret/alternatives", ligneController.genererAlternatives);
-
-module.exports = router;
+router.get("/api/lignes/:lineid/:arretId/alternatives", ligneController.voirAlternatives);
 
 module.exports = router;

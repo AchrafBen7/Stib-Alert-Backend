@@ -52,18 +52,26 @@ exports.voirPerturbationsParLigne = async (req, res) => {
 };
 
 // ✅ Générer des alternatives en cas de perturbation
-exports.genererAlternatives = async (req, res) => {
+exports.voirAlternatives = async (req, res) => {
 	try {
-		const { ligne, arret } = req.params;
+		const { lineid, arretId } = req.params;
 
-		// Trouver les lignes alternatives desservant cet arrêt
-		const arretData = await Arret.findOne({ nom: arret });
-		const alternatives = arretData ? arretData.lignesDesservies.filter((l) => l !== ligne) : [];
+		// 🔹 Vérifier si l'arrêt existe
+		const arret = await Arret.findById(arretId);
+		if (!arret) return res.status(404).json({ message: "Arrêt introuvable." });
 
-		// 🔹 Génération de la suggestion OpenAI
-		const suggestion = await genererSuggestionAlternative(ligne, arret, alternatives);
+		// 🔹 Trouver les autres lignes qui passent par cet arrêt
+		const alternatives = arret.lignesDesservies.filter((id) => id !== lineid);
 
-		res.json({ suggestion, alternatives });
+		// 🔹 Générer une suggestion avec OpenAI
+		const suggestion = await genererSuggestionAlternative(lineid, arret.nom, alternatives);
+
+		res.json({
+			arret: arret.nom,
+			ligneAffectee: lineid,
+			alternatives,
+			suggestion,
+		});
 	} catch (error) {
 		res.status(500).json({ message: error.message });
 	}
