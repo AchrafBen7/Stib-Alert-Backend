@@ -25,6 +25,7 @@ redis.on("error", (err) => {
 app.use("/api/signalements", require("./routes/signalementRoutes"));
 app.use("/api/utilisateurs", require("./routes/utilisateurRoutes"));
 app.use("/api/lignes", require("./routes/ligneRoutes"));
+app.use("/api/chatbot", require("./routes/chatbotRoutes"));
 
 // Route de test
 app.get("/", (req, res) => {

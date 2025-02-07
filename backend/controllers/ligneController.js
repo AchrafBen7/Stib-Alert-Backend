@@ -1,5 +1,6 @@
 const Ligne = require("../models/Ligne");
 const Trace = require("../models/Trace");
+const Arret = require("../models/Arret"); // ✅ Ajout de l'importation manquante
 const Signalement = require("../models/Signalement");
 const { genererSuggestionAlternative, genererResumeSignalements } = require("../config/openai");
 
@@ -56,14 +57,14 @@ exports.voirAlternatives = async (req, res) => {
 	try {
 		const { lineid, arretId } = req.params;
 
-		// 🔹 Vérifier si l'arrêt existe
+		// ✅ Vérifier si l'arrêt existe
 		const arret = await Arret.findById(arretId);
 		if (!arret) return res.status(404).json({ message: "Arrêt introuvable." });
 
-		// 🔹 Trouver les autres lignes qui passent par cet arrêt
+		// ✅ Trouver les autres lignes qui passent par cet arrêt
 		const alternatives = arret.lignesDesservies.filter((id) => id !== lineid);
 
-		// 🔹 Générer une suggestion avec OpenAI
+		// ✅ Générer une suggestion avec OpenAI
 		const suggestion = await genererSuggestionAlternative(lineid, arret.nom, alternatives);
 
 		res.json({

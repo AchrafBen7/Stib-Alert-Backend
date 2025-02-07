@@ -1,6 +1,7 @@
 const Signalement = require("../models/Signalement");
 const Arret = require("../models/Arret");
 const { analyserSignalement, genererResumeSignalements, traduireSignalement } = require("../config/openai");
+const { envoyerNotification } = require("../config/fcm"); // 🔥 Import FCM
 
 exports.ajouterSignalement = async (req, res) => {
 	try {
@@ -17,14 +18,23 @@ exports.ajouterSignalement = async (req, res) => {
 		const estValide = await analyserSignalement(description);
 		if (!estValide) return res.status(400).json({ message: "Ce signalement ne respecte pas les règles." });
 
-		// 🔹 Création du signalement sans traduction stockée
+		// 🔹 Création du signalement
 		const signalement = await Signalement.create({
 			arretId: arret._id,
 			ligne,
 			typeProbleme,
-			description, // ✅ On stocke uniquement le texte original
+			description,
 			photo,
 		});
+
+		// 🔥 Envoi de la notification aux utilisateurs abonnés
+		const utilisateursAbonnes = await Utilisateur.find({ favoris: arret._id });
+
+		for (let utilisateur of utilisateursAbonnes) {
+			if (utilisateur.tokenFCM) {
+				await envoyerNotification(utilisateur.tokenFCM, `🚨 Problème sur la ligne ${ligne}`, `${typeProbleme} signalé à ${nomArret}.`);
+			}
+		}
 
 		res.status(201).json({ message: "Signalement ajouté avec succès.", signalement });
 	} catch (error) {

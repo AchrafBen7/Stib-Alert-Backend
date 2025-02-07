@@ -136,7 +136,7 @@ exports.predireTendances = async (signalementsHistorique) => {
 		const response = await openai.chat.completions.create({
 			model: "gpt-4o",
 			messages: [{ role: "user", content: prompt }],
-			max_tokens: 100,
+			max_tokens: 125,
 		});
 
 		return response.choices[0].message.content.trim();

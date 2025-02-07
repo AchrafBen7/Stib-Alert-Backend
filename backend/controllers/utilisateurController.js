@@ -175,3 +175,20 @@ exports.predireEtNotifier = async (req, res) => {
 		res.status(500).json({ message: error.message });
 	}
 };
+exports.enregistrerTokenFCM = async (req, res) => {
+	try {
+		const { userId, tokenFCM } = req.body;
+		const utilisateur = await Utilisateur.findById(userId);
+
+		if (!utilisateur) {
+			return res.status(404).json({ message: "Utilisateur introuvable." });
+		}
+
+		utilisateur.tokenFCM = tokenFCM;
+		await utilisateur.save();
+
+		res.json({ message: "Token FCM enregistré avec succès." });
+	} catch (error) {
+		res.status(500).json({ message: error.message });
+	}
+};
