@@ -1,5 +1,5 @@
 const admin = require("firebase-admin");
-const serviceAccount = require("./serviceAccountKey.json"); // 🔹 Remplace avec ton fichier
+const serviceAccount = require("./stib-alert-firebase-adminsdk-fbsvc-96f79df321.json");
 
 admin.initializeApp({
 	credential: admin.credential.cert(serviceAccount),
