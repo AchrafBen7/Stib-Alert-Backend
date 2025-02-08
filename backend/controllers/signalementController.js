@@ -3,9 +3,19 @@ const Arret = require("../models/Arret");
 const { analyserSignalement, genererResumeSignalements, traduireSignalement } = require("../config/openai");
 const { envoyerNotification } = require("../config/fcm"); // 🔥 Import FCM
 
+// 🔹 Fonction pour calculer la distance entre deux points (en km)
+const distanceEntrePoints = (lat1, lon1, lat2, lon2) => {
+	const R = 6371; // Rayon de la Terre en km
+	const dLat = (lat2 - lat1) * (Math.PI / 180);
+	const dLon = (lon2 - lon1) * (Math.PI / 180);
+	const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+	const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+	return R * c;
+};
+
 exports.ajouterSignalement = async (req, res) => {
 	try {
-		const { nomArret, ligne, typeProbleme, description, photo } = req.body;
+		const { nomArret, ligne, typeProbleme, description, photo, latitude, longitude } = req.body;
 		let arret = await Arret.findOne({ nom: nomArret });
 
 		if (!arret) return res.status(404).json({ message: `L'arrêt "${nomArret}" n'existe pas.` });
@@ -18,13 +28,22 @@ exports.ajouterSignalement = async (req, res) => {
 		const estValide = await analyserSignalement(description);
 		if (!estValide) return res.status(400).json({ message: "Ce signalement ne respecte pas les règles." });
 
-		// 🔹 Création du signalement
+		// 🔍 Vérification de la distance GPS (si fournie)
+		let confiance = "basse"; // ⚠️ Valeur par défaut si aucune position
+		if (latitude && longitude) {
+			const distance = distanceEntrePoints(latitude, longitude, arret.latitude, arret.longitude);
+			if (distance < 0.2) confiance = "haute"; // ✅ Moins de 200m → Fiable
+			else if (distance < 1) confiance = "moyenne"; // 🤔 Entre 200m et 1km → Acceptable
+		}
+
+		// 🔹 Création du signalement avec "confiance"
 		const signalement = await Signalement.create({
 			arretId: arret._id,
 			ligne,
 			typeProbleme,
 			description,
 			photo,
+			confiance, // ✅ Niveau de confiance du signalement
 		});
 
 		// 🔥 Envoi de la notification aux utilisateurs abonnés
@@ -87,31 +106,70 @@ exports.voirSignalementsParArret = async (req, res) => {
 // ✅ Fonction pour voter pour un signalement
 exports.voterSignalement = async (req, res) => {
 	try {
+		const { vote } = req.body; // "up" ou "down"
 		const signalement = await Signalement.findById(req.params.id);
+
 		if (!signalement) return res.status(404).json({ message: "Signalement introuvable" });
 
-		// Vérifie si l'utilisateur est connecté
-		if (!req.user) {
-			return res.status(401).json({ message: "Vous devez être connecté pour voter." });
+		if (vote === "up") {
+			signalement.votesPositifs += 1;
+		} else if (vote === "down") {
+			signalement.votesNegatifs += 1;
 		}
 
-		const utilisateur = await Utilisateur.findById(req.user.userId);
-		if (!utilisateur) return res.status(404).json({ message: "Utilisateur introuvable" });
-
-		// Vérifie si l'utilisateur a déjà voté pour ce signalement
-		if (utilisateur.votes.includes(signalement._id)) {
-			return res.status(400).json({ message: "Vous avez déjà voté pour ce signalement." });
-		}
-
-		// Ajoute le signalement à la liste des votes de l'utilisateur
-		utilisateur.votes.push(signalement._id);
-		await utilisateur.save();
-
-		// Augmente le nombre de votes sur le signalement
-		signalement.votes += 1;
 		await signalement.save();
 
-		res.json({ message: "Vote ajouté !" });
+		// Si un signalement reçoit trop de votes négatifs, il est marqué comme suspect
+		if (signalement.votesNegatifs >= 5) {
+			await Signalement.findByIdAndUpdate(signalement._id, { confiance: "basse" });
+		}
+
+		res.json({ message: "Vote enregistré !" });
+	} catch (error) {
+		res.status(500).json({ message: error.message });
+	}
+};
+
+exports.signalerFauxSignalement = async (req, res) => {
+	try {
+		const signalement = await Signalement.findById(req.params.id);
+
+		if (!signalement) return res.status(404).json({ message: "Signalement introuvable" });
+
+		// 🔹 Incrémentation des signalements
+		signalement.signalements += 1;
+		await signalement.save();
+
+		// 🚨 Si un signalement est marqué comme faux 7 fois, il est supprimé
+		if (signalement.signalements >= 7) {
+			await Signalement.findByIdAndDelete(signalement._id);
+			return res.json({ message: "🚨 Ce signalement a été supprimé car trop de personnes l'ont signalé comme faux." });
+		}
+
+		// ⚠️ Si signalé 3 fois, on abaisse sa confiance
+		if (signalement.signalements >= 3) {
+			signalement.confiance = "basse";
+			await signalement.save();
+		}
+
+		res.json({ message: "✅ Signalement signalé comme faux." });
+	} catch (error) {
+		res.status(500).json({ message: error.message });
+	}
+};
+exports.supprimerSignalement = async (req, res) => {
+	try {
+		const signalement = await Signalement.findById(req.params.id);
+
+		if (!signalement) return res.status(404).json({ message: "Signalement introuvable" });
+
+		// ✅ Vérifier si l'utilisateur est ADMIN
+		if (req.user.role !== "Admin") {
+			return res.status(403).json({ message: "❌ Seuls les administrateurs peuvent supprimer un signalement." });
+		}
+
+		await signalement.deleteOne();
+		res.json({ message: "✅ Signalement supprimé avec succès par un administrateur." });
 	} catch (error) {
 		res.status(500).json({ message: error.message });
 	}
@@ -144,23 +202,6 @@ exports.voirSignalementsParLigneEtArret = async (req, res) => {
 		const { ligne, arretId } = req.params;
 		const signalements = await Signalement.find({ ligne, arretId }).populate("arretId");
 		res.json(signalements);
-	} catch (error) {
-		res.status(500).json({ message: error.message });
-	}
-};
-exports.supprimerSignalement = async (req, res) => {
-	try {
-		const signalement = await Signalement.findById(req.params.id);
-
-		if (!signalement) return res.status(404).json({ message: "Signalement introuvable" });
-
-		// Vérifier si l'utilisateur est bien l'auteur du signalement
-		if (signalement.utilisateurId.toString() !== req.user.userId) {
-			return res.status(403).json({ message: "Vous ne pouvez pas supprimer ce signalement." });
-		}
-
-		await signalement.deleteOne();
-		res.json({ message: "Signalement supprimé avec succès." });
 	} catch (error) {
 		res.status(500).json({ message: error.message });
 	}

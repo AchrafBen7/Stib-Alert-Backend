@@ -9,13 +9,27 @@ const signalementSchema = new mongoose.Schema({
 		enum: ["Retard", "Accident", "Panne", "Propreté", "Agression", "Incivilité", "Autre"],
 		required: true,
 	},
-
 	description: { type: String, required: true },
 	photo: { type: String },
 	dateSignalement: { type: Date, default: Date.now },
 	validationIA: { type: Boolean, default: false },
 	resumeIA: { type: String },
-	votes: { type: Number, default: 0 },
+
+	// 🔹 Votes (approbation et rejet)
+	votesPositifs: { type: Number, default: 0 }, // 👍 Approuvé par les utilisateurs
+	votesNegatifs: { type: Number, default: 0 }, // 👎 Jugé faux par les utilisateurs
+	signalements: { type: Number, default: 0 }, // 🚨 Nombre de signalements pour faux signalement
+
+	// 📍 Coordonnées GPS du signalement
+	latitude: { type: Number, required: false },
+	longitude: { type: Number, required: false },
+
+	// 🔹 Niveau de confiance du signalement
+	confiance: {
+		type: String,
+		enum: ["haute", "moyenne", "basse"],
+		default: "basse",
+	},
 });
 
 module.exports = mongoose.model("Signalement", signalementSchema);

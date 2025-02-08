@@ -31,12 +31,12 @@ exports.chatbot = async (req, res) => {
 
 		// 🧠 🔹 Création du prompt avec les données en direct
 		const prompt = `
-L'utilisateur pose la question : "${question}". 
-Voici les signalements récents :
-${perturbations}
+	L'utilisateur pose la question : "${question}". 
+	Voici les signalements récents :
+	${perturbations}
 
-Réponds de manière concise et utile. Si aucun signalement n'est disponible, propose une alternative raisonnable.
-		`;
+	Réponds de manière concise et utile. Si aucun signalement n'est disponible, propose une alternative raisonnable.
+			`;
 
 		// 🔹 Envoyer à OpenAI pour générer une réponse améliorée
 		const reponse = await repondreQuestionChatbot(prompt);
