@@ -77,3 +77,36 @@ exports.voirAlternatives = async (req, res) => {
 		res.status(500).json({ message: error.message });
 	}
 };
+
+exports.etatLignes = async (req, res) => {
+	try {
+		// 🔍 Récupérer les signalements récents (dernières 24h)
+		const signalements = await Signalement.find({
+			dateSignalement: { $gte: new Date(Date.now() - 86400000) }, // ➜ Étendre à 24h
+		});
+
+		// 🔹 Récupérer toutes les lignes de la base de données
+		const lignes = await Ligne.find().select("lineid nomComplet");
+
+		const etatLignes = {};
+
+		// 🔹 Initialiser toutes les lignes à "Normal"
+		lignes.forEach((ligne) => {
+			etatLignes[ligne.lineid] = { nom: ligne.nomComplet, incidents: 0, statut: "Normal" };
+		});
+
+		// 🔍 Analyser les signalements
+		signalements.forEach((s) => {
+			if (!etatLignes[s.ligne]) return; // ➜ Si la ligne n'existe pas, on l'ignore
+
+			etatLignes[s.ligne].incidents++;
+
+			if (etatLignes[s.ligne].incidents >= 5) etatLignes[s.ligne].statut = "Bloqué";
+			else if (etatLignes[s.ligne].incidents >= 2) etatLignes[s.ligne].statut = "Perturbé";
+		});
+
+		res.json(etatLignes);
+	} catch (error) {
+		res.status(500).json({ message: error.message });
+	}
+};

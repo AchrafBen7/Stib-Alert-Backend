@@ -1,7 +1,7 @@
 const Signalement = require("../models/Signalement");
 const Arret = require("../models/Arret");
 const { analyserSignalement, genererResumeSignalements, traduireSignalement } = require("../config/openai");
-const { envoyerNotification } = require("../config/fcm"); // 🔥 Import FCM
+const { emitSignalement } = require("../config/websocket");
 
 // 🔹 Fonction pour calculer la distance entre deux points (en km)
 const distanceEntrePoints = (lat1, lon1, lat2, lon2) => {
@@ -46,14 +46,8 @@ exports.ajouterSignalement = async (req, res) => {
 			confiance, // ✅ Niveau de confiance du signalement
 		});
 
-		// 🔥 Envoi de la notification aux utilisateurs abonnés
-		const utilisateursAbonnes = await Utilisateur.find({ favoris: arret._id });
-
-		for (let utilisateur of utilisateursAbonnes) {
-			if (utilisateur.tokenFCM) {
-				await envoyerNotification(utilisateur.tokenFCM, `🚨 Problème sur la ligne ${ligne}`, `${typeProbleme} signalé à ${nomArret}.`);
-			}
-		}
+		// 🚀 Émettre le signalement en temps réel via WebSockets
+		emitSignalement(signalement);
 
 		res.status(201).json({ message: "Signalement ajouté avec succès.", signalement });
 	} catch (error) {
