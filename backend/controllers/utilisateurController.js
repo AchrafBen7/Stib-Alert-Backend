@@ -1,5 +1,5 @@
 const Utilisateur = require("../models/Utilisateur");
-const bcrypt = require("bcrypt");
+const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const redis = require("../config/redis");
 const sendMail = require("../config/Mail");
