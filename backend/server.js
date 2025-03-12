@@ -43,7 +43,7 @@ app.get("/", (req, res) => {
 
 // Démarrer le serveur après connexion à la DB
 const PORT = process.env.PORT || 4000;
-app.listen(PORT, async () => {
+app.listen(PORT, "0.0.0.0", async () => {
 	await connectDB();
-	console.log(`🚀 Serveur en cours sur http://localhost:${PORT}`);
+	console.log(`🚀 Serveur en ligne sur le port ${PORT}`);
 });
