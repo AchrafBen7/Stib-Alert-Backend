@@ -15,4 +15,6 @@ router.get("/:id/perturbations", ligneController.voirPerturbationsParLigne);
 // ✅ Route pour voir les alternatives
 router.get("/:lineid/:arretId/alternatives", ligneController.voirAlternatives);
 
+router.get("/etat-lignes", ligneController.etatLignes);
+
 module.exports = router;

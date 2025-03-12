@@ -9,14 +9,13 @@ const isAdmin = require("../middlewares/adminMiddleware");
 router.post("/", signalementController.ajouterSignalement);
 router.get("/", voirSignalements);
 router.get("/arret/:id", signalementController.voirSignalementsParArret);
-router.post("/:id/vote", voterSignalement);
-router.post("/:id/signalement-faux", signalerFauxSignalement);
+router.post("/:id/vote", protect, voterSignalement);
+router.post("/:id/signalement-faux", protect, signalerFauxSignalement);
 
 // Nouvelles Routes
 router.get("/lignes", voirLignesDisponibles); // Voir toutes les lignes
 router.get("/ligne/:ligne", voirArretsParLigne); // Voir tous les arrêts d’une ligne
 router.get("/ligne/:ligne/arret/:arretId", voirSignalementsParLigneEtArret); // Voir signalements d’un arrêt
-router.delete("/:id", protect, supprimerSignalement);
 router.get("/:id/traduire", signalementController.traduireSignalement);
 
 // 📌 Suppression (ADMIN uniquement)
