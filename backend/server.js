@@ -35,6 +35,7 @@ app.use("/api/signalements", require("./routes/signalementRoutes"));
 app.use("/api/utilisateurs", require("./routes/utilisateurRoutes"));
 app.use("/api/lignes", require("./routes/ligneRoutes"));
 app.use("/api/chatbot", require("./routes/chatbotRoutes"));
+app.use("/api/arrets", require("./routes/arretRoute"));
 
 // Route de test
 app.get("/", (req, res) => {
