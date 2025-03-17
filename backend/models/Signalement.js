@@ -11,7 +11,14 @@ const signalementSchema = new mongoose.Schema({
 	},
 	description: { type: String, required: true },
 	photo: { type: String },
-	dateSignalement: { type: Date, default: Date.now },
+	dateSignalement: {
+		type: Date,
+		default: () => {
+			let now = new Date();
+			now.setSeconds(0, 0); // ✅ Supprime les secondes et millisecondes
+			return now;
+		},
+	},
 	validationIA: { type: Boolean, default: false },
 	resumeIA: { type: String },
 

@@ -48,6 +48,8 @@ exports.ajouterSignalement = async (req, res) => {
 
 		// 🚀 Émettre le signalement en temps réel via WebSockets
 		emitSignalement(signalement);
+		// ✅ Formatter la date avant d'envoyer la réponse
+		signalement.dateSignalement = moment(signalement.dateSignalement).format("YYYY-MM-DD HH:mm");
 
 		res.status(201).json({ message: "Signalement ajouté avec succès.", signalement });
 	} catch (error) {
