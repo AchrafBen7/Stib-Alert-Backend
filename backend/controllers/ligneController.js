@@ -23,6 +23,20 @@ exports.voirTraceParLigne = async (req, res) => {
 		res.status(500).json({ message: error.message });
 	}
 };
+exports.voirLigneParLineID = async (req, res) => {
+	try {
+		const ligne = await Ligne.findOne({ lineid: req.params.lineid });
+
+		if (!ligne) {
+			return res.status(404).json({ message: "Ligne introuvable." });
+		}
+
+		res.json(ligne);
+	} catch (error) {
+		res.status(500).json({ message: error.message });
+	}
+};
+
 // ✅ Obtenir toutes les lignes
 exports.voirToutesLesLignes = async (req, res) => {
 	try {

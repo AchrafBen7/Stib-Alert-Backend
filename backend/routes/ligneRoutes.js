@@ -6,6 +6,9 @@ const router = express.Router();
 // ✅ Route pour voir toutes les lignes
 router.get("/", ligneController.voirToutesLesLignes);
 
+// ✅ Route pour voir une ligne spécifique par son ID STIB (lineid)
+router.get("/:lineid", ligneController.voirLigneParLineID);
+
 // ✅ Route pour voir le tracé d'une ligne
 router.get("/:id/trace", ligneController.voirTraceParLigne);
 
