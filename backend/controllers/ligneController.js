@@ -36,11 +36,47 @@ exports.voirLigneParLineID = async (req, res) => {
 		res.status(500).json({ message: error.message });
 	}
 };
+// Dans votre ligneController.js
+exports.voirToutesLesLignesDisponibles = async (req, res) => {
+	try {
+		// On récupère TOUTES les lignes, sans condition spécifique
+		const lignes = await Ligne.find();
+		res.json(lignes);
+	} catch (error) {
+		res.status(500).json({ message: error.message });
+	}
+};
+// Ajouter ou mettre à jour le champ nomCompletRetour pour une ligne donnée
+exports.ajouterNomCompletRetour = async (req, res) => {
+	try {
+		// On suppose que l'identifiant de la ligne est passé dans l'URL (par exemple, _id)
+		const { id } = req.params;
+		const { nomCompletRetour } = req.body;
+
+		if (!nomCompletRetour) {
+			return res.status(400).json({ message: "Le nomCompletRetour est requis." });
+		}
+
+		// Met à jour la ligne en ajoutant le champ nomCompletRetour
+		const updatedLigne = await Ligne.findByIdAndUpdate(id, { nomCompletRetour }, { new: true });
+
+		if (!updatedLigne) {
+			return res.status(404).json({ message: "Ligne non trouvée." });
+		}
+
+		res.json({
+			message: "nomCompletRetour ajouté avec succès.",
+			ligne: updatedLigne,
+		});
+	} catch (error) {
+		res.status(500).json({ message: error.message });
+	}
+};
 
 // ✅ Obtenir toutes les lignes
 exports.voirToutesLesLignes = async (req, res) => {
 	try {
-		const lignes = await Ligne.find().select("lineid nomComplet typeTransport couleur direction");
+		const lignes = await Ligne.find().select("lineid nomComplet nomCompletRetour typeTransport couleur direction");
 		res.json(lignes);
 	} catch (error) {
 		res.status(500).json({ message: error.message });

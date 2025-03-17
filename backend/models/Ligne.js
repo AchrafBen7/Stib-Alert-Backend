@@ -3,6 +3,7 @@ const mongoose = require("mongoose");
 const ligneSchema = new mongoose.Schema({
 	lineid: { type: String, required: true, unique: true },
 	nomComplet: { type: String, required: true },
+	nomCompletRetour: { type: String },
 	typeTransport: { type: String, enum: ["Tram", "Bus", "Métro"], required: true },
 	couleur: { type: String, required: true },
 	destination: {

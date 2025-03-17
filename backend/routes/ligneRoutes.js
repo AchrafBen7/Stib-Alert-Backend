@@ -9,6 +9,9 @@ router.get("/", ligneController.voirToutesLesLignes);
 // ✅ Route pour voir une ligne spécifique par son ID STIB (lineid)
 router.get("/:lineid", ligneController.voirLigneParLineID);
 
+// Route pour voir toutes les lignes disponibles
+router.get("/toutes", ligneController.voirToutesLesLignesDisponibles);
+
 // ✅ Route pour voir le tracé d'une ligne
 router.get("/:id/trace", ligneController.voirTraceParLigne);
 
@@ -19,5 +22,7 @@ router.get("/:id/perturbations", ligneController.voirPerturbationsParLigne);
 router.get("/:lineid/:arretId/alternatives", ligneController.voirAlternatives);
 
 router.get("/etat-lignes", ligneController.etatLignes);
+
+router.patch("/:id/ajouter-retour", ligneController.ajouterNomCompletRetour);
 
 module.exports = router;
