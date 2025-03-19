@@ -9,6 +9,7 @@ const arretSchema = new mongoose.Schema({
 	lignesDesservies: [{ type: String }],
 	etat: { type: String, enum: ["Vert", "Orange", "Rouge"], default: "Vert" },
 	signalementsRecents: [{ type: mongoose.Schema.Types.ObjectId, ref: "Signalement" }],
+	order: { type: Map, of: Number },
 });
 
 module.exports = mongoose.model("Arret", arretSchema);

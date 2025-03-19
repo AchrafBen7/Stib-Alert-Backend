@@ -127,6 +127,27 @@ exports.voirAlternatives = async (req, res) => {
 		res.status(500).json({ message: error.message });
 	}
 };
+exports.voirArretsParLigne = async (req, res) => {
+	try {
+		const { lineid } = req.params;
+
+		// On recherche la ligne par son "lineid"
+		const ligne = await Ligne.findOne({ lineid }).populate("points.id");
+		if (!ligne) {
+			return res.status(404).json({ message: "Ligne non trouvée." });
+		}
+
+		// Trier les points par ordre (order)
+		const pointsTries = ligne.points.sort((a, b) => a.order - b.order);
+
+		// Extraire les arrêts à partir des points
+		const arrets = pointsTries.map((point) => point.id);
+
+		res.json(arrets);
+	} catch (error) {
+		res.status(500).json({ message: error.message });
+	}
+};
 
 exports.etatLignes = async (req, res) => {
 	try {
@@ -156,6 +177,92 @@ exports.etatLignes = async (req, res) => {
 		});
 
 		res.json(etatLignes);
+	} catch (error) {
+		res.status(500).json({ message: error.message });
+	}
+};
+exports.ajouterArretALigne = async (req, res) => {
+	try {
+		const { lineid } = req.params; // ID de la ligne (exemple: "7")
+		const { arretId, order } = req.body; // ID de l'arrêt et ordre optionnel
+
+		// Vérifier que la ligne existe
+		const ligne = await Ligne.findOne({ lineid });
+		if (!ligne) {
+			return res.status(404).json({ message: "Ligne non trouvée." });
+		}
+
+		// Vérifier que l'arrêt existe
+		const arret = await Arret.findById(arretId);
+		if (!arret) {
+			return res.status(404).json({ message: "Arrêt non trouvé." });
+		}
+
+		// Vérifier si cet arrêt est déjà associé à la ligne
+		if (ligne.points.some((point) => point.id.toString() === arretId)) {
+			return res.status(400).json({ message: "Cet arrêt est déjà associé à cette ligne." });
+		}
+
+		// Déterminer l'ordre : si non fourni, on ajoute à la fin (dernier + 1)
+		const orderFinal = order || ligne.points.length + 1;
+
+		// Créer le nouvel objet point
+		const nouveauPoint = { id: arretId, order: orderFinal };
+
+		// Ajouter le point à la ligne
+		ligne.points.push(nouveauPoint);
+		await ligne.save();
+
+		res.status(200).json({
+			message: "Arrêt ajouté à la ligne avec succès.",
+			ligne,
+		});
+	} catch (error) {
+		res.status(500).json({ message: error.message });
+	}
+};
+exports.majOrderPourLigne = async (req, res) => {
+	try {
+		const { line, sort } = req.query;
+		if (!line) {
+			return res.status(400).json({ message: "Le paramètre 'line' est requis." });
+		}
+
+		// Vérifier que la ligne existe dans la collection Ligne
+		const Ligne = require("../models/Ligne");
+		const ligne = await Ligne.findOne({ lineid: line });
+		if (!ligne) {
+			return res.status(404).json({ message: "Ligne introuvable." });
+		}
+
+		// Récupérer tous les arrêts qui desservent cette ligne
+		const Arret = require("../models/Arret");
+		const arrets = await Arret.find({ lignesDesservies: line });
+
+		// Coordonnées des deux terminus (à adapter selon la ligne et le sens souhaité)
+		const latA = 50.896804,
+			lonA = 4.337345; // Par exemple, terminus de départ (HEYSEL)
+		const latB = 50.813378,
+			lonB = 4.348149; // Par exemple, terminus d'arrivée (VANDERKINDERE)
+		const dx = lonB - lonA,
+			dy = latB - latA;
+		const denom = dx * dx + dy * dy;
+
+		// Trier les arrêts par projection sur la trajectoire définie par les deux terminus
+		arrets.sort((a, b) => {
+			const projA = ((a.latitude - latA) * dy + (a.longitude - lonA) * dx) / denom;
+			const projB = ((b.latitude - latA) * dy + (b.longitude - lonA) * dx) / denom;
+			return sort === "desc" ? projB - projA : projA - projB;
+		});
+
+		// Mettre à jour le champ d'ordre pour chaque arrêt
+		for (let i = 0; i < arrets.length; i++) {
+			await Arret.findByIdAndUpdate(arrets[i]._id, {
+				$set: { [`order.${line}`]: i + 1 },
+			});
+		}
+
+		res.json({ message: `Order mis à jour pour la ligne ${line}`, count: arrets.length });
 	} catch (error) {
 		res.status(500).json({ message: error.message });
 	}

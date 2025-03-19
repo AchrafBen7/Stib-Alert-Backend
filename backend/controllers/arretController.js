@@ -141,3 +141,52 @@ exports.ajouterLigneAArrêt = async (req, res) => {
 		res.status(500).json({ message: error.message });
 	}
 };
+exports.voirTousLesArrets = async (req, res) => {
+	try {
+		const arrets = await Arret.find();
+		res.json(arrets);
+	} catch (error) {
+		res.status(500).json({ message: error.message });
+	}
+};
+exports.voirArretsParLigne = async (req, res) => {
+	try {
+		const { line } = req.query; // Par exemple, ?line=7
+		if (!line) {
+			return res.status(400).json({ message: "Le paramètre 'line' est requis." });
+		}
+
+		// On cherche tous les arrêts dont le tableau "lignesDesservies" contient la valeur "line"
+		const arrets = await Arret.find({ lignesDesservies: line });
+		res.json(arrets);
+	} catch (error) {
+		res.status(500).json({ message: error.message });
+	}
+};
+exports.voirArretsParLigneFiltres = async (req, res) => {
+	try {
+		const { line, sort } = req.query;
+		if (!line) return res.status(400).json({ message: "Paramètre 'line' requis." });
+
+		const arrets = await require("../models/Arret").find({ lignesDesservies: line });
+
+		// Coordonnées des deux terminus
+		const latA = 50.896804,
+			lonA = 4.337345;
+		const latB = 50.813378,
+			lonB = 4.348149;
+		const dx = lonB - lonA,
+			dy = latB - latA;
+		const denom = dx * dx + dy * dy;
+
+		arrets.sort((a, b) => {
+			const projA = ((a.latitude - latA) * dy + (a.longitude - lonA) * dx) / denom;
+			const projB = ((b.latitude - latA) * dy + (b.longitude - lonA) * dx) / denom;
+			return sort === "desc" ? projB - projA : projA - projB;
+		});
+
+		res.json(arrets);
+	} catch (error) {
+		res.status(500).json({ message: error.message });
+	}
+};
