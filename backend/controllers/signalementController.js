@@ -68,21 +68,31 @@ exports.voirUnSignalementParArret = async (req, res) => {
 			return res.status(404).json({ message: "Arrêt introuvable." });
 		}
 
-		// Rechercher un seul signalement qui a l'ID 'signalementId' et un 'arretId' égal à arretId
-		const signalement = await Signalement.findOne({ _id: signalementId, arretId }).populate("arretId");
+		// Chercher le signalement lié à cet arrêt
+		const signalement = await Signalement.findOne({ _id: signalementId, arretId });
 		if (!signalement) {
 			return res.status(404).json({ message: "Signalement introuvable pour cet arrêt." });
 		}
 
-		// Vous pouvez formater la réponse comme vous voulez
+		// Retourner toutes les infos nécessaires
 		res.json({
-			id: signalement._id,
+			_id: signalement._id,
+			utilisateurId: signalement.utilisateurId,
+			arretId: signalement.arretId,
 			ligne: signalement.ligne,
 			typeProbleme: signalement.typeProbleme,
 			description: signalement.description,
 			photo: signalement.photo,
-			date: signalement.dateSignalement,
-			arret: arret.nom,
+			dateSignalement: signalement.dateSignalement,
+			validationIA: signalement.validationIA,
+			resumeIA: signalement.resumeIA,
+			votesPositifs: signalement.votesPositifs,
+			votesNegatifs: signalement.votesNegatifs,
+			signalements: signalement.signalements,
+			latitude: signalement.latitude,
+			longitude: signalement.longitude,
+			confiance: signalement.confiance,
+			arret: arret.nom, // nom de l'arrêt pour affichage
 		});
 	} catch (error) {
 		res.status(500).json({ message: error.message });
