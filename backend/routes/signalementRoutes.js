@@ -21,3 +21,5 @@ router.get("/:id/traduire", signalementController.traduireSignalement);
 // 📌 Suppression (ADMIN uniquement)
 router.delete("/:id", protect, isAdmin, supprimerSignalement); //
 module.exports = router;
+
+router.get("/arret/:arretId/signalement/:signalementId", signalementController.voirUnSignalementParArret);

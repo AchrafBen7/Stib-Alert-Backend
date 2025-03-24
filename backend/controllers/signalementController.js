@@ -58,6 +58,37 @@ exports.ajouterSignalement = async (req, res) => {
 	}
 };
 
+exports.voirUnSignalementParArret = async (req, res) => {
+	try {
+		const { arretId, signalementId } = req.params;
+
+		// Vérifier que l'arrêt existe
+		const arret = await Arret.findById(arretId);
+		if (!arret) {
+			return res.status(404).json({ message: "Arrêt introuvable." });
+		}
+
+		// Rechercher un seul signalement qui a l'ID 'signalementId' et un 'arretId' égal à arretId
+		const signalement = await Signalement.findOne({ _id: signalementId, arretId }).populate("arretId");
+		if (!signalement) {
+			return res.status(404).json({ message: "Signalement introuvable pour cet arrêt." });
+		}
+
+		// Vous pouvez formater la réponse comme vous voulez
+		res.json({
+			id: signalement._id,
+			ligne: signalement.ligne,
+			typeProbleme: signalement.typeProbleme,
+			description: signalement.description,
+			photo: signalement.photo,
+			date: signalement.dateSignalement,
+			arret: arret.nom,
+		});
+	} catch (error) {
+		res.status(500).json({ message: error.message });
+	}
+};
+
 // ✅ Ajout de la pagination (optionnelle)
 exports.voirSignalements = async (req, res) => {
 	try {
