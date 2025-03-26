@@ -6,7 +6,7 @@ const utilisateurSchema = new mongoose.Schema(
 		email: { type: String, required: true, unique: true },
 		motDePasse: { type: String, required: true },
 		photoProfil: { type: String },
-		tokenFCM: { type: String }, // 🔥 Ajout du token FCM
+		tokenFCM: { type: String },
 		favoris: [{ type: mongoose.Schema.Types.ObjectId, ref: "Arret" }],
 		langue: { type: String, enum: ["FR", "NL", "EN"], default: "FR" },
 		notifications: { type: Boolean, default: true },
