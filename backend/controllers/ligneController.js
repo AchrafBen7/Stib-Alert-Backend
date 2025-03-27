@@ -88,19 +88,20 @@ exports.voirPerturbationsParLigne = async (req, res) => {
 	try {
 		const { id } = req.params;
 
-		// On récupère les signalements de la ligne, et on "popule" les infos de l'arrêt lié
+		// 🧠 On récupère les signalements et on popule le champ "nom" de l’arrêt
 		const signalements = await Signalement.find({ ligne: id }).populate("arretId", "nom");
 
 		if (!signalements.length) {
 			return res.json({ message: `Aucun signalement récent sur la ligne ${id}.` });
 		}
 
-		// Résumé généré par OpenAI
+		// 📝 Génération du résumé OpenAI
 		const resume = await genererResumeSignalements(signalements, id, "tous les arrêts");
 
-		// On mappe les signalements pour ajouter le nom de l’arrêt dans un champ `arretNom`
+		// ✅ Reformater les signalements pour que arretId soit l'ID, et arretNom un champ à part
 		const signalementsAvecNom = signalements.map((s) => ({
 			...s.toObject(),
+			arretId: s.arretId?._id?.toString() ?? s.arretId,
 			arretNom: s.arretId?.nom ?? "Nom inconnu",
 		}));
 
