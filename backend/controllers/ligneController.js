@@ -153,27 +153,39 @@ exports.etatLignes = async (req, res) => {
 	try {
 		// 🔍 Récupérer les signalements récents (dernières 24h)
 		const signalements = await Signalement.find({
-			dateSignalement: { $gte: new Date(Date.now() - 86400000) }, // ➜ Étendre à 24h
+			dateSignalement: { $gte: new Date(Date.now() - 86400000) },
 		});
 
-		// 🔹 Récupérer toutes les lignes de la base de données
+		// 🔹 Récupérer toutes les lignes
 		const lignes = await Ligne.find().select("lineid nomComplet");
 
-		const etatLignes = {};
+		const etatLignes = [];
 
-		// 🔹 Initialiser toutes les lignes à "Normal"
+		// 🔹 Initialiser chaque ligne avec ses infos de base
+		const mapLignes = {}; // pour accès rapide par lineid
 		lignes.forEach((ligne) => {
-			etatLignes[ligne.lineid] = { nom: ligne.nomComplet, incidents: 0, statut: "Normal" };
+			mapLignes[ligne.lineid] = {
+				lineid: ligne.lineid,
+				nom: ligne.nomComplet,
+				incidents: 0,
+				statut: "Normal",
+			};
 		});
 
-		// 🔍 Analyser les signalements
+		// 🔍 Compter les signalements par ligne
 		signalements.forEach((s) => {
-			if (!etatLignes[s.ligne]) return; // ➜ Si la ligne n'existe pas, on l'ignore
+			const ligne = mapLignes[s.ligne];
+			if (!ligne) return;
 
-			etatLignes[s.ligne].incidents++;
+			ligne.incidents++;
 
-			if (etatLignes[s.ligne].incidents >= 5) etatLignes[s.ligne].statut = "Bloqué";
-			else if (etatLignes[s.ligne].incidents >= 2) etatLignes[s.ligne].statut = "Perturbé";
+			if (ligne.incidents >= 5) ligne.statut = "Bloqué";
+			else if (ligne.incidents >= 2) ligne.statut = "Perturbé";
+		});
+
+		// 🔁 Convertir en tableau
+		Object.values(mapLignes).forEach((etat) => {
+			etatLignes.push(etat);
 		});
 
 		res.json(etatLignes);
@@ -181,6 +193,7 @@ exports.etatLignes = async (req, res) => {
 		res.status(500).json({ message: error.message });
 	}
 };
+
 exports.ajouterArretALigne = async (req, res) => {
 	try {
 		const { lineid } = req.params; // ID de la ligne (exemple: "7")
