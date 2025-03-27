@@ -5,7 +5,7 @@ const router = express.Router();
 
 // ✅ Route pour voir toutes les lignes
 router.get("/", ligneController.voirToutesLesLignes);
-
+router.get("/etat-lignes", ligneController.etatLignes);
 router.get("/:lineid/arrets", ligneController.voirArretsParLigne);
 // ✅ Route pour voir une ligne spécifique par son ID STIB (lineid)
 router.get("/:lineid", ligneController.voirLigneParLineID);
@@ -21,8 +21,6 @@ router.get("/:id/perturbations", ligneController.voirPerturbationsParLigne);
 
 // ✅ Route pour voir les alternatives
 router.get("/:lineid/:arretId/alternatives", ligneController.voirAlternatives);
-
-router.get("/etat-lignes", ligneController.etatLignes);
 
 router.patch("/:id/ajouter-retour", ligneController.ajouterNomCompletRetour);
 router.post("/:lineid/arrets", ligneController.ajouterArretALigne);
