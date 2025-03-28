@@ -157,7 +157,12 @@ exports.voterSignalement = async (req, res) => {
 
 		await signalement.save();
 
-		// Si un signalement reçoit trop de votes négatifs, il est marqué comme suspect
+		// Ajouter l'ID du signalement aux votes de l'utilisateur connecté
+		await Utilisateur.findByIdAndUpdate(req.utilisateur._id, {
+			$addToSet: { votes: signalement._id },
+		});
+
+		// Si trop de votes négatifs → mise à jour de la confiance
 		if (signalement.votesNegatifs >= 5) {
 			await Signalement.findByIdAndUpdate(signalement._id, { confiance: "basse" });
 		}
