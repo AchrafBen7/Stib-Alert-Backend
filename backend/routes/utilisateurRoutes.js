@@ -14,4 +14,5 @@ router.get("/:id/votes", protect, voirVotesUtilisateur);
 router.patch("/:id/langue", utilisateurController.modifierLangueUtilisateur);
 router.get("/previsions", utilisateurController.predireEtNotifier);
 router.post("/enregistrer-token", enregistrerTokenFCM);
+router.patch("/:id/favoris/:arretId", protect, utilisateurController.ajouterOuRetirerFavori);
 module.exports = router;
