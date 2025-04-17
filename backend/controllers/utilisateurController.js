@@ -192,3 +192,27 @@ exports.enregistrerTokenFCM = async (req, res) => {
 		res.status(500).json({ message: error.message });
 	}
 };
+exports.ajouterOuRetirerFavori = async (req, res) => {
+	try {
+		const { id, arretId } = req.params;
+
+		const utilisateur = await Utilisateur.findById(id);
+		if (!utilisateur) return res.status(404).json({ message: "Utilisateur introuvable." });
+
+		const index = utilisateur.favoris.indexOf(arretId);
+
+		if (index > -1) {
+			// L'arrêt est déjà en favoris, on le retire
+			utilisateur.favoris.splice(index, 1);
+			await utilisateur.save();
+			return res.json({ message: "Arrêt retiré des favoris.", favoris: utilisateur.favoris });
+		} else {
+			// L'arrêt n'est pas encore en favoris, on l'ajoute
+			utilisateur.favoris.push(arretId);
+			await utilisateur.save();
+			return res.json({ message: "Arrêt ajouté aux favoris.", favoris: utilisateur.favoris });
+		}
+	} catch (error) {
+		res.status(500).json({ message: error.message });
+	}
+};
