@@ -48,6 +48,9 @@ exports.ajouterSignalement = async (req, res) => {
 		const { nomArret, ligne, typeProbleme, description, latitude, longitude } = req.body;
 		let photo = req.file ? req.file.path : undefined;
 
+		const latitudeParsed = parseFloat(latitude);
+		const longitudeParsed = parseFloat(longitude);
+
 		let arret = await Arret.findOne({ nom: nomArret });
 
 		if (!arret) return res.status(404).json({ message: `L'arrêt "${nomArret}" n'existe pas.` });
@@ -63,7 +66,8 @@ exports.ajouterSignalement = async (req, res) => {
 		// 🔍 Vérification de la distance GPS (si fournie)
 		let confiance = "basse"; // ⚠️ Valeur par défaut si aucune position
 		if (latitude && longitude) {
-			const distance = distanceEntrePoints(latitude, longitude, arret.latitude, arret.longitude);
+			const distance = distanceEntrePoints(latitudeParsed, longitudeParsed, arret.latitude, arret.longitude);
+
 			if (distance < 0.2) confiance = "haute"; // ✅ Moins de 200m → Fiable
 			else if (distance < 1) confiance = "moyenne"; // 🤔 Entre 200m et 1km → Acceptable
 		}
@@ -75,6 +79,8 @@ exports.ajouterSignalement = async (req, res) => {
 			typeProbleme,
 			description,
 			photo,
+			latitude: isNaN(latitudeParsed) ? undefined : latitudeParsed,
+			longitude: isNaN(longitudeParsed) ? undefined : longitudeParsed,
 			confiance, // ✅ Niveau de confiance du signalement
 		});
 
@@ -83,7 +89,13 @@ exports.ajouterSignalement = async (req, res) => {
 		// ✅ Formatter la date avant d'envoyer la réponse
 		signalement.dateSignalement = moment(signalement.dateSignalement).format("YYYY-MM-DD HH:mm");
 
-		res.status(201).json({ message: "Signalement ajouté avec succès.", signalement });
+		res.status(201).json({
+			message: "Signalement ajouté avec succès.",
+			signalement: {
+				...signalement.toObject(),
+				dateSignalementLisible: moment(signalement.dateSignalement).format("YYYY-MM-DD HH:mm"),
+			},
+		});
 	} catch (error) {
 		res.status(500).json({ message: error.message });
 	}
