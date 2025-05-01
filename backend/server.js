@@ -9,6 +9,7 @@ const { initWebSocket } = require("./config/websocket");
 const http = require("http");
 const cookieParser = require("cookie-parser"); // ✅ Import de cookie-parser
 const path = require("path");
+
 const app = express();
 const server = http.createServer(app);
 

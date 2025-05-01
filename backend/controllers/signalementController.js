@@ -3,16 +3,17 @@ const Arret = require("../models/Arret");
 const { analyserSignalement, genererResumeSignalements, traduireSignalement } = require("../config/openai");
 const { emitSignalement } = require("../config/websocket");
 const moment = require("moment");
-const multer = require("multer");
 const path = require("path");
+const cloudinary = require("../config/cloudinary");
+const { CloudinaryStorage } = require("multer-storage-cloudinary");
+const multer = require("multer");
 
-const storage = multer.diskStorage({
-	destination: function (req, file, cb) {
-		cb(null, "uploads/");
-	},
-
-	filename: function (req, file, cb) {
-		cb(null, Date.now() + path.extname(file.originalname));
+const storage = new CloudinaryStorage({
+	cloudinary: cloudinary,
+	params: {
+		folder: "stib-alert", // nom du dossier dans Cloudinary
+		allowed_formats: ["jpg", "jpeg", "png"],
+		transformation: [{ width: 800, crop: "scale" }],
 	},
 });
 
@@ -45,7 +46,7 @@ const distanceEntrePoints = (lat1, lon1, lat2, lon2) => {
 exports.ajouterSignalement = async (req, res) => {
 	try {
 		const { nomArret, ligne, typeProbleme, description, latitude, longitude } = req.body;
-		let photo = req.file ? `/uploads/${req.file.filename}` : undefined;
+		let photo = req.file ? req.file.path : undefined;
 
 		let arret = await Arret.findOne({ nom: nomArret });
 
