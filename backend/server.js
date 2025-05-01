@@ -8,7 +8,7 @@ const redis = require("./config/redis"); // ✅ Import Redis
 const { initWebSocket } = require("./config/websocket");
 const http = require("http");
 const cookieParser = require("cookie-parser"); // ✅ Import de cookie-parser
-
+const path = require("path");
 const app = express();
 const server = http.createServer(app);
 
@@ -36,6 +36,7 @@ app.use("/api/utilisateurs", require("./routes/utilisateurRoutes"));
 app.use("/api/lignes", require("./routes/ligneRoutes"));
 app.use("/api/chatbot", require("./routes/chatbotRoutes"));
 app.use("/api/arrets", require("./routes/arretRoute"));
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 // Route de test
 app.get("/", (req, res) => {

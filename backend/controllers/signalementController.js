@@ -3,6 +3,34 @@ const Arret = require("../models/Arret");
 const { analyserSignalement, genererResumeSignalements, traduireSignalement } = require("../config/openai");
 const { emitSignalement } = require("../config/websocket");
 const moment = require("moment");
+const multer = require("multer");
+const path = require("path");
+
+const storage = multer.diskStorage({
+	destination: function (req, file, cb) {
+		cb(null, "uploads/");
+	},
+
+	filename: function (req, file, cb) {
+		cb(null, Date.now() + path.extname(file.originalname));
+	},
+});
+
+exports.upload = multer({
+	storage,
+
+	fileFilter: function (req, file, cb) {
+		const allowed = ["image/jpeg", "image/png", "image/jpg"];
+
+		if (!allowed.includes(file.mimetype)) {
+			return cb(new Error("Seulement les fichiers JPEG/PNG sont autorisés."), false);
+		}
+
+		cb(null, true);
+	},
+
+	limits: { fileSize: 2 * 1024 * 1024 }, // 2MB max
+});
 
 // 🔹 Fonction pour calculer la distance entre deux points (en km)
 const distanceEntrePoints = (lat1, lon1, lat2, lon2) => {
@@ -16,7 +44,9 @@ const distanceEntrePoints = (lat1, lon1, lat2, lon2) => {
 
 exports.ajouterSignalement = async (req, res) => {
 	try {
-		const { nomArret, ligne, typeProbleme, description, photo, latitude, longitude } = req.body;
+		const { nomArret, ligne, typeProbleme, description, latitude, longitude } = req.body;
+		let photo = req.file ? `/uploads/${req.file.filename}` : undefined;
+
 		let arret = await Arret.findOne({ nom: nomArret });
 
 		if (!arret) return res.status(404).json({ message: `L'arrêt "${nomArret}" n'existe pas.` });
