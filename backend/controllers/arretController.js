@@ -40,6 +40,26 @@ exports.ajouterArret = async (req, res) => {
 	}
 };
 
+exports.voirLignesPourArret = async (req, res) => {
+	const arretId = req.params.id;
+
+	try {
+		const arret = await Arret.findById(arretId);
+
+		if (!arret) {
+			return res.status(404).json({ message: "Arrêt non trouvé" });
+		}
+
+		// Supposons que arret.lignesDesservies est un tableau de lineid
+		const lignes = await Ligne.find({ lineid: { $in: arret.lignesDesservies } });
+
+		res.json(lignes);
+	} catch (error) {
+		console.error("[ERREUR] Backend voirLignesPourArret :", error);
+		res.status(500).json({ message: "Erreur serveur" });
+	}
+};
+
 // ✅ 2. Créer une nouvelle ligne (ex: Tram 7)
 exports.ajouterLigne = async (req, res) => {
 	try {
