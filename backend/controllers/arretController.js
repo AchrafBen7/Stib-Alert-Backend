@@ -225,6 +225,12 @@ exports.voirArretsParLigneFiltres = async (req, res) => {
 					dateSignalement: { $gte: oneDayAgo },
 				}).lean();
 
+				// 🔥 Convertir toutes les dates ISO
+				const signalementsFormatted = signalements.map((s) => ({
+					...s,
+					dateSignalement: s.dateSignalement.toISOString(),
+				}));
+
 				// 🔥 Calcul dynamique de l’état
 				let etat = "Vert";
 				if (signalements.length >= 4) etat = "Rouge";
@@ -236,7 +242,7 @@ exports.voirArretsParLigneFiltres = async (req, res) => {
 				return {
 					...arret,
 					etat,
-					signalementsRecents: signalements,
+					signalementsRecents: signalementsFormatted,
 				};
 			})
 		);
