@@ -212,10 +212,12 @@ exports.voirArretsParLigneFiltres = async (req, res) => {
 
 		const arretsAvecSignalements = await Promise.all(
 			arrets.map(async (arret) => {
-				const signalements = await Signalement.find({
-					arretId: arret._id,
-					createdAt: { $gte: oneDayAgo },
-				}).lean();
+				const signalements = await require("../models/Signalement")
+					.find({
+						arretId: arret._id,
+						dateSignalement: { $gte: oneDayAgo }, // ✅ CORRIGÉ ICI
+					})
+					.lean();
 
 				return {
 					...arret,
