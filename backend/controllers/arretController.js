@@ -190,7 +190,7 @@ exports.voirArretsParLigneFiltres = async (req, res) => {
 
 		let arrets = await Arret.find({ lignesDesservies: line }).lean();
 
-		// --- Coordonnées de référence pour trier (à adapter dynamiquement si besoin)
+		// Coordonnées de tri (exemple statique — adapter si besoin)
 		const latA = 50.896804,
 			lonA = 4.337345;
 		const latB = 50.813378,
@@ -199,34 +199,41 @@ exports.voirArretsParLigneFiltres = async (req, res) => {
 			dy = latB - latA;
 		const denom = dx * dx + dy * dy;
 
-		// --- Trier les arrêts selon la projection linéaire
+		// Tri
 		arrets.sort((a, b) => {
 			const projA = ((a.latitude - latA) * dy + (a.longitude - lonA) * dx) / denom;
 			const projB = ((b.latitude - latA) * dy + (b.longitude - lonA) * dx) / denom;
 			return sort === "desc" ? projB - projA : projA - projB;
 		});
 
-		// --- Ajout des signalements récents (24h)
+		// Signalements récents
 		const now = new Date();
 		const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
 
-		const arretsAvecSignalements = await Promise.all(
+		const arretsAvecInfos = await Promise.all(
 			arrets.map(async (arret) => {
-				const signalements = await require("../models/Signalement")
-					.find({
-						arretId: arret._id,
-						dateSignalement: { $gte: oneDayAgo }, // ✅ CORRIGÉ ICI
-					})
-					.lean();
+				const signalements = await Signalement.find({
+					arretId: arret._id,
+					dateSignalement: { $gte: oneDayAgo },
+				}).lean();
+
+				// 🔥 Calcul dynamique de l’état
+				let etat = "Vert";
+				if (signalements.length >= 4) etat = "Rouge";
+				else if (signalements.length >= 2) etat = "Orange";
+
+				// ✅ (Optionnel) Persister dans Mongo si tu veux le stocker
+				await Arret.findByIdAndUpdate(arret._id, { etat });
 
 				return {
 					...arret,
+					etat,
 					signalementsRecents: signalements,
 				};
 			})
 		);
 
-		res.json(arretsAvecSignalements);
+		res.json(arretsAvecInfos);
 	} catch (error) {
 		console.error("[ERREUR] voirArretsParLigneFiltres:", error);
 		res.status(500).json({ message: error.message });
