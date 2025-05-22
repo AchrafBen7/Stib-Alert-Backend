@@ -107,17 +107,25 @@ exports.synchroniserArretAvecLigne = async (req, res) => {
 			});
 		}
 
-		// ✅ Ajouter la ligne à l'arrêt
 		if (!arret.lignesDesservies.includes(ligne.lineid)) {
 			arret.lignesDesservies.push(ligne.lineid);
-			await arret.save();
 		}
 
 		// ✅ Ajouter l'arrêt à la ligne
 		if (!ligne.points.some((point) => point.id.toString() === arret._id.toString())) {
-			ligne.points.push({ id: arret._id, order: ligne.points.length + 1 });
+			const nouvelOrdre = ligne.points.length + 1;
+			ligne.points.push({ id: arret._id, order: nouvelOrdre });
 			await ligne.save();
+
+			// ✅ Ajouter ou mettre à jour l'ordre dans l'arrêt
+			if (!arret.order) {
+				arret.order = {};
+			}
+			arret.order[ligne.lineid] = nouvelOrdre;
 		}
+
+		// ✅ Sauvegarder l'arrêt mis à jour
+		await arret.save();
 
 		res.json({ message: "Arrêt et ligne synchronisés avec succès.", arret, ligne });
 	} catch (error) {
