@@ -240,12 +240,8 @@ exports.voirArretsParLigneFiltres = async (req, res) => {
 				};
 			})
 		);
-
-		// ✅ Nettoyer les Maps "order" pour Swift (en objets simples)
 		const arretsFinal = arretsAvecInfos.map((arret) => {
 			let orderClean = {};
-
-			// Si c'est déjà un objet simple, on le copie
 			if (arret.order && typeof arret.order === "object") {
 				for (const [k, v] of Object.entries(arret.order)) {
 					orderClean[k] = typeof v === "object" && v.hasOwnProperty("$numberInt") ? parseInt(v.$numberInt) : v;
@@ -254,6 +250,7 @@ exports.voirArretsParLigneFiltres = async (req, res) => {
 
 			return {
 				...arret,
+				typeTransport: Array.isArray(arret.typeTransport) ? arret.typeTransport : [arret.typeTransport], // 💥 fix ici
 				order: orderClean,
 			};
 		});
