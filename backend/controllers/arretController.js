@@ -1,6 +1,6 @@
 const Arret = require("../models/Arret");
 const Ligne = require("../models/Ligne");
-
+const Signalement = require("../models/Signalement");
 // ✅ 1. Créer un nouvel arrêt (ex: Vanderkindere)
 exports.ajouterArret = async (req, res) => {
 	try {
@@ -188,9 +188,9 @@ exports.voirArretsParLigneFiltres = async (req, res) => {
 		const { line, sort } = req.query;
 		if (!line) return res.status(400).json({ message: "Paramètre 'line' requis." });
 
-		const arrets = await require("../models/Arret").find({ lignesDesservies: line });
+		let arrets = await Arret.find({ lignesDesservies: line }).lean();
 
-		// Coordonnées des deux terminus
+		// --- Coordonnées de référence pour trier (à adapter dynamiquement si besoin)
 		const latA = 50.896804,
 			lonA = 4.337345;
 		const latB = 50.813378,
@@ -199,14 +199,34 @@ exports.voirArretsParLigneFiltres = async (req, res) => {
 			dy = latB - latA;
 		const denom = dx * dx + dy * dy;
 
+		// --- Trier les arrêts selon la projection linéaire
 		arrets.sort((a, b) => {
 			const projA = ((a.latitude - latA) * dy + (a.longitude - lonA) * dx) / denom;
 			const projB = ((b.latitude - latA) * dy + (b.longitude - lonA) * dx) / denom;
 			return sort === "desc" ? projB - projA : projA - projB;
 		});
 
-		res.json(arrets);
+		// --- Ajout des signalements récents (24h)
+		const now = new Date();
+		const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+
+		const arretsAvecSignalements = await Promise.all(
+			arrets.map(async (arret) => {
+				const signalements = await Signalement.find({
+					arretId: arret._id,
+					createdAt: { $gte: oneDayAgo },
+				}).lean();
+
+				return {
+					...arret,
+					signalementsRecents: signalements,
+				};
+			})
+		);
+
+		res.json(arretsAvecSignalements);
 	} catch (error) {
+		console.error("[ERREUR] voirArretsParLigneFiltres:", error);
 		res.status(500).json({ message: error.message });
 	}
 };
