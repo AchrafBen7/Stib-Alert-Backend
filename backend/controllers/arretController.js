@@ -209,9 +209,9 @@ exports.voirArretsParLigneFiltres = async (req, res) => {
 
 		// Tri
 		arrets.sort((a, b) => {
-			const projA = ((a.latitude - latA) * dy + (a.longitude - lonA) * dx) / denom;
-			const projB = ((b.latitude - latA) * dy + (b.longitude - lonA) * dx) / denom;
-			return sort === "desc" ? projB - projA : projA - projB;
+			const aOrder = a.order?.[line] ?? 9999;
+			const bOrder = b.order?.[line] ?? 9999;
+			return sort === "desc" ? bOrder - aOrder : aOrder - bOrder;
 		});
 
 		// Signalements récents
@@ -241,7 +241,22 @@ exports.voirArretsParLigneFiltres = async (req, res) => {
 			})
 		);
 
-		res.json(arretsAvecInfos);
+		// ✅ Nettoyer les Maps "order" en objets JSON simples
+		const arretsFinal = arretsAvecInfos.map((arret) => {
+			const orderClean = {};
+			if (arret.order && typeof arret.order === "object") {
+				for (const [key, value] of Object.entries(arret.order)) {
+					orderClean[key] = value;
+				}
+			}
+
+			return {
+				...arret,
+				order: orderClean,
+			};
+		});
+
+		res.json(arretsFinal);
 	} catch (error) {
 		console.error("[ERREUR] voirArretsParLigneFiltres:", error);
 		res.status(500).json({ message: error.message });
