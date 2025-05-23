@@ -228,7 +228,7 @@ exports.voirArretsParLigneFiltres = async (req, res) => {
 				// 🔥 Convertir toutes les dates ISO
 				const signalementsFormatted = signalements.map((s) => ({
 					...s,
-					dateSignalement: s.dateSignalement instanceof Date ? s.dateSignalement.toISOString() : new Date(s.dateSignalement).toISOString(),
+					dateSignalement: (s.dateSignalement instanceof Date ? s.dateSignalement : new Date(s.dateSignalement)).toISOString().split(".")[0] + "Z",
 				}));
 
 				// 🔥 Calcul dynamique de l’état
