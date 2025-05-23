@@ -256,8 +256,9 @@ exports.voirArretsParLigneFiltres = async (req, res) => {
 
 			return {
 				...arret,
-				typeTransport: Array.isArray(arret.typeTransport) ? arret.typeTransport : [arret.typeTransport], // 💥 fix ici
+				typeTransport: Array.isArray(arret.typeTransport) ? arret.typeTransport : [arret.typeTransport],
 				order: orderClean,
+				signalementsRecents: arret.signalementsRecents, // ✅ ne PAS l'oublier ici !
 			};
 		});
 
