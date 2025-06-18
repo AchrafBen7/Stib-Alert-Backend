@@ -2,7 +2,7 @@ const Ligne = require("../models/Ligne");
 const Trace = require("../models/Trace");
 const Arret = require("../models/Arret"); // ✅ Ajout de l'importation manquante
 const Signalement = require("../models/Signalement");
-const { genererSuggestionAlternative, genererResumeSignalements } = require("../config/openai");
+const { genererAlternativeItineraire, genererResumeSignalements } = require("../config/openai");
 
 // ✅ Récupérer le tracé d’une ligne spécifique
 exports.voirTraceParLigne = async (req, res) => {
@@ -111,31 +111,48 @@ exports.voirPerturbationsParLigne = async (req, res) => {
 	}
 };
 
+function getLastHour() {
+	const date = new Date();
+	date.setHours(date.getHours() - 1);
+	return date;
+}
+
+function getNearbyStopsByNom(nom) {
+	return Arret.find().then((arrets) => {
+		const cible = arrets.find((a) => a.nom.toLowerCase().includes(nom.toLowerCase()));
+		if (!cible) return [];
+
+		return arrets
+			.map((a) => {
+				const d = Math.sqrt(Math.pow(a.latitude - cible.latitude, 2) + Math.pow(a.longitude - cible.longitude, 2));
+				return { ...a.toObject(), distance: d };
+			})
+			.sort((a, b) => a.distance - b.distance)
+			.slice(0, 5);
+	});
+}
+
 // ✅ Générer des alternatives en cas de perturbation
-exports.voirAlternatives = async (req, res) => {
+exports.voirAlternativeItineraire = async (req, res) => {
 	try {
-		const { lineid, arretId } = req.params;
+		const { depart, destination, ligneBloquee } = req.body;
 
-		// ✅ Vérifier si l'arrêt existe
-		const arret = await Arret.findById(arretId);
-		if (!arret) return res.status(404).json({ message: "Arrêt introuvable." });
-
-		// ✅ Trouver les autres lignes qui passent par cet arrêt
-		const alternatives = arret.lignesDesservies.filter((id) => id !== lineid);
-
-		// ✅ Générer une suggestion avec OpenAI
-		const suggestion = await genererSuggestionAlternative(lineid, arret.nom, alternatives);
+		// Récupère les deux propriétés directement
+		const { suggestion, itineraire } = await genererAlternativeItineraire(depart, destination, ligneBloquee);
 
 		res.json({
-			arret: arret.nom,
-			ligneAffectee: lineid,
-			alternatives,
+			depart,
+			destination,
+			ligneBloquee,
 			suggestion,
+			itineraire,
 		});
 	} catch (error) {
-		res.status(500).json({ message: error.message });
+		console.error("Erreur suggestion itinéraire:", error);
+		res.status(500).json({ message: "Erreur serveur." });
 	}
 };
+
 exports.voirArretsParLigne = async (req, res) => {
 	try {
 		const { lineid } = req.params;

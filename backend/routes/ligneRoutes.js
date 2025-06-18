@@ -20,7 +20,7 @@ router.get("/:id/trace", ligneController.voirTraceParLigne);
 router.get("/:id/perturbations", ligneController.voirPerturbationsParLigne);
 
 // ✅ Route pour voir les alternatives
-router.get("/:lineid/:arretId/alternatives", ligneController.voirAlternatives);
+router.post("/alternatives", ligneController.voirAlternativeItineraire);
 
 router.patch("/:id/ajouter-retour", ligneController.ajouterNomCompletRetour);
 router.post("/:lineid/arrets", ligneController.ajouterArretALigne);

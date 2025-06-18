@@ -1,4 +1,6 @@
 const OpenAI = require("openai");
+const { fetchItinerairesGoogle } = require("../services/googleDirections");
+const Signalement = require("../models/Signalement"); // adapte le chemin si nécessaire
 
 const openai = new OpenAI({
 	apiKey: process.env.OPENAI_API_KEY,
@@ -47,25 +49,95 @@ exports.genererResumeSignalements = async (signalements, ligne, arret) => {
 	}
 };
 
-/**
- * ✅ 3. Génère des itinéraires alternatifs en cas de perturbation.
- */
-exports.genererSuggestionAlternative = async (ligne, arret, alternatives) => {
+function getLastHour() {
+	const date = new Date();
+	date.setHours(date.getHours() - 1);
+	return date;
+}
+
+function getLignesDepuisItineraire(itineraire) {
+	return itineraire.legs.flatMap((leg) =>
+		leg.steps
+			.filter((step) => step.travel_mode === "TRANSIT")
+			.map((step) => step.transit_details?.line?.short_name)
+			.filter(Boolean)
+	);
+}
+
+function choisirPlusCourt(itineraires) {
+	return itineraires.reduce((min, current) => {
+		const durationMin = min.legs.reduce((sum, leg) => sum + leg.duration.value, 0);
+		const durationCurrent = current.legs.reduce((sum, leg) => sum + leg.duration.value, 0);
+		return durationCurrent < durationMin ? current : min;
+	}, itineraires[0]);
+}
+
+exports.genererAlternativeItineraire = async (depart, destination, ligneBloquee) => {
 	try {
-		if (alternatives.length === 0) return "Aucune alternative disponible.";
+		const itineraireData = await fetchItinerairesGoogle(depart, destination);
+		const itineraireList = itineraireData || [];
 
-		const prompt = `Le ${ligne} est bloqué à ${arret}. Quelles sont les meilleures alternatives en utilisant ces lignes : ${alternatives.join(", ")} ?`;
+		if (!itineraireList.length) {
+			console.warn("⚠️ Google Directions n’a renvoyé aucun itinéraire.");
+			return {
+				message: "Aucun itinéraire trouvé entre ces deux points.",
+				itineraire: null,
+			};
+		}
 
-		const response = await openai.chat.completions.create({
-			model: "gpt-4o",
-			messages: [{ role: "user", content: prompt }],
-			max_tokens: 50,
+		const signalements = await Signalement.find({
+			type: { $in: ["bloqué", "retard"] },
+			date: { $gte: getLastHour() },
 		});
 
-		return response.choices[0].message.content.trim();
-	} catch (error) {
-		console.error("Erreur OpenAI :", error);
-		return "Erreur lors de la génération de la suggestion.";
+		const lignesPerturbées = signalements.map((sig) => String(sig.ligne));
+		console.log("🧪 Lignes perturbées :", lignesPerturbées);
+
+		itineraireList.forEach((itin, index) => {
+			const lignes = getLignesDepuisItineraire(itin);
+			console.log(`🔍 Itinéraire ${index + 1} utilise les lignes :`, lignes);
+		});
+
+		const itineraireFiltrés = itineraireList.filter((itin) => {
+			const lignes = getLignesDepuisItineraire(itin);
+			return lignes.every((l) => !lignesPerturbées.includes(l));
+		});
+
+		const meilleur = choisirPlusCourt(itineraireFiltrés.length ? itineraireFiltrés : itineraireList);
+
+		const leg = meilleur.legs[0];
+		const transitStep = leg.steps.find((s) => s.travel_mode === "TRANSIT");
+
+		const ligne = transitStep?.transit_details?.line?.short_name || "Inconnue";
+		const direction = transitStep?.transit_details?.headsign || "inconnue";
+		const numStops = transitStep?.transit_details?.num_stops || "?";
+		const stopDep = transitStep?.transit_details?.departure_stop?.name || "départ inconnu";
+		const stopArr = transitStep?.transit_details?.arrival_stop?.name || "arrivée inconnue";
+		const durationMin = Math.round(leg.duration.value / 60);
+		const walking = leg.steps.find((s) => s.travel_mode === "WALKING");
+		const walkDuration = walking ? Math.round(walking.duration.value / 60) : 0;
+
+		const message = `
+🟢 Itinéraire ${itineraireFiltrés.length ? "sans perturbation détectée" : "avec quelques perturbations"} :
+
+🚶‍♂️ Marchez ${walkDuration} min jusqu’à l’arrêt **${stopDep}**
+🚋 Prenez la ligne **${ligne}** vers **${direction}**
+📍 De **${stopDep}** à **${stopArr}** (${numStops} arrêts)
+🕒 Temps total : ${durationMin} minutes
+
+Bonne route ! 🚀
+`.trim();
+
+		return {
+			suggestion: message,
+			itineraire: meilleur,
+		};
+	} catch (err) {
+		console.error("Erreur IA itinéraire:", err);
+		return {
+			message: "Une erreur est survenue lors de la recherche d’un itinéraire.",
+			itineraire: null,
+		};
 	}
 };
 
@@ -82,7 +154,10 @@ exports.repondreQuestionChatbot = async (question) => {
 			max_tokens: 100,
 		});
 
-		return response.choices[0].message.content.trim();
+		return {
+			suggestion: response.choices[0].message.content.trim(),
+			itineraire: meilleur,
+		};
 	} catch (error) {
 		console.error("Erreur OpenAI :", error);
 		return "Je ne peux pas répondre pour le moment.";
