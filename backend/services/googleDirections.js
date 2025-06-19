@@ -41,4 +41,29 @@ async function fetchItinerairesGoogle(depart, destination) {
 	}
 }
 
-module.exports = { fetchItinerairesGoogle };
+/**
+ * Récupère une adresse lisible depuis des coordonnées (lat, lng)
+ * @param {number} lat
+ * @param {number} lng
+ * @returns {Promise<string>} Adresse lisible
+ */
+async function getAdresseFromCoord(lat, lng) {
+	try {
+		const params = new URLSearchParams({
+			latlng: `${lat},${lng}`,
+			key: GOOGLE_API_KEY,
+			language: "fr",
+		});
+
+		const response = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?${params.toString()}`);
+		const data = await response.json();
+
+		const adresse = data.results?.[0]?.formatted_address;
+		return adresse || `${lat}, ${lng}`;
+	} catch (error) {
+		console.error("Erreur reverse geocoding :", error.message);
+		return `${lat}, ${lng}`;
+	}
+}
+
+module.exports = { fetchItinerairesGoogle, getAdresseFromCoord };

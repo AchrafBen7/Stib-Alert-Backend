@@ -1,5 +1,5 @@
 const OpenAI = require("openai");
-const { fetchItinerairesGoogle } = require("../services/googleDirections");
+const { fetchItinerairesGoogle, getAdresseFromCoord } = require("../services/googleDirections");
 const Signalement = require("../models/Signalement"); // adapte le chemin si nécessaire
 
 const openai = new OpenAI({
@@ -48,7 +48,6 @@ exports.genererResumeSignalements = async (signalements, ligne, arret) => {
 		return "Erreur lors de la génération du résumé.";
 	}
 };
-
 function getLastHour() {
 	const date = new Date();
 	date.setHours(date.getHours() - 1);
@@ -72,22 +71,30 @@ function choisirPlusCourt(itineraires) {
 	}, itineraires[0]);
 }
 
-function formatterEtapes(itineraire) {
-	const steps = itineraire.legs[0].steps.filter((s) => s.travel_mode === "TRANSIT");
+async function construireMessage(itineraire) {
+	const leg = itineraire.legs[0];
+	const totalDuration = Math.round(leg.duration.value / 60);
+	const steps = leg.steps;
 
-	return steps.map((step, i) => {
-		const t = step.transit_details;
-		const ligne = t.line.short_name;
-		const type = t.line.vehicle.type;
-		const direction = t.headsign;
-		const dep = t.departure_stop.name;
-		const arr = t.arrival_stop.name;
-		const stops = t.num_stops;
-		const duration = Math.round(step.duration.value / 60);
-		const emoji = type === "TRAM" ? "🚋" : type === "SUBWAY" ? "🚇" : "🚌";
+	let message = `🟢 Itinéraire proposé :\n\n`;
+	let currentStepIndex = 1;
 
-		return `${emoji} ${i === 0 ? "Depuis" : "Ensuite"} **${dep}**, prends la ligne **${ligne}** (${type.toLowerCase()}) vers **${direction}** ➜ descends à **${arr}** (${stops} arrêts, env. ${duration} min)`;
-	});
+	for (const step of steps) {
+		if (step.travel_mode === "WALKING") {
+			const walkMin = Math.round(step.duration.value / 60);
+			const adresseLisible = await getAdresseFromCoord(step.end_location.lat, step.end_location.lng);
+			message += `🚶 Étape ${currentStepIndex} : Marchez environ ${walkMin} min jusqu’à **${adresseLisible}**\n`;
+		} else if (step.travel_mode === "TRANSIT") {
+			const t = step.transit_details;
+			message += `🚋 Étape ${currentStepIndex} : Prends la ligne **${t.line.short_name}** (${t.line.vehicle.type.toLowerCase()}) vers **${t.headsign}**\n`;
+			message += `📍 De **${t.departure_stop.name}** à **${t.arrival_stop.name}** (${t.num_stops} arrêts, env. ${Math.round(step.duration.value / 60)} min)\n\n`;
+		}
+		currentStepIndex++;
+	}
+
+	message += `🕒 Temps total estimé : ${totalDuration} minutes\n\nBonne route ! 🚀`;
+
+	return message;
 }
 
 exports.genererAlternativeItineraire = async (depart, destination, ligneBloquee) => {
@@ -108,8 +115,8 @@ exports.genererAlternativeItineraire = async (depart, destination, ligneBloquee)
 			date: { $gte: getLastHour() },
 		});
 		const lignesPerturbées = signalements.map((sig) => String(sig.ligne));
-		console.log("🧪 Lignes perturbées :", lignesPerturbées);
 
+		console.log("🧪 Lignes perturbées :", lignesPerturbées);
 		itineraireList.forEach((itin, index) => {
 			const lignes = getLignesDepuisItineraire(itin);
 			console.log(`🔍 Itinéraire ${index + 1} utilise les lignes :`, lignes);
@@ -121,25 +128,7 @@ exports.genererAlternativeItineraire = async (depart, destination, ligneBloquee)
 		});
 
 		const meilleur = choisirPlusCourt(itineraireFiltrés.length ? itineraireFiltrés : itineraireList);
-		const leg = meilleur.legs[0];
-
-		const totalDuration = Math.round(meilleur.legs.reduce((sum, leg) => sum + leg.duration.value, 0) / 60);
-		const walking = leg.steps.find((s) => s.travel_mode === "WALKING");
-		const walkDuration = walking ? Math.round(walking.duration.value / 60) : 0;
-
-		const resuméEtapes = formatterEtapes(meilleur).join("\n");
-
-		const message = `
-${itineraireFiltrés.length ? "🟢 Itinéraire sans perturbation détectée !" : "⚠️ Meilleur itinéraire malgré des perturbations détectées sur d'autres options."}
-
-🚶‍♂️ Marchez environ ${walkDuration} min jusqu’a l'arret ci-dessous: 
-
-${resuméEtapes}
-
-🕒 Temps total estimé : ${totalDuration} minutes.
-
-Bonne route ! 🚀
-`.trim();
+		const message = await construireMessage(meilleur);
 
 		return {
 			suggestion: message,
