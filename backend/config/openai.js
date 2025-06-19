@@ -72,6 +72,24 @@ function choisirPlusCourt(itineraires) {
 	}, itineraires[0]);
 }
 
+function formatterEtapes(itineraire) {
+	const steps = itineraire.legs[0].steps.filter((s) => s.travel_mode === "TRANSIT");
+
+	return steps.map((step, i) => {
+		const t = step.transit_details;
+		const ligne = t.line.short_name;
+		const type = t.line.vehicle.type;
+		const direction = t.headsign;
+		const dep = t.departure_stop.name;
+		const arr = t.arrival_stop.name;
+		const stops = t.num_stops;
+		const duration = Math.round(step.duration.value / 60);
+		const emoji = type === "TRAM" ? "🚋" : type === "SUBWAY" ? "🚇" : "🚌";
+
+		return `${emoji} ${i === 0 ? "Depuis" : "Ensuite"} **${dep}**, prends la ligne **${ligne}** (${type.toLowerCase()}) vers **${direction}** ➜ descends à **${arr}** (${stops} arrêts, env. ${duration} min)`;
+	});
+}
+
 exports.genererAlternativeItineraire = async (depart, destination, ligneBloquee) => {
 	try {
 		const itineraireData = await fetchItinerairesGoogle(depart, destination);
@@ -89,7 +107,6 @@ exports.genererAlternativeItineraire = async (depart, destination, ligneBloquee)
 			type: { $in: ["bloqué", "retard"] },
 			date: { $gte: getLastHour() },
 		});
-
 		const lignesPerturbées = signalements.map((sig) => String(sig.ligne));
 		console.log("🧪 Lignes perturbées :", lignesPerturbées);
 
@@ -104,26 +121,22 @@ exports.genererAlternativeItineraire = async (depart, destination, ligneBloquee)
 		});
 
 		const meilleur = choisirPlusCourt(itineraireFiltrés.length ? itineraireFiltrés : itineraireList);
-
 		const leg = meilleur.legs[0];
-		const transitStep = leg.steps.find((s) => s.travel_mode === "TRANSIT");
 
-		const ligne = transitStep?.transit_details?.line?.short_name || "Inconnue";
-		const direction = transitStep?.transit_details?.headsign || "inconnue";
-		const numStops = transitStep?.transit_details?.num_stops || "?";
-		const stopDep = transitStep?.transit_details?.departure_stop?.name || "départ inconnu";
-		const stopArr = transitStep?.transit_details?.arrival_stop?.name || "arrivée inconnue";
-		const durationMin = Math.round(leg.duration.value / 60);
+		const totalDuration = Math.round(meilleur.legs.reduce((sum, leg) => sum + leg.duration.value, 0) / 60);
 		const walking = leg.steps.find((s) => s.travel_mode === "WALKING");
 		const walkDuration = walking ? Math.round(walking.duration.value / 60) : 0;
 
-		const message = `
-🟢 Itinéraire ${itineraireFiltrés.length ? "sans perturbation détectée" : "avec quelques perturbations"} :
+		const resuméEtapes = formatterEtapes(meilleur).join("\n");
 
-🚶‍♂️ Marchez ${walkDuration} min jusqu’à l’arrêt **${stopDep}**
-🚋 Prenez la ligne **${ligne}** vers **${direction}**
-📍 De **${stopDep}** à **${stopArr}** (${numStops} arrêts)
-🕒 Temps total : ${durationMin} minutes
+		const message = `
+${itineraireFiltrés.length ? "🟢 Itinéraire sans perturbation détectée !" : "⚠️ Meilleur itinéraire malgré des perturbations détectées sur d'autres options."}
+
+🚶‍♂️ Marchez environ ${walkDuration} min jusqu’a l'arret ci-dessous: 
+
+${resuméEtapes}
+
+🕒 Temps total estimé : ${totalDuration} minutes.
 
 Bonne route ! 🚀
 `.trim();
