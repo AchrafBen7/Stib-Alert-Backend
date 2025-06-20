@@ -135,17 +135,17 @@ function getNearbyStopsByNom(nom) {
 // ✅ Générer des alternatives en cas de perturbation
 exports.voirAlternativeItineraire = async (req, res) => {
 	try {
-		const { depart, destination, ligneBloquee } = req.body;
+		const { depart, destination, lignesBloquees = [] } = req.body; // 👈 Pluriel ici
 
-		// Récupère les deux propriétés directement
-		const { suggestion, itineraire } = await genererAlternativeItineraire(depart, destination, ligneBloquee);
+		const { suggestion, itineraire, details } = await genererAlternativeItineraire(depart, destination, lignesBloquees); // 👈 Tableau passé
 
 		res.json({
 			depart,
 			destination,
-			ligneBloquee,
+			lignesBloquees,
 			suggestion,
 			itineraire,
+			details,
 		});
 	} catch (error) {
 		console.error("Erreur suggestion itinéraire:", error);

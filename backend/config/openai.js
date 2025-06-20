@@ -48,9 +48,9 @@ exports.genererResumeSignalements = async (signalements, ligne, arret) => {
 		return "Erreur lors de la génération du résumé.";
 	}
 };
-function getLastHour() {
+function getDernieres24h() {
 	const date = new Date();
-	date.setHours(date.getHours() - 1);
+	date.setHours(date.getHours() - 24);
 	return date;
 }
 
@@ -97,7 +97,31 @@ async function construireMessage(itineraire) {
 	return message;
 }
 
-exports.genererAlternativeItineraire = async (depart, destination, ligneBloquee) => {
+function extraireDetailsEtapes(itineraire) {
+	const steps = itineraire.legs.flatMap((leg) => leg.steps);
+	const details = [];
+
+	for (const step of steps) {
+		if (step.travel_mode === "TRANSIT") {
+			const ligne = step.transit_details?.line?.short_name;
+			const depart = step.transit_details?.departure_stop?.name;
+			const arrivee = step.transit_details?.arrival_stop?.name;
+			const arrets = step.transit_details?.num_stops;
+
+			details.push({
+				ligne,
+				depart,
+				arrivee,
+				arrets,
+				type: step.transit_details?.line?.vehicle?.type || "TRANSIT",
+			});
+		}
+	}
+
+	return details;
+}
+
+exports.genererAlternativeItineraire = async (depart, destination, lignesBloquees = []) => {
 	try {
 		const itineraireData = await fetchItinerairesGoogle(depart, destination);
 		const itineraireList = itineraireData || [];
@@ -112,27 +136,54 @@ exports.genererAlternativeItineraire = async (depart, destination, ligneBloquee)
 
 		const signalements = await Signalement.find({
 			type: { $in: ["bloqué", "retard"] },
-			date: { $gte: getLastHour() },
+			date: { $gte: getDernieres24h() },
 		});
-		const lignesPerturbées = signalements.map((sig) => String(sig.ligne));
+		const lignesPerturbeesParArret = new Set(signalements.map((s) => `${s.ligne}-${s.arret.toUpperCase().trim()}`));
+		const lignesBloqueesPropres = (lignesBloquees || []).map((l) => l.toString().trim());
 
-		console.log("🧪 Lignes perturbées :", lignesPerturbées);
+		console.log("🧪 Lignes perturbées :", lignesPerturbeesParArret);
+
 		itineraireList.forEach((itin, index) => {
 			const lignes = getLignesDepuisItineraire(itin);
 			console.log(`🔍 Itinéraire ${index + 1} utilise les lignes :`, lignes);
 		});
 
-		const itineraireFiltrés = itineraireList.filter((itin) => {
-			const lignes = getLignesDepuisItineraire(itin);
-			return lignes.every((l) => !lignesPerturbées.includes(l));
+		const itineraireFiltrés = itineraireList.filter((itin, i) => {
+			const transitSteps = itin.legs.flatMap((leg) => leg.steps.filter((s) => s.travel_mode === "TRANSIT"));
+
+			const rejeté = transitSteps.some((step) => {
+				const ligne = step.transit_details?.line?.short_name?.trim();
+				const arretDepart = step.transit_details?.departure_stop?.name?.toUpperCase().trim();
+				console.log("🔎 Vérif ligne bloquée :", {
+					ligne,
+					lignesBloqueesPropres,
+					estLigneBloquee: lignesBloqueesPropres.includes(ligne),
+				});
+
+				const ligneStep = ligne?.toString().trim();
+				const estLigneBloquee = lignesBloqueesPropres.includes(ligneStep);
+
+				const estPerturbe = lignesPerturbeesParArret.has(`${ligne}-${arretDepart}`);
+
+				console.log(`🔍 Itinéraire ${i + 1} étape ${ligne}-${arretDepart} : ${estPerturbe || estLigneBloquee ? "🚫 Rejeté" : "✅ OK"}`);
+
+				return estPerturbe || estLigneBloquee;
+			});
+
+			if (rejeté) console.log(`❌ Itinéraire ${i + 1} filtré à cause d'une ligne perturbée ou bloquée`);
+			else console.log(`✅ Itinéraire ${i + 1} conservé`);
+
+			return !rejeté;
 		});
 
 		const meilleur = choisirPlusCourt(itineraireFiltrés.length ? itineraireFiltrés : itineraireList);
 		const message = await construireMessage(meilleur);
+		const details = extraireDetailsEtapes(meilleur);
 
 		return {
 			suggestion: message,
 			itineraire: meilleur,
+			details: details,
 		};
 	} catch (err) {
 		console.error("Erreur IA itinéraire:", err);
