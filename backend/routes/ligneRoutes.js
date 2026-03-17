@@ -6,12 +6,11 @@ const router = express.Router();
 // ✅ Route pour voir toutes les lignes
 router.get("/", ligneController.voirToutesLesLignes);
 router.get("/etat-lignes", ligneController.etatLignes);
+router.get("/toutes", ligneController.voirToutesLesLignesDisponibles);
+router.get("/maj-order", ligneController.majOrderPourLigne);
 router.get("/:lineid/arrets", ligneController.voirArretsParLigne);
 // ✅ Route pour voir une ligne spécifique par son ID STIB (lineid)
 router.get("/:lineid", ligneController.voirLigneParLineID);
-
-// Route pour voir toutes les lignes disponibles
-router.get("/toutes", ligneController.voirToutesLesLignesDisponibles);
 
 // ✅ Route pour voir le tracé d'une ligne
 router.get("/:id/trace", ligneController.voirTraceParLigne);
@@ -24,5 +23,4 @@ router.post("/alternatives", ligneController.voirAlternativeItineraire);
 
 router.patch("/:id/ajouter-retour", ligneController.ajouterNomCompletRetour);
 router.post("/:lineid/arrets", ligneController.ajouterArretALigne);
-router.get("/maj-order", ligneController.majOrderPourLigne);
 module.exports = router;

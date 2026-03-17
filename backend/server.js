@@ -37,6 +37,7 @@ app.use("/api/utilisateurs", require("./routes/utilisateurRoutes"));
 app.use("/api/lignes", require("./routes/ligneRoutes"));
 app.use("/api/chatbot", require("./routes/chatbotRoutes"));
 app.use("/api/arrets", require("./routes/arretRoute"));
+app.use("/api/stib", require("./routes/stibRealtimeRoutes"));
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 // Route de test
