@@ -137,7 +137,7 @@ exports.voirAlternativeItineraire = async (req, res) => {
 	try {
 		const { depart, destination, lignesBloquees = [] } = req.body; // 👈 Pluriel ici
 
-		const { suggestion, itineraire, details } = await genererAlternativeItineraire(depart, destination, lignesBloquees); // 👈 Tableau passé
+		const { suggestion, itineraire, details, meta } = await genererAlternativeItineraire(depart, destination, lignesBloquees); // 👈 Tableau passé
 
 		res.json({
 			depart,
@@ -146,6 +146,7 @@ exports.voirAlternativeItineraire = async (req, res) => {
 			suggestion,
 			itineraire,
 			details,
+			meta,
 		});
 	} catch (error) {
 		console.error("Erreur suggestion itinéraire:", error);

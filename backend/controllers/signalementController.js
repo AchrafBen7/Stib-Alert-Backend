@@ -1,5 +1,6 @@
 const Signalement = require("../models/Signalement");
 const Arret = require("../models/Arret");
+const Utilisateur = require("../models/Utilisateur");
 const { analyserSignalement, genererResumeSignalements, traduireSignalement } = require("../config/openai");
 const { emitSignalement } = require("../config/websocket");
 const moment = require("moment");
@@ -199,9 +200,11 @@ exports.voterSignalement = async (req, res) => {
 		await signalement.save();
 
 		// Ajouter l'ID du signalement aux votes de l'utilisateur connecté
-		await Utilisateur.findByIdAndUpdate(req.utilisateur._id, {
-			$addToSet: { votes: signalement._id },
-		});
+		if (req.user?.userId) {
+			await Utilisateur.findByIdAndUpdate(req.user.userId, {
+				$addToSet: { votes: signalement._id },
+			});
+		}
 
 		// Si trop de votes négatifs → mise à jour de la confiance
 		if (signalement.votesNegatifs >= 5) {

@@ -16,10 +16,12 @@ const protect = async (req, res, next) => {
 		}
 
 		// Vérifie si le token est dans Redis (cache)
-		const cacheUser = await redis.get(`auth:${token}`);
-		if (cacheUser) {
-			req.user = JSON.parse(cacheUser); // Récupère les données mises en cache
-			return next();
+		if (redis) {
+			const cacheUser = await redis.get(`auth:${token}`);
+			if (cacheUser) {
+				req.user = JSON.parse(cacheUser); // Récupère les données mises en cache
+				return next();
+			}
 		}
 
 		// Vérifie et décode le token JWT
@@ -27,7 +29,9 @@ const protect = async (req, res, next) => {
 		req.user = { userId: decoded.userId };
 
 		// Stocke les infos de l'utilisateur dans Redis (expire après 7 jours)
-		await redis.setex(`auth:${token}`, 604800, JSON.stringify(req.user));
+		if (redis) {
+			await redis.setex(`auth:${token}`, 604800, JSON.stringify(req.user));
+		}
 
 		next();
 	} catch (error) {

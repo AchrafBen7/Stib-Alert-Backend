@@ -25,12 +25,16 @@ app.use(helmet());
 app.use(morgan("dev"));
 
 // Connexion à Redis
-redis.on("connect", () => {
-	console.log("✅ Redis connecté !");
-});
-redis.on("error", (err) => {
-	console.error("❌ Erreur Redis :", err);
-});
+if (redis) {
+	redis.on("connect", () => {
+		console.log("✅ Redis connecté !");
+	});
+	redis.on("error", (err) => {
+		console.error("❌ Erreur Redis :", err);
+	});
+} else {
+	console.warn("⚠️ Redis désactivé : REDIS_URL manquant.");
+}
 
 app.use("/api/signalements", require("./routes/signalementRoutes"));
 app.use("/api/utilisateurs", require("./routes/utilisateurRoutes"));
@@ -47,7 +51,7 @@ app.get("/", (req, res) => {
 
 // Démarrer le serveur après connexion à la DB
 const PORT = process.env.PORT || 4000;
-app.listen(PORT, "0.0.0.0", async () => {
+server.listen(PORT, "0.0.0.0", async () => {
 	await connectDB();
 	console.log(`🚀 Serveur en ligne sur le port ${PORT}`);
 });

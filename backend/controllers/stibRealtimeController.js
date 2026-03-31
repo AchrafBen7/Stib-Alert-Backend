@@ -1,4 +1,10 @@
-const { getTravellersInformation, getWaitingTimes, getVehiclePositions } = require("../services/belgianMobility");
+const {
+	getShapeFiles,
+	getStopDetails,
+	getTravellersInformation,
+	getWaitingTimes,
+	getVehiclePositions,
+} = require("../services/belgianMobility");
 
 function includeRaw(req) {
 	return String(req.query.includeRaw || "false").toLowerCase() === "true";
@@ -45,6 +51,24 @@ exports.voirVehiclePositions = async (req, res) => {
 	try {
 		const result = await getVehiclePositions(req.query);
 		res.json(formatResponse(req, "VehiclePositions", result));
+	} catch (error) {
+		handleError(res, error);
+	}
+};
+
+exports.voirShapeFiles = async (req, res) => {
+	try {
+		const result = await getShapeFiles(req.query);
+		res.json(formatResponse(req, "ShapeFiles", result));
+	} catch (error) {
+		handleError(res, error);
+	}
+};
+
+exports.voirStopDetails = async (req, res) => {
+	try {
+		const result = await getStopDetails(req.query);
+		res.json(formatResponse(req, "StopDetails", result));
 	} catch (error) {
 		handleError(res, error);
 	}

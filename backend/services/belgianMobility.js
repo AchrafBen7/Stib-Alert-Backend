@@ -119,6 +119,87 @@ function normalizeVehiclePosition(entry) {
 	};
 }
 
+function normalizeCoordinatePair(pair) {
+	if (!Array.isArray(pair) || pair.length < 2) return null;
+
+	const [longitude, latitude] = pair;
+	if (longitude === undefined || latitude === undefined) return null;
+
+	return {
+		latitude: Number(latitude),
+		longitude: Number(longitude),
+	};
+}
+
+function flattenLineStrings(coordinates) {
+	if (!Array.isArray(coordinates)) return [];
+
+	return coordinates.flatMap((segment) => {
+		if (!Array.isArray(segment)) return [];
+		return segment.map(normalizeCoordinatePair).filter(Boolean);
+	}).filter((segment) => segment.length > 0);
+}
+
+function extractShapeGeometry(entry) {
+	const geometry =
+		entry.geometry ||
+		entry.geom ||
+		entry.geo_shape ||
+		entry.geojson ||
+		entry.shape ||
+		null;
+
+	if (!geometry) return [];
+
+	if (geometry.type === "LineString") {
+		const line = toArray(geometry.coordinates).map(normalizeCoordinatePair).filter(Boolean);
+		return line.length ? [line] : [];
+	}
+
+	if (geometry.type === "MultiLineString") {
+		return flattenLineStrings(geometry.coordinates);
+	}
+
+	return [];
+}
+
+function normalizeShapeFile(entry) {
+	const properties = entry.properties || entry.fields || entry.attributes || entry;
+	const polylines = extractShapeGeometry(entry);
+
+	return {
+		id: entry.id || entry._id || properties.id || properties.objectid || null,
+		line: properties.line || properties.lineid || properties.route || properties.route_id || null,
+		transportType: properties.transportType || properties.mode || properties.type || properties.network || null,
+		direction: properties.direction || properties.destination || properties.headsign || null,
+		polylines,
+		raw: entry,
+	};
+}
+
+function normalizeStopDetail(entry) {
+	const properties = entry.properties || entry.fields || entry.attributes || entry;
+
+	return {
+		id: entry.id || entry._id || properties.id || properties.stopId || properties.stop_id || properties.pointid || properties.pointId || null,
+		name: properties.name || properties.stopName || properties.stop_name || properties.description || null,
+		latitude:
+			properties.latitude ||
+			properties.lat ||
+			properties.location?.latitude ||
+			entry.geometry?.coordinates?.[1] ||
+			null,
+		longitude:
+			properties.longitude ||
+			properties.lon ||
+			properties.lng ||
+			properties.location?.longitude ||
+			entry.geometry?.coordinates?.[0] ||
+			null,
+		raw: entry,
+	};
+}
+
 async function requestDataset(pathname, query = {}) {
 	const requestUrl = buildUrl(pathname, query);
 	const response = await getFetch()(requestUrl, {
@@ -179,7 +260,37 @@ async function getVehiclePositions(query = {}) {
 	return { payload, items: normalized };
 }
 
+async function getShapeFiles(query = {}) {
+	const payload = await requestDataset("/api/datasets/stibmivb/static/shape-files", query);
+	const items = extractItems(payload);
+	const lineFilters = toArray(query.line || query.lines).map((value) => String(value).toLowerCase());
+	const modeFilters = toArray(query.transportType || query.mode || query.type).map((value) => String(value).toLowerCase());
+
+	const normalized = items
+		.map(normalizeShapeFile)
+		.filter((entry) => containsOneOf(entry.line, lineFilters))
+		.filter((entry) => containsOneOf(entry.transportType, modeFilters))
+		.filter((entry) => entry.polylines.length > 0);
+
+	return { payload, items: normalized };
+}
+
+async function getStopDetails(query = {}) {
+	const payload = await requestDataset("/api/datasets/stibmivb/static/stopDetails", query);
+	const items = extractItems(payload);
+	const stopFilters = toArray(query.stopId || query.stop || query.pointid).map((value) => String(value).toLowerCase());
+
+	const normalized = items
+		.map(normalizeStopDetail)
+		.filter((entry) => containsOneOf(entry.id, stopFilters))
+		.filter((entry) => entry.latitude !== null && entry.longitude !== null);
+
+	return { payload, items: normalized };
+}
+
 module.exports = {
+	getShapeFiles,
+	getStopDetails,
 	getTravellersInformation,
 	getVehiclePositions,
 	getWaitingTimes,

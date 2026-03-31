@@ -1,4 +1,5 @@
 const Utilisateur = require("../models/Utilisateur");
+const Signalement = require("../models/Signalement");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const redis = require("../config/redis");
@@ -25,6 +26,9 @@ exports.inscription = async (req, res) => {
 		);
 
 		// Stocker le code OTP dans Redis (expire en 10 min)
+		if (!redis) {
+			return res.status(500).json({ message: "Redis est requis pour l'activation par OTP." });
+		}
 		await redis.setex(`activation:${email}`, 600, activationCode);
 
 		// Envoyer l'email avec le code OTP
@@ -47,6 +51,9 @@ exports.activerCompte = async (req, res) => {
 		const decoded = jwt.verify(activationToken, process.env.ACTIVATION_SECRET);
 
 		// Vérifier le code OTP dans Redis
+		if (!redis) {
+			return res.status(500).json({ message: "Redis est requis pour l'activation par OTP." });
+		}
 		const storedCode = await redis.get(`activation:${decoded.email}`);
 		if (!storedCode || storedCode !== activationCode) {
 			return res.status(400).json({ message: "Code d'activation incorrect ou expiré." });
@@ -83,7 +90,9 @@ exports.connexion = async (req, res) => {
 		const token = jwt.sign({ userId: utilisateur._id }, process.env.JWT_SECRET, { expiresIn: "7d" });
 
 		// Stocker le token dans Redis
-		await redis.setex(`auth:${token}`, 604800, JSON.stringify({ userId: utilisateur._id }));
+		if (redis) {
+			await redis.setex(`auth:${token}`, 604800, JSON.stringify({ userId: utilisateur._id }));
+		}
 
 		res.json({
 			message: "Connexion réussie",
@@ -101,7 +110,9 @@ exports.deconnexion = async (req, res) => {
 			return res.status(400).json({ message: "Aucun token fourni." });
 		}
 		const token = req.headers.authorization.split(" ")[1];
-		await redis.del(`auth:${token}`);
+		if (redis) {
+			await redis.del(`auth:${token}`);
+		}
 		res.json({ message: "Déconnexion réussie !" });
 	} catch (error) {
 		res.status(500).json({ message: error.message });

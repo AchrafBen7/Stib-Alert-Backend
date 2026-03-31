@@ -54,21 +54,98 @@ function getDernieres24h() {
 	return date;
 }
 
+function normaliserLigne(line) {
+	return line?.toString().trim().toUpperCase() || null;
+}
+
 function getLignesDepuisItineraire(itineraire) {
 	return itineraire.legs.flatMap((leg) =>
 		leg.steps
 			.filter((step) => step.travel_mode === "TRANSIT")
-			.map((step) => step.transit_details?.line?.short_name)
+			.map((step) => normaliserLigne(step.transit_details?.line?.short_name))
 			.filter(Boolean)
 	);
 }
 
-function choisirPlusCourt(itineraires) {
-	return itineraires.reduce((min, current) => {
-		const durationMin = min.legs.reduce((sum, leg) => sum + leg.duration.value, 0);
-		const durationCurrent = current.legs.reduce((sum, leg) => sum + leg.duration.value, 0);
-		return durationCurrent < durationMin ? current : min;
-	}, itineraires[0]);
+function getDurationValue(itineraire) {
+	return itineraire.legs.reduce((sum, leg) => sum + leg.duration.value, 0);
+}
+
+function calculerPoidsSignalement(signalement) {
+	const poidsConfiance = {
+		haute: 3,
+		moyenne: 2,
+		basse: 1,
+	};
+	const poidsProbleme = {
+		Panne: 4,
+		Accident: 4,
+		Agression: 4,
+		Incivilité: 2,
+		Retard: 2,
+		Propreté: 1,
+		Autre: 1,
+	};
+
+	return (poidsProbleme[signalement.typeProbleme] || 1) * (poidsConfiance[signalement.confiance] || 1);
+}
+
+function construireIndicePerturbations(signalements) {
+	const lignes = new Map();
+
+	for (const signalement of signalements) {
+		const ligne = normaliserLigne(signalement.ligne);
+		if (!ligne) continue;
+
+		if (!lignes.has(ligne)) {
+			lignes.set(ligne, {
+				count: 0,
+				score: 0,
+				types: new Set(),
+			});
+		}
+
+		const ligneData = lignes.get(ligne);
+		ligneData.count += 1;
+		ligneData.score += calculerPoidsSignalement(signalement);
+		ligneData.types.add(signalement.typeProbleme);
+	}
+
+	return lignes;
+}
+
+function evaluerItineraire(itineraire, lignesBloqueesSet, perturbationsParLigne) {
+	const lignes = getLignesDepuisItineraire(itineraire);
+	const lignesUniques = [...new Set(lignes)];
+	const lignesBloqueesDansItineraire = lignesUniques.filter((ligne) => lignesBloqueesSet.has(ligne));
+	const scorePerturbation = lignesUniques.reduce((sum, ligne) => sum + (perturbationsParLigne.get(ligne)?.score || 0), 0);
+	const nombreIncidents = lignesUniques.reduce((sum, ligne) => sum + (perturbationsParLigne.get(ligne)?.count || 0), 0);
+	const duration = getDurationValue(itineraire);
+
+	return {
+		itineraire,
+		lignes: lignesUniques,
+		lignesBloqueesDansItineraire,
+		scorePerturbation,
+		nombreIncidents,
+		duration,
+	};
+}
+
+function choisirMeilleurItineraire(evaluations) {
+	return evaluations.reduce((best, current) => {
+		if (!best) return current;
+		if (current.lignesBloqueesDansItineraire.length !== best.lignesBloqueesDansItineraire.length) {
+			return current.lignesBloqueesDansItineraire.length < best.lignesBloqueesDansItineraire.length ? current : best;
+		}
+		if (current.scorePerturbation !== best.scorePerturbation) {
+			return current.scorePerturbation < best.scorePerturbation ? current : best;
+		}
+		if (current.nombreIncidents !== best.nombreIncidents) {
+			return current.nombreIncidents < best.nombreIncidents ? current : best;
+		}
+		return current.duration < best.duration ? current : best;
+	}, null);
 }
 
 async function construireMessage(itineraire) {
@@ -134,56 +211,41 @@ exports.genererAlternativeItineraire = async (depart, destination, lignesBloquee
 			};
 		}
 
+		const lignesBloqueesSet = new Set((lignesBloquees || []).map(normaliserLigne).filter(Boolean));
+		const lignesUtilisees = [...new Set(itineraireList.flatMap(getLignesDepuisItineraire))];
 		const signalements = await Signalement.find({
-			type: { $in: ["bloqué", "retard"] },
-			date: { $gte: getDernieres24h() },
-		});
-		const lignesPerturbeesParArret = new Set(signalements.map((s) => `${s.ligne}-${s.arret.toUpperCase().trim()}`));
-		const lignesBloqueesPropres = (lignesBloquees || []).map((l) => l.toString().trim());
+			ligne: { $in: lignesUtilisees },
+			typeProbleme: { $in: ["Retard", "Panne"] },
+			dateSignalement: { $gte: getDernieres24h() },
+		}).lean();
+		const perturbationsParLigne = construireIndicePerturbations(signalements);
 
-		console.log("🧪 Lignes perturbées :", lignesPerturbeesParArret);
+		const evaluations = itineraireList.map((itineraire) => evaluerItineraire(itineraire, lignesBloqueesSet, perturbationsParLigne));
+		const itinerairesSansLigneBloquee = evaluations.filter((evaluation) => evaluation.lignesBloqueesDansItineraire.length === 0);
+		const meilleur = choisirMeilleurItineraire(itinerairesSansLigneBloquee.length ? itinerairesSansLigneBloquee : evaluations);
 
-		itineraireList.forEach((itin, index) => {
-			const lignes = getLignesDepuisItineraire(itin);
-			console.log(`🔍 Itinéraire ${index + 1} utilise les lignes :`, lignes);
-		});
+		if (!meilleur?.itineraire) {
+			return {
+				message: "Aucun itinéraire exploitable n’a pu être calculé.",
+				itineraire: null,
+				details: [],
+			};
+		}
 
-		const itineraireFiltrés = itineraireList.filter((itin, i) => {
-			const transitSteps = itin.legs.flatMap((leg) => leg.steps.filter((s) => s.travel_mode === "TRANSIT"));
-
-			const rejeté = transitSteps.some((step) => {
-				const ligne = step.transit_details?.line?.short_name?.trim();
-				const arretDepart = step.transit_details?.departure_stop?.name?.toUpperCase().trim();
-				console.log("🔎 Vérif ligne bloquée :", {
-					ligne,
-					lignesBloqueesPropres,
-					estLigneBloquee: lignesBloqueesPropres.includes(ligne),
-				});
-
-				const ligneStep = ligne?.toString().trim();
-				const estLigneBloquee = lignesBloqueesPropres.includes(ligneStep);
-
-				const estPerturbe = lignesPerturbeesParArret.has(`${ligne}-${arretDepart}`);
-
-				console.log(`🔍 Itinéraire ${i + 1} étape ${ligne}-${arretDepart} : ${estPerturbe || estLigneBloquee ? "🚫 Rejeté" : "✅ OK"}`);
-
-				return estPerturbe || estLigneBloquee;
-			});
-
-			if (rejeté) console.log(`❌ Itinéraire ${i + 1} filtré à cause d'une ligne perturbée ou bloquée`);
-			else console.log(`✅ Itinéraire ${i + 1} conservé`);
-
-			return !rejeté;
-		});
-
-		const meilleur = choisirPlusCourt(itineraireFiltrés.length ? itineraireFiltrés : itineraireList);
-		const message = await construireMessage(meilleur);
-		const details = extraireDetailsEtapes(meilleur);
+		const message = await construireMessage(meilleur.itineraire);
+		const details = extraireDetailsEtapes(meilleur.itineraire);
 
 		return {
 			suggestion: message,
-			itineraire: meilleur,
-			details: details,
+			itineraire: meilleur.itineraire,
+			details,
+			meta: {
+				lignesAnalysees: meilleur.lignes,
+				lignesBloqueesEcartees: meilleur.lignesBloqueesDansItineraire,
+				scorePerturbation: meilleur.scorePerturbation,
+				nombreIncidents: meilleur.nombreIncidents,
+				dureeSecondes: meilleur.duration,
+			},
 		};
 	} catch (err) {
 		console.error("Erreur IA itinéraire:", err);
@@ -209,7 +271,7 @@ exports.repondreQuestionChatbot = async (question) => {
 
 		return {
 			suggestion: response.choices[0].message.content.trim(),
-			itineraire: meilleur,
+			itineraire: null,
 		};
 	} catch (error) {
 		console.error("Erreur OpenAI :", error);

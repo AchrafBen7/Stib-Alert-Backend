@@ -9,7 +9,7 @@ const isAdmin = require("../middlewares/adminMiddleware");
 router.post("/", upload.single("photo"), signalementController.ajouterSignalement);
 router.get("/", voirSignalements);
 router.get("/arret/:id", signalementController.voirSignalementsParArret);
-router.post("/:id/vote", voterSignalement);
+router.post("/:id/vote", protect, voterSignalement);
 router.post("/:id/signalement-faux", protect, signalerFauxSignalement);
 
 // Nouvelles Routes
