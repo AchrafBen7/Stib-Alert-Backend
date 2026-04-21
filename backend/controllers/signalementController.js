@@ -9,6 +9,13 @@ const cloudinary = require("../config/cloudinary");
 const { CloudinaryStorage } = require("multer-storage-cloudinary");
 const multer = require("multer");
 
+const parsePagination = (req) => {
+	const page = Math.max(Number.parseInt(req.query.page || "1", 10), 1);
+	const requestedLimit = Number.parseInt(req.query.limit || "25", 10);
+	const limit = Math.min(Math.max(requestedLimit || 25, 1), 100);
+	return { page, limit, skip: (page - 1) * limit };
+};
+
 const storage = new CloudinaryStorage({
 	cloudinary: cloudinary,
 	params: {
@@ -75,6 +82,7 @@ exports.ajouterSignalement = async (req, res) => {
 
 		// 🔹 Création du signalement avec "confiance"
 		const signalement = await Signalement.create({
+			utilisateurId: req.user?.userId,
 			arretId: arret._id,
 			ligne,
 			typeProbleme,
@@ -82,7 +90,7 @@ exports.ajouterSignalement = async (req, res) => {
 			photo,
 			latitude: isNaN(latitudeParsed) ? undefined : latitudeParsed,
 			longitude: isNaN(longitudeParsed) ? undefined : longitudeParsed,
-			confiance, // ✅ Niveau de confiance du signalement
+			confiance,
 		});
 
 		// 🚀 Émettre le signalement en temps réel via WebSockets
@@ -144,8 +152,30 @@ exports.voirUnSignalementParArret = async (req, res) => {
 // ✅ Ajout de la pagination (optionnelle)
 exports.voirSignalements = async (req, res) => {
 	try {
-		const signalements = await Signalement.find().populate("arretId");
-		res.json(signalements);
+		const { page, limit, skip } = parsePagination(req);
+		const query = {};
+
+		if (req.query.ligne) query.ligne = req.query.ligne;
+		if (req.query.arretId) query.arretId = req.query.arretId;
+
+		const [signalements, total] = await Promise.all([
+			Signalement.find(query)
+				.sort({ dateSignalement: -1 })
+				.skip(skip)
+				.limit(limit)
+				.populate("arretId"),
+			Signalement.countDocuments(query),
+		]);
+
+		res.json({
+			signalements,
+			pagination: {
+				page,
+				limit,
+				total,
+				totalPages: Math.max(Math.ceil(total / limit), 1),
+			},
+		});
 	} catch (error) {
 		res.status(500).json({ message: error.message });
 	}
@@ -161,13 +191,27 @@ exports.voirSignalementsParArret = async (req, res) => {
 		}
 
 		// 🔹 Récupérer les signalements pour cet arrêt
-		const signalements = await Signalement.find({ arretId: req.params.id }).populate("arretId");
+		const { page, limit, skip } = parsePagination(req);
+		const [signalements, total] = await Promise.all([
+			Signalement.find({ arretId: req.params.id })
+				.sort({ dateSignalement: -1 })
+				.skip(skip)
+				.limit(limit)
+				.populate("arretId"),
+			Signalement.countDocuments({ arretId: req.params.id }),
+		]);
 
 		// 🔹 Générer le résumé
 		const resume = await genererResumeSignalements(signalements, arret.nom, signalements.length > 0 ? signalements[0].ligne : "N/A");
 
 		res.json({
 			resume,
+			pagination: {
+				page,
+				limit,
+				total,
+				totalPages: Math.max(Math.ceil(total / limit), 1),
+			},
 			signalements: signalements.map((s) => ({
 				id: s._id,
 				ligne: s.ligne,
@@ -287,8 +331,25 @@ exports.voirArretsParLigne = async (req, res) => {
 exports.voirSignalementsParLigneEtArret = async (req, res) => {
 	try {
 		const { ligne, arretId } = req.params;
-		const signalements = await Signalement.find({ ligne, arretId }).populate("arretId");
-		res.json(signalements);
+		const { page, limit, skip } = parsePagination(req);
+		const query = { ligne, arretId };
+		const [signalements, total] = await Promise.all([
+			Signalement.find(query)
+				.sort({ dateSignalement: -1 })
+				.skip(skip)
+				.limit(limit)
+				.populate("arretId"),
+			Signalement.countDocuments(query),
+		]);
+		res.json({
+			signalements,
+			pagination: {
+				page,
+				limit,
+				total,
+				totalPages: Math.max(Math.ceil(total / limit), 1),
+			},
+		});
 	} catch (error) {
 		res.status(500).json({ message: error.message });
 	}

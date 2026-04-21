@@ -6,6 +6,69 @@ const redis = require("../config/redis");
 const sendMail = require("../config/Mail");
 const { predireTendances } = require("../config/openai");
 const crypto = require("crypto");
+const { getWaitingTimes } = require("../services/belgianMobility");
+
+const buildFavorisDetails = async (favoris = []) => {
+	const favoriIds = favoris.map((favori) => favori._id || favori);
+	if (favoriIds.length === 0) return [];
+
+	const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+	const signalements = await Signalement.find({
+		arretId: { $in: favoriIds },
+		dateSignalement: { $gte: since },
+	})
+		.sort({ dateSignalement: -1 })
+		.select("arretId ligne typeProbleme votesPositifs confiance dateSignalement");
+
+	const grouped = new Map();
+	for (const signalement of signalements) {
+		const key = signalement.arretId.toString();
+		if (!grouped.has(key)) grouped.set(key, []);
+		grouped.get(key).push(signalement);
+	}
+
+	let waitingTimesByStop = new Map();
+	try {
+		const stopIds = favoris
+			.map((favori) => favori.stop_id || favori.stopId || favori.pointid || null)
+			.filter(Boolean);
+		if (stopIds.length > 0) {
+			const waitingTimesResult = await getWaitingTimes({ stopId: stopIds });
+			for (const item of waitingTimesResult.items) {
+				if (!item.stopId) continue;
+				if (!waitingTimesByStop.has(item.stopId)) waitingTimesByStop.set(item.stopId, []);
+				waitingTimesByStop.get(item.stopId).push(item);
+			}
+		}
+	} catch (error) {
+		console.warn("WaitingTimes fallback skipped:", error.message);
+	}
+
+	return favoris.map((favori) => {
+		const stop = favori.toObject ? favori.toObject() : favori;
+		const recent = grouped.get(stop._id.toString()) ?? [];
+		const recentCount = recent.length;
+		const latest = recent[0];
+		const status = recentCount === 0 ? "Normal" : recentCount >= 4 ? "Bloqué" : "Perturbé";
+		const crowding = recentCount >= 4 ? "Haute" : recentCount >= 2 ? "Moyenne" : "Faible";
+		const waitingItems = waitingTimesByStop.get(stop.stop_id) ?? [];
+		const nextPassageMinutes = waitingItems
+			.map((item) => Number.parseInt(String(item.minutes), 10))
+			.filter((value) => Number.isFinite(value) && value >= 0)
+			.sort((a, b) => a - b)[0] ?? null;
+		return {
+			...stop,
+			status,
+			crowding,
+			signalementCount: recentCount,
+			primaryLine: latest?.ligne || stop.lignesDesservies?.[0] || null,
+			lastProblemType: latest?.typeProbleme || null,
+			lastConfidence: latest?.confiance || null,
+			nextPassageMinutes,
+			lastUpdatedAt: latest?.dateSignalement || null,
+		};
+	});
+};
 
 // ✅ Inscription avec Code d'Activation
 exports.inscription = async (req, res) => {
@@ -17,19 +80,19 @@ exports.inscription = async (req, res) => {
 			return res.status(400).json({ message: "Cet email est déjà utilisé." });
 		}
 
-		const hashedPassword = await bcrypt.hash(motDePasse, 10);
-		const activationCode = Math.floor(1000 + Math.random() * 9000).toString(); // Code à 4 chiffres
+		const hashedPassword = await bcrypt.hash(motDePasse, 12);
+		const activationCode = Math.floor(1000 + Math.random() * 9000).toString();
 		const activationToken = jwt.sign(
-			{ nom, email, motDePasse: hashedPassword, activationCode },
+			{ nom, email, activationCode },
 			process.env.ACTIVATION_SECRET,
-			{ expiresIn: "10m" } // Expire en 10 minutes
+			{ expiresIn: "10m" }
 		);
 
-		// Stocker le code OTP dans Redis (expire en 10 min)
 		if (!redis) {
 			return res.status(500).json({ message: "Redis est requis pour l'activation par OTP." });
 		}
 		await redis.setex(`activation:${email}`, 600, activationCode);
+		await redis.setex(`pending:${email}`, 600, hashedPassword);
 
 		// Envoyer l'email avec le code OTP
 		const emailContent = `<h1>Votre code d'activation : ${activationCode}</h1>`;
@@ -50,7 +113,6 @@ exports.activerCompte = async (req, res) => {
 		const { activationToken, activationCode } = req.body;
 		const decoded = jwt.verify(activationToken, process.env.ACTIVATION_SECRET);
 
-		// Vérifier le code OTP dans Redis
 		if (!redis) {
 			return res.status(500).json({ message: "Redis est requis pour l'activation par OTP." });
 		}
@@ -59,19 +121,31 @@ exports.activerCompte = async (req, res) => {
 			return res.status(400).json({ message: "Code d'activation incorrect ou expiré." });
 		}
 
-		const { nom, email, motDePasse } = decoded;
-		const utilisateurExiste = await Utilisateur.findOne({ email });
+		const storedHash = await redis.get(`pending:${decoded.email}`);
+		if (!storedHash) {
+			return res.status(400).json({ message: "Inscription expirée. Recommencez." });
+		}
 
+		const { nom, email } = decoded;
+		const utilisateurExiste = await Utilisateur.findOne({ email });
 		if (utilisateurExiste) {
 			return res.status(400).json({ message: "Utilisateur déjà activé." });
 		}
 
-		const utilisateur = await Utilisateur.create({ nom, email, motDePasse });
+		const utilisateur = await Utilisateur.create({ nom, email, motDePasse: storedHash });
 
-		// Supprimer le code OTP après activation
 		await redis.del(`activation:${email}`);
+		await redis.del(`pending:${email}`);
 
-		res.status(201).json({ message: "Compte activé avec succès !" });
+		const token = jwt.sign({ userId: utilisateur._id }, process.env.JWT_SECRET, { expiresIn: "7d" });
+		if (redis) {
+			await redis.setex(`auth:${token}`, 604800, JSON.stringify({ userId: utilisateur._id }));
+		}
+
+		const sanitized = utilisateur.toObject();
+		delete sanitized.motDePasse;
+
+		res.status(201).json({ message: "Compte activé avec succès !", utilisateur: sanitized, token });
 	} catch (error) {
 		res.status(500).json({ message: error.message });
 	}
@@ -94,10 +168,30 @@ exports.connexion = async (req, res) => {
 			await redis.setex(`auth:${token}`, 604800, JSON.stringify({ userId: utilisateur._id }));
 		}
 
+		const sanitized = utilisateur.toObject();
+		delete sanitized.motDePasse;
+
 		res.json({
 			message: "Connexion réussie",
-			utilisateur,
+			utilisateur: sanitized,
 			token,
+		});
+	} catch (error) {
+		res.status(500).json({ message: error.message });
+	}
+};
+
+exports.voirMoi = async (req, res) => {
+	try {
+		const utilisateur = await Utilisateur.findById(req.user.userId)
+			.select("-motDePasse")
+			.populate("favoris", "nom latitude longitude lignesDesservies");
+		if (!utilisateur) return res.status(404).json({ message: "Utilisateur introuvable." });
+		const data = utilisateur.toObject();
+		const favorisDetails = await buildFavorisDetails(utilisateur.favoris);
+		res.json({
+			...data,
+			favorisDetails,
 		});
 	} catch (error) {
 		res.status(500).json({ message: error.message });
@@ -125,16 +219,31 @@ exports.voirProfil = async (req, res) => {
 		const utilisateur = await Utilisateur.findById(req.params.id).populate("favoris votes");
 		if (!utilisateur) return res.status(404).json({ message: "Utilisateur introuvable." });
 
-		res.json(utilisateur);
+		const data = utilisateur.toObject();
+		delete data.motDePasse;
+		const favorisDetails = await buildFavorisDetails(utilisateur.favoris);
+		res.json({
+			...data,
+			favorisDetails,
+		});
 	} catch (error) {
 		res.status(500).json({ message: error.message });
 	}
 };
 
-// ✅ Modifier le profil d'un utilisateur
+// ✅ Modifier le profil d'un utilisateur (champs whitelistés)
 exports.modifierProfil = async (req, res) => {
 	try {
-		const utilisateur = await Utilisateur.findByIdAndUpdate(req.params.id, req.body, { new: true });
+		const allowed = ["nom", "photoProfil", "langue", "notifications"];
+		const update = {};
+		for (const key of allowed) {
+			if (req.body[key] !== undefined) update[key] = req.body[key];
+		}
+		const utilisateur = await Utilisateur.findByIdAndUpdate(req.params.id, update, {
+			new: true,
+			runValidators: true,
+		}).select("-motDePasse");
+		if (!utilisateur) return res.status(404).json({ message: "Utilisateur introuvable." });
 		res.json(utilisateur);
 	} catch (error) {
 		res.status(500).json({ message: error.message });
@@ -188,17 +297,17 @@ exports.predireEtNotifier = async (req, res) => {
 };
 exports.enregistrerTokenFCM = async (req, res) => {
 	try {
-		const { userId, tokenFCM } = req.body;
-		const utilisateur = await Utilisateur.findById(userId);
+		const tokenPush = req.body.tokenPush || req.body.tokenFCM;
+		const utilisateur = await Utilisateur.findById(req.user.userId);
 
 		if (!utilisateur) {
 			return res.status(404).json({ message: "Utilisateur introuvable." });
 		}
 
-		utilisateur.tokenFCM = tokenFCM;
+		utilisateur.tokenPush = tokenPush;
 		await utilisateur.save();
 
-		res.json({ message: "Token FCM enregistré avec succès." });
+		res.json({ message: "Token push enregistré avec succès." });
 	} catch (error) {
 		res.status(500).json({ message: error.message });
 	}
@@ -216,12 +325,24 @@ exports.ajouterOuRetirerFavori = async (req, res) => {
 			// L'arrêt est déjà en favoris, on le retire
 			utilisateur.favoris.splice(index, 1);
 			await utilisateur.save();
-			return res.json({ message: "Arrêt retiré des favoris.", favoris: utilisateur.favoris });
+			await utilisateur.populate("favoris", "nom latitude longitude lignesDesservies");
+			const favorisDetails = await buildFavorisDetails(utilisateur.favoris);
+			return res.json({
+				message: "Arrêt retiré des favoris.",
+				favoris: utilisateur.favoris.map((favori) => favori._id),
+				favorisDetails,
+			});
 		} else {
 			// L'arrêt n'est pas encore en favoris, on l'ajoute
 			utilisateur.favoris.push(arretId);
 			await utilisateur.save();
-			return res.json({ message: "Arrêt ajouté aux favoris.", favoris: utilisateur.favoris });
+			await utilisateur.populate("favoris", "nom latitude longitude lignesDesservies");
+			const favorisDetails = await buildFavorisDetails(utilisateur.favoris);
+			return res.json({
+				message: "Arrêt ajouté aux favoris.",
+				favoris: utilisateur.favoris.map((favori) => favori._id),
+				favorisDetails,
+			});
 		}
 	} catch (error) {
 		res.status(500).json({ message: error.message });

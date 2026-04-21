@@ -1,5 +1,6 @@
 const jwt = require("jsonwebtoken");
 const redis = require("../config/redis");
+const Utilisateur = require("../models/Utilisateur");
 
 // ✅ Middleware pour protéger les routes
 const protect = async (req, res, next) => {
@@ -26,7 +27,20 @@ const protect = async (req, res, next) => {
 
 		// Vérifie et décode le token JWT
 		const decoded = jwt.verify(token, process.env.JWT_SECRET);
-		req.user = { userId: decoded.userId };
+		const utilisateur = await Utilisateur.findById(decoded.userId)
+			.select("_id role email nom")
+			.lean();
+
+		if (!utilisateur) {
+			return res.status(401).json({ message: "Utilisateur introuvable pour ce token." });
+		}
+
+		req.user = {
+			userId: String(utilisateur._id),
+			role: utilisateur.role,
+			email: utilisateur.email,
+			nom: utilisateur.nom,
+		};
 
 		// Stocke les infos de l'utilisateur dans Redis (expire après 7 jours)
 		if (redis) {

@@ -1,18 +1,51 @@
 const express = require("express");
-const { inscription, activerCompte, connexion, deconnexion, voirProfil, modifierProfil, voirVotesUtilisateur, enregistrerTokenFCM } = require("../controllers/utilisateurController");
-const protect = require("../middlewares/authMiddleware");
-const utilisateurController = require("../controllers/utilisateurController");
 const router = express.Router();
+const utilisateurController = require("../controllers/utilisateurController");
+const {
+	inscription,
+	activerCompte,
+	connexion,
+	deconnexion,
+	voirProfil,
+	modifierProfil,
+	voirVotesUtilisateur,
+	enregistrerTokenFCM,
+	voirMoi,
+} = utilisateurController;
 
-router.post("/inscription", inscription); // ✅ Envoi du code d'activation
-router.post("/activation", activerCompte); // ✅ Activation du compte avec OTP
-router.post("/connexion", connexion);
+const protect = require("../middlewares/authMiddleware");
+const { requireSelf } = require("../middlewares/ownership");
+const { authLimiter } = require("../middlewares/rateLimiters");
+const {
+	validateSignup,
+	validateLogin,
+	validateActivation,
+	validateMongoId,
+	validateFavori,
+	validatePushToken,
+	handleValidation,
+} = require("../middlewares/validators");
+
+router.post("/inscription", authLimiter, validateSignup, handleValidation, inscription);
+router.post("/activation", authLimiter, validateActivation, handleValidation, activerCompte);
+router.post("/connexion", authLimiter, validateLogin, handleValidation, connexion);
 router.post("/deconnexion", protect, deconnexion);
-router.get("/:id", protect, voirProfil);
-router.patch("/:id", protect, modifierProfil);
-router.get("/:id/votes", protect, voirVotesUtilisateur);
-router.patch("/:id/langue", utilisateurController.modifierLangueUtilisateur);
-router.get("/previsions", utilisateurController.predireEtNotifier);
-router.post("/enregistrer-token", enregistrerTokenFCM);
-router.patch("/:id/favoris/:arretId", protect, utilisateurController.ajouterOuRetirerFavori);
+
+router.get("/me", protect, voirMoi);
+
+router.get("/:id", protect, validateMongoId, handleValidation, requireSelf(), voirProfil);
+router.patch("/:id", protect, validateMongoId, handleValidation, requireSelf(), modifierProfil);
+router.get("/:id/votes", protect, validateMongoId, handleValidation, requireSelf(), voirVotesUtilisateur);
+router.patch("/:id/langue", protect, validateMongoId, handleValidation, requireSelf(), utilisateurController.modifierLangueUtilisateur);
+router.patch(
+	"/:id/favoris/:arretId",
+	protect,
+	validateFavori,
+	handleValidation,
+	requireSelf(),
+	utilisateurController.ajouterOuRetirerFavori
+);
+
+router.post("/enregistrer-token", protect, validatePushToken, handleValidation, enregistrerTokenFCM);
+
 module.exports = router;

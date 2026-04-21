@@ -42,4 +42,15 @@ const signalementSchema = new mongoose.Schema(
 	{ timestamps: true }
 );
 
+const ttlDays = Number.parseInt(process.env.SIGNALEMENT_TTL_DAYS || "30", 10);
+
+signalementSchema.index({ dateSignalement: -1 });
+signalementSchema.index({ arretId: 1, dateSignalement: -1 });
+signalementSchema.index({ ligne: 1, dateSignalement: -1 });
+signalementSchema.index({ ligne: 1, arretId: 1, dateSignalement: -1 });
+signalementSchema.index(
+	{ dateSignalement: 1 },
+	{ expireAfterSeconds: Math.max(ttlDays, 1) * 24 * 60 * 60, name: "signalement_ttl" }
+);
+
 module.exports = mongoose.model("Signalement", signalementSchema);

@@ -102,6 +102,7 @@ function stopVehiclePolling() {
 // 🔥 Émission ciblée des signalements
 const emitSignalement = (signalement) => {
 	if (io) {
+		io.emit("nouveauSignalementGlobal", signalement);
 		const { arretId } = signalement;
 		if (utilisateursAbonnes[arretId]) {
 			utilisateursAbonnes[arretId].forEach((socketId) => {

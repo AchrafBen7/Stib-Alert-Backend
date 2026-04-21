@@ -3,35 +3,41 @@ const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");
 const morgan = require("morgan");
+const mongoSanitize = require("express-mongo-sanitize");
 const connectDB = require("./config/db");
-const redis = require("./config/redis"); // ✅ Import Redis
+const redis = require("./config/redis");
 const { initWebSocket } = require("./config/websocket");
+const { globalLimiter } = require("./middlewares/rateLimiters");
 const http = require("http");
-const cookieParser = require("cookie-parser"); // ✅ Import de cookie-parser
+const cookieParser = require("cookie-parser");
 const path = require("path");
 
 const app = express();
 const server = http.createServer(app);
 
-// Initialiser WebSockets
 initWebSocket(server);
 
-// Middlewares
-app.use(express.json());
-app.use(cors());
-app.use(express.json({ limit: "50mb" }));
-app.use(cookieParser());
-app.use(helmet());
-app.use(morgan("dev"));
+const allowedOrigins = (process.env.CORS_ORIGINS || "")
+	.split(",")
+	.map((o) => o.trim())
+	.filter(Boolean);
 
-// Connexion à Redis
+app.use(helmet());
+app.use(
+	cors({
+		origin: allowedOrigins.length ? allowedOrigins : true,
+		credentials: true,
+	})
+);
+app.use(express.json({ limit: "10mb" }));
+app.use(cookieParser());
+app.use(mongoSanitize());
+app.use(morgan(process.env.NODE_ENV === "production" ? "combined" : "dev"));
+app.use(globalLimiter);
+
 if (redis) {
-	redis.on("connect", () => {
-		console.log("✅ Redis connecté !");
-	});
-	redis.on("error", (err) => {
-		console.error("❌ Erreur Redis :", err);
-	});
+	redis.on("connect", () => console.log("✅ Redis connecté !"));
+	redis.on("error", (err) => console.error("❌ Erreur Redis :", err.message));
 } else {
 	console.warn("⚠️ Redis désactivé : REDIS_URL manquant.");
 }
@@ -42,14 +48,19 @@ app.use("/api/lignes", require("./routes/ligneRoutes"));
 app.use("/api/chatbot", require("./routes/chatbotRoutes"));
 app.use("/api/arrets", require("./routes/arretRoute"));
 app.use("/api/stib", require("./routes/stibRealtimeRoutes"));
-app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
-// Route de test
-app.get("/", (req, res) => {
-	res.send("STIB Alert API fonctionne !");
+app.get("/", (req, res) => res.send("STIB Alert API fonctionne !"));
+
+app.use((err, req, res, _next) => {
+	console.error("❌", err.message);
+	if (err.type === "entity.too.large") {
+		return res.status(413).json({ message: "Payload trop volumineux." });
+	}
+	res.status(err.status || 500).json({
+		message: err.publicMessage || "Erreur serveur.",
+	});
 });
 
-// Démarrer le serveur après connexion à la DB
 const PORT = process.env.PORT || 4000;
 server.listen(PORT, "0.0.0.0", async () => {
 	await connectDB();

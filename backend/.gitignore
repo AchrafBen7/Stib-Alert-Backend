@@ -1,3 +1,22 @@
 node_modules/
 .env
 .DS_Store
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# GTFS / large data files (host on S3/CDN)
+stop_times.txt
+stops.txt
+trips.txt
+translations.txt
+shapefiles-production.json
+stops-by-line-production.json
+
+# Uploads
+uploads/
+
+# Coverage
+coverage/

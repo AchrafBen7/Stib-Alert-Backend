@@ -1,25 +1,52 @@
 const express = require("express");
-const { voirSignalements, voterSignalement, voirLignesDisponibles, voirArretsParLigne, voirSignalementsParLigneEtArret, supprimerSignalement, signalerFauxSignalement, upload } = require("../controllers/signalementController");
-const protect = require("../middlewares/authMiddleware");
 const router = express.Router();
 const signalementController = require("../controllers/signalementController");
+const {
+	voirSignalements,
+	voterSignalement,
+	voirLignesDisponibles,
+	voirArretsParLigne,
+	voirSignalementsParLigneEtArret,
+	supprimerSignalement,
+	signalerFauxSignalement,
+	upload,
+} = signalementController;
+
+const protect = require("../middlewares/authMiddleware");
 const isAdmin = require("../middlewares/adminMiddleware");
+const { signalementLimiter } = require("../middlewares/rateLimiters");
+const {
+	validateSignalement,
+	validateVote,
+	validateMongoId,
+	handleValidation,
+} = require("../middlewares/validators");
 
-// Routes existantes
-router.post("/", upload.single("photo"), signalementController.ajouterSignalement);
+router.post(
+	"/",
+	protect,
+	signalementLimiter,
+	upload.single("photo"),
+	validateSignalement,
+	handleValidation,
+	signalementController.ajouterSignalement
+);
+
 router.get("/", voirSignalements);
-router.get("/arret/:id", signalementController.voirSignalementsParArret);
-router.post("/:id/vote", protect, voterSignalement);
-router.post("/:id/signalement-faux", protect, signalerFauxSignalement);
+router.get("/lignes", voirLignesDisponibles);
+router.get("/ligne/:ligne", voirArretsParLigne);
+router.get("/ligne/:ligne/arret/:arretId", voirSignalementsParLigneEtArret);
 
-// Nouvelles Routes
-router.get("/lignes", voirLignesDisponibles); // Voir toutes les lignes
-router.get("/ligne/:ligne", voirArretsParLigne); // Voir tous les arrêts d’une ligne
-router.get("/ligne/:ligne/arret/:arretId", voirSignalementsParLigneEtArret); // Voir signalements d’un arrêt
-router.get("/:id/traduire", signalementController.traduireSignalement);
+router.get("/arret/:id", validateMongoId, handleValidation, signalementController.voirSignalementsParArret);
+router.get(
+	"/arret/:arretId/signalement/:signalementId",
+	signalementController.voirUnSignalementParArret
+);
 
-// 📌 Suppression (ADMIN uniquement)
-router.delete("/:id", protect, isAdmin, supprimerSignalement); //
+router.post("/:id/vote", protect, validateVote, handleValidation, voterSignalement);
+router.post("/:id/signalement-faux", protect, validateMongoId, handleValidation, signalerFauxSignalement);
+router.get("/:id/traduire", validateMongoId, handleValidation, signalementController.traduireSignalement);
+
+router.delete("/:id", protect, isAdmin, validateMongoId, handleValidation, supprimerSignalement);
+
 module.exports = router;
-
-router.get("/arret/:arretId/signalement/:signalementId", signalementController.voirUnSignalementParArret);
