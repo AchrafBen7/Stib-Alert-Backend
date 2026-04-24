@@ -9,6 +9,9 @@ const {
 	voirSignalementsParLigneEtArret,
 	supprimerSignalement,
 	signalerFauxSignalement,
+	confirmerSignalement,
+	marquerToujoursBloque,
+	marquerResolu,
 	upload,
 } = signalementController;
 
@@ -44,6 +47,9 @@ router.get(
 );
 
 router.post("/:id/vote", protect, validateVote, handleValidation, voterSignalement);
+router.post("/:id/confirm", protect, validateMongoId, handleValidation, confirmerSignalement);
+router.post("/:id/still-blocked", protect, validateMongoId, handleValidation, marquerToujoursBloque);
+router.post("/:id/resolved", protect, validateMongoId, handleValidation, marquerResolu);
 router.post("/:id/signalement-faux", protect, validateMongoId, handleValidation, signalerFauxSignalement);
 router.get("/:id/traduire", validateMongoId, handleValidation, signalementController.traduireSignalement);
 

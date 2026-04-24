@@ -184,7 +184,7 @@ exports.etatLignes = async (req, res) => {
 		});
 
 		// 🔹 Récupérer toutes les lignes
-		const lignes = await Ligne.find().select("lineid nomComplet");
+		const lignes = await Ligne.find().select("lineid nomComplet nomCompletRetour typeTransport couleur direction destination");
 
 		const etatLignes = [];
 
@@ -194,6 +194,11 @@ exports.etatLignes = async (req, res) => {
 			mapLignes[ligne.lineid] = {
 				lineid: ligne.lineid,
 				nom: ligne.nomComplet,
+				nomRetour: ligne.nomCompletRetour,
+				typeTransport: ligne.typeTransport,
+				couleur: ligne.couleur,
+				direction: ligne.direction,
+				destination: ligne.destination,
 				incidents: 0,
 				statut: "Normal",
 			};

@@ -10,7 +10,6 @@ const { initWebSocket } = require("./config/websocket");
 const { globalLimiter } = require("./middlewares/rateLimiters");
 const http = require("http");
 const cookieParser = require("cookie-parser");
-const path = require("path");
 
 const app = express();
 const server = http.createServer(app);
@@ -48,6 +47,8 @@ app.use("/api/lignes", require("./routes/ligneRoutes"));
 app.use("/api/chatbot", require("./routes/chatbotRoutes"));
 app.use("/api/arrets", require("./routes/arretRoute"));
 app.use("/api/stib", require("./routes/stibRealtimeRoutes"));
+app.use("/api/transport", require("./routes/transportRoutes"));
+app.use("/api/assistant", require("./routes/assistantRoutes"));
 
 app.get("/", (req, res) => res.send("STIB Alert API fonctionne !"));
 
@@ -62,7 +63,20 @@ app.use((err, req, res, _next) => {
 });
 
 const PORT = process.env.PORT || 4000;
-server.listen(PORT, "0.0.0.0", async () => {
-	await connectDB();
-	console.log(`🚀 Serveur en ligne sur le port ${PORT}`);
+
+async function startServer() {
+	const connected = await connectDB();
+	if (!connected) {
+		console.error("❌ Serveur HTTP non lancé : MongoDB indisponible.");
+		process.exit(1);
+	}
+
+	server.listen(PORT, "0.0.0.0", () => {
+		console.log(`🚀 Serveur en ligne sur le port ${PORT}`);
+	});
+}
+
+startServer().catch((error) => {
+	console.error("❌ Fatal server startup error:", error.message);
+	process.exit(1);
 });

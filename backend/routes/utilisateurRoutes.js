@@ -23,6 +23,7 @@ const {
 	validateMongoId,
 	validateFavori,
 	validatePushToken,
+	validateProfileUpdate,
 	handleValidation,
 } = require("../middlewares/validators");
 
@@ -34,7 +35,7 @@ router.post("/deconnexion", protect, deconnexion);
 router.get("/me", protect, voirMoi);
 
 router.get("/:id", protect, validateMongoId, handleValidation, requireSelf(), voirProfil);
-router.patch("/:id", protect, validateMongoId, handleValidation, requireSelf(), modifierProfil);
+router.patch("/:id", protect, validateMongoId, validateProfileUpdate, handleValidation, requireSelf(), modifierProfil);
 router.get("/:id/votes", protect, validateMongoId, handleValidation, requireSelf(), voirVotesUtilisateur);
 router.patch("/:id/langue", protect, validateMongoId, handleValidation, requireSelf(), utilisateurController.modifierLangueUtilisateur);
 router.patch(

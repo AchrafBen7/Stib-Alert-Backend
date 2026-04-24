@@ -38,6 +38,23 @@ const signalementSchema = new mongoose.Schema(
 			enum: ["haute", "moyenne", "basse"],
 			default: "basse",
 		},
+		status: {
+			type: String,
+			enum: ["active", "resolved"],
+			default: "active",
+		},
+		communityEvents: [{
+			userId: { type: mongoose.Schema.Types.ObjectId, ref: "Utilisateur", required: false },
+			action: {
+				type: String,
+				enum: ["confirm", "still_blocked", "resolved"],
+				required: true,
+			},
+			createdAt: {
+				type: Date,
+				default: Date.now,
+			},
+		}],
 	},
 	{ timestamps: true }
 );
@@ -48,6 +65,7 @@ signalementSchema.index({ dateSignalement: -1 });
 signalementSchema.index({ arretId: 1, dateSignalement: -1 });
 signalementSchema.index({ ligne: 1, dateSignalement: -1 });
 signalementSchema.index({ ligne: 1, arretId: 1, dateSignalement: -1 });
+signalementSchema.index({ status: 1, dateSignalement: -1 });
 signalementSchema.index(
 	{ dateSignalement: 1 },
 	{ expireAfterSeconds: Math.max(ttlDays, 1) * 24 * 60 * 60, name: "signalement_ttl" }

@@ -3,6 +3,9 @@ const Arret = require("../models/Arret");
 const Utilisateur = require("../models/Utilisateur");
 const { analyserSignalement, genererResumeSignalements, traduireSignalement } = require("../config/openai");
 const { emitSignalement } = require("../config/websocket");
+const { getWaitingTimes } = require("../services/belgianMobility");
+const { COMMUNITY_ACTION, buildCommunityMeta, upsertCommunityAction } = require("../services/signalementCommunityService");
+const { sendFavoriteIncidentPushes } = require("../services/assistantIncidentPushService");
 const moment = require("moment");
 const path = require("path");
 const cloudinary = require("../config/cloudinary");
@@ -14,6 +17,15 @@ const parsePagination = (req) => {
 	const requestedLimit = Number.parseInt(req.query.limit || "25", 10);
 	const limit = Math.min(Math.max(requestedLimit || 25, 1), 100);
 	return { page, limit, skip: (page - 1) * limit };
+};
+
+const serializeSignalement = (signalement) => {
+	const raw = typeof signalement.toObject === "function" ? signalement.toObject() : signalement;
+	return {
+		...raw,
+		source: raw.source || "community",
+		community: buildCommunityMeta(raw),
+	};
 };
 
 const storage = new CloudinaryStorage({
@@ -49,6 +61,63 @@ const distanceEntrePoints = (lat1, lon1, lat2, lon2) => {
 	const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
 	const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 	return R * c;
+};
+
+const parseWaitingMinutes = (value) => {
+	if (typeof value === "number" && Number.isFinite(value)) {
+		return Math.max(Math.round(value), 0);
+	}
+
+	if (typeof value !== "string") return null;
+
+	const normalized = value.trim().toLowerCase();
+	if (!normalized) return null;
+	if (normalized === "due" || normalized === "now") return 0;
+
+	const match = normalized.match(/(\d+)/);
+	if (!match) return null;
+
+	const parsed = Number.parseInt(match[1], 10);
+	return Number.isNaN(parsed) ? null : Math.max(parsed, 0);
+};
+
+const groupWaitingTimesByStop = async (line, arrets) => {
+	if (!arrets.length) return new Map();
+
+	const stopIds = arrets
+		.map((arret) => arret.stop_id)
+		.filter(Boolean);
+
+	if (!stopIds.length) return new Map();
+
+	try {
+		const waitingTimes = await getWaitingTimes({ line, stopId: stopIds });
+		const grouped = new Map();
+
+		for (const item of waitingTimes.items) {
+			const stopId = item.stopId ? String(item.stopId) : null;
+			if (!stopId) continue;
+
+			const minutes = parseWaitingMinutes(item.minutes);
+			if (minutes === null) continue;
+
+			if (!grouped.has(stopId)) {
+				grouped.set(stopId, []);
+			}
+
+			grouped.get(stopId).push(minutes);
+		}
+
+		for (const [stopId, values] of grouped.entries()) {
+			const uniqueSorted = [...new Set(values)].sort((a, b) => a - b);
+			grouped.set(stopId, uniqueSorted);
+		}
+
+		return grouped;
+	} catch (error) {
+		console.error("[WaitingTimes] enrichissement ligne/arrêts impossible:", error.message);
+		return new Map();
+	}
 };
 
 exports.ajouterSignalement = async (req, res) => {
@@ -95,11 +164,13 @@ exports.ajouterSignalement = async (req, res) => {
 
 		// 🚀 Émettre le signalement en temps réel via WebSockets
 		emitSignalement(signalement);
+		sendFavoriteIncidentPushes({ ...signalement.toObject(), arretId: arret }, "new_signalement")
+			.catch((pushError) => console.warn("[assistant incident push]", pushError.message));
 
 		res.status(201).json({
 			message: "Signalement ajouté avec succès.",
 			signalement: {
-				...signalement.toObject(),
+				...serializeSignalement(signalement),
 				dateSignalementLisible: moment(signalement.dateSignalement).format("YYYY-MM-DD HH:mm"),
 			},
 		});
@@ -126,22 +197,7 @@ exports.voirUnSignalementParArret = async (req, res) => {
 
 		// Retourner toutes les infos nécessaires
 		res.json({
-			_id: signalement._id,
-			utilisateurId: signalement.utilisateurId,
-			arretId: signalement.arretId,
-			ligne: signalement.ligne,
-			typeProbleme: signalement.typeProbleme,
-			description: signalement.description,
-			photo: signalement.photo,
-			dateSignalement: signalement.dateSignalement,
-			validationIA: signalement.validationIA,
-			resumeIA: signalement.resumeIA,
-			votesPositifs: signalement.votesPositifs,
-			votesNegatifs: signalement.votesNegatifs,
-			signalements: signalement.signalements,
-			latitude: signalement.latitude,
-			longitude: signalement.longitude,
-			confiance: signalement.confiance,
+			...serializeSignalement(signalement),
 			arret: arret.nom, // nom de l'arrêt pour affichage
 		});
 	} catch (error) {
@@ -168,7 +224,7 @@ exports.voirSignalements = async (req, res) => {
 		]);
 
 		res.json({
-			signalements,
+			signalements: signalements.map(serializeSignalement),
 			pagination: {
 				page,
 				limit,
@@ -220,6 +276,9 @@ exports.voirSignalementsParArret = async (req, res) => {
 				photo: s.photo,
 				date: s.dateSignalement,
 				arret: arret.nom, // ✅ Correction ici pour bien afficher l'arrêt
+				source: "community",
+				status: s.status,
+				community: buildCommunityMeta(s),
 			})),
 		});
 	} catch (error) {
@@ -260,6 +319,40 @@ exports.voterSignalement = async (req, res) => {
 		res.status(500).json({ message: error.message });
 	}
 };
+
+async function applyCommunityAction(req, res, action, successMessage) {
+	try {
+		const signalement = await Signalement.findById(req.params.id);
+		if (!signalement) return res.status(404).json({ message: "Signalement introuvable" });
+
+		const summary = upsertCommunityAction(signalement, req.user?.userId, action);
+		await signalement.save();
+
+		emitSignalement(signalement.toObject());
+		const populatedSignalement = await Signalement.findById(signalement._id).populate("arretId");
+		const eventType = action === COMMUNITY_ACTION.RESOLVED ? "resolved" : "still_blocked";
+		sendFavoriteIncidentPushes(populatedSignalement.toObject(), eventType)
+			.catch((pushError) => console.warn("[assistant incident push]", pushError.message));
+
+		res.json({
+			message: successMessage,
+			status: summary.status,
+			confidence: summary.confidence,
+			community: buildCommunityMeta(signalement),
+		});
+	} catch (error) {
+		res.status(500).json({ message: error.message });
+	}
+}
+
+exports.confirmerSignalement = async (req, res) =>
+	applyCommunityAction(req, res, COMMUNITY_ACTION.CONFIRM, "Signalement confirmé.");
+
+exports.marquerToujoursBloque = async (req, res) =>
+	applyCommunityAction(req, res, COMMUNITY_ACTION.STILL_BLOCKED, "Le signalement reste actif.");
+
+exports.marquerResolu = async (req, res) =>
+	applyCommunityAction(req, res, COMMUNITY_ACTION.RESOLVED, "Signalement marqué comme résolu.");
 
 exports.signalerFauxSignalement = async (req, res) => {
 	try {
@@ -320,8 +413,19 @@ exports.voirLignesDisponibles = async (req, res) => {
 exports.voirArretsParLigne = async (req, res) => {
 	try {
 		const { ligne } = req.params;
-		const arrets = await Arret.find({ lignesDesservies: ligne });
-		res.json(arrets);
+		const arrets = await Arret.find({ lignesDesservies: ligne }).lean();
+		const waitingTimesByStop = await groupWaitingTimesByStop(ligne, arrets);
+
+		const enriched = arrets.map((arret) => {
+			const nextPassages = waitingTimesByStop.get(String(arret.stop_id)) || [];
+			return {
+				...arret,
+				nextPassageMinutes: nextPassages[0] ?? null,
+				nextPassages: nextPassages.slice(0, 3),
+			};
+		});
+
+		res.json(enriched);
 	} catch (error) {
 		res.status(500).json({ message: error.message });
 	}
@@ -342,7 +446,7 @@ exports.voirSignalementsParLigneEtArret = async (req, res) => {
 			Signalement.countDocuments(query),
 		]);
 		res.json({
-			signalements,
+			signalements: signalements.map(serializeSignalement),
 			pagination: {
 				page,
 				limit,

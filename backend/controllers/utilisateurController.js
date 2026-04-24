@@ -7,6 +7,7 @@ const sendMail = require("../config/Mail");
 const { predireTendances } = require("../config/openai");
 const crypto = require("crypto");
 const { getWaitingTimes } = require("../services/belgianMobility");
+const { registerDevice } = require("../services/oneSignalService");
 
 const buildFavorisDetails = async (favoris = []) => {
 	const favoriIds = favoris.map((favori) => favori._id || favori);
@@ -68,6 +69,23 @@ const buildFavorisDetails = async (favoris = []) => {
 			lastUpdatedAt: latest?.dateSignalement || null,
 		};
 	});
+};
+
+const sanitizeRoutine = (routine, favorisDetails = []) => {
+	if (!routine) return null;
+
+	const favoriteIds = new Set(favorisDetails.map((item) => String(item._id || item.id)));
+	const homeStopId = routine.homeStopId ? String(routine.homeStopId._id || routine.homeStopId) : null;
+	const workStopId = routine.workStopId ? String(routine.workStopId._id || routine.workStopId) : null;
+
+	return {
+		enabled: Boolean(routine.enabled && (homeStopId || workStopId)),
+		homeLabel: routine.homeLabel || "Domicile",
+		workLabel: routine.workLabel || "Travail",
+		departureTime: routine.departureTime || "08:15",
+		homeStopId: homeStopId && favoriteIds.has(homeStopId) ? homeStopId : null,
+		workStopId: workStopId && favoriteIds.has(workStopId) ? workStopId : null,
+	};
 };
 
 // ✅ Inscription avec Code d'Activation
@@ -183,15 +201,19 @@ exports.connexion = async (req, res) => {
 
 exports.voirMoi = async (req, res) => {
 	try {
-		const utilisateur = await Utilisateur.findById(req.user.userId)
+	const utilisateur = await Utilisateur.findById(req.user.userId)
 			.select("-motDePasse")
-			.populate("favoris", "nom latitude longitude lignesDesservies");
+			.populate("favoris", "nom latitude longitude lignesDesservies stop_id")
+			.populate("routine.homeStopId", "nom latitude longitude lignesDesservies stop_id")
+			.populate("routine.workStopId", "nom latitude longitude lignesDesservies stop_id");
 		if (!utilisateur) return res.status(404).json({ message: "Utilisateur introuvable." });
 		const data = utilisateur.toObject();
 		const favorisDetails = await buildFavorisDetails(utilisateur.favoris);
 		res.json({
 			...data,
 			favorisDetails,
+			favoriteLines: data.favoriteLines || [],
+			routine: sanitizeRoutine(data.routine, favorisDetails),
 		});
 	} catch (error) {
 		res.status(500).json({ message: error.message });
@@ -216,7 +238,10 @@ exports.deconnexion = async (req, res) => {
 // ✅ Voir le profil d'un utilisateur
 exports.voirProfil = async (req, res) => {
 	try {
-		const utilisateur = await Utilisateur.findById(req.params.id).populate("favoris votes");
+		const utilisateur = await Utilisateur.findById(req.params.id)
+			.populate("favoris votes")
+			.populate("routine.homeStopId", "nom latitude longitude lignesDesservies stop_id")
+			.populate("routine.workStopId", "nom latitude longitude lignesDesservies stop_id");
 		if (!utilisateur) return res.status(404).json({ message: "Utilisateur introuvable." });
 
 		const data = utilisateur.toObject();
@@ -225,6 +250,8 @@ exports.voirProfil = async (req, res) => {
 		res.json({
 			...data,
 			favorisDetails,
+			favoriteLines: data.favoriteLines || [],
+			routine: sanitizeRoutine(data.routine, favorisDetails),
 		});
 	} catch (error) {
 		res.status(500).json({ message: error.message });
@@ -234,17 +261,43 @@ exports.voirProfil = async (req, res) => {
 // ✅ Modifier le profil d'un utilisateur (champs whitelistés)
 exports.modifierProfil = async (req, res) => {
 	try {
-		const allowed = ["nom", "photoProfil", "langue", "notifications"];
+		const allowed = ["nom", "photoProfil", "langue", "notifications", "weeklyDigestEnabled"];
 		const update = {};
 		for (const key of allowed) {
 			if (req.body[key] !== undefined) update[key] = req.body[key];
 		}
+		if (req.body.favoriteLines !== undefined) {
+			update.favoriteLines = [...new Set((req.body.favoriteLines || [])
+				.map((line) => String(line || "").trim().toUpperCase())
+				.filter(Boolean))];
+		}
+		if (req.body.routine !== undefined) {
+			update.routine = {
+				enabled: Boolean(req.body.routine?.enabled),
+				homeLabel: req.body.routine?.homeLabel || "Domicile",
+				workLabel: req.body.routine?.workLabel || "Travail",
+				departureTime: req.body.routine?.departureTime || "08:15",
+				homeStopId: req.body.routine?.homeStopId || null,
+				workStopId: req.body.routine?.workStopId || null,
+			};
+		}
 		const utilisateur = await Utilisateur.findByIdAndUpdate(req.params.id, update, {
 			new: true,
 			runValidators: true,
-		}).select("-motDePasse");
+		})
+			.select("-motDePasse")
+			.populate("favoris", "nom latitude longitude lignesDesservies stop_id")
+			.populate("routine.homeStopId", "nom latitude longitude lignesDesservies stop_id")
+			.populate("routine.workStopId", "nom latitude longitude lignesDesservies stop_id");
 		if (!utilisateur) return res.status(404).json({ message: "Utilisateur introuvable." });
-		res.json(utilisateur);
+		const data = utilisateur.toObject();
+		const favorisDetails = await buildFavorisDetails(utilisateur.favoris);
+		res.json({
+			...data,
+			favorisDetails,
+			favoriteLines: data.favoriteLines || [],
+			routine: sanitizeRoutine(data.routine, favorisDetails),
+		});
 	} catch (error) {
 		res.status(500).json({ message: error.message });
 	}
@@ -298,16 +351,38 @@ exports.predireEtNotifier = async (req, res) => {
 exports.enregistrerTokenFCM = async (req, res) => {
 	try {
 		const tokenPush = req.body.tokenPush || req.body.tokenFCM;
+		const oneSignalPlayerId = req.body.oneSignalPlayerId;
 		const utilisateur = await Utilisateur.findById(req.user.userId);
 
 		if (!utilisateur) {
 			return res.status(404).json({ message: "Utilisateur introuvable." });
 		}
 
-		utilisateur.tokenPush = tokenPush;
+		if (tokenPush) {
+			utilisateur.tokenPush = tokenPush;
+		}
+		if (oneSignalPlayerId) {
+			utilisateur.oneSignalPlayerId = oneSignalPlayerId;
+		} else if (tokenPush) {
+			try {
+				const registration = await registerDevice({
+					userId: String(utilisateur._id),
+					token: tokenPush,
+					platform: "ios",
+				});
+				if (registration?.id) {
+					utilisateur.oneSignalPlayerId = registration.id;
+				}
+			} catch (pushError) {
+				console.warn("[ONESIGNAL] device registration failed:", pushError.message);
+			}
+		}
 		await utilisateur.save();
 
-		res.json({ message: "Token push enregistré avec succès." });
+		res.json({
+			message: "Token push enregistré avec succès.",
+			oneSignalPlayerId: utilisateur.oneSignalPlayerId || null,
+		});
 	} catch (error) {
 		res.status(500).json({ message: error.message });
 	}
