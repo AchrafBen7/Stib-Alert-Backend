@@ -125,6 +125,51 @@ exports.inscription = async (req, res) => {
 	}
 };
 
+// ✅ Renvoyer un nouveau code d'activation
+exports.renvoyerCode = async (req, res) => {
+	try {
+		const { activationToken } = req.body;
+
+		const decoded = jwt.decode(activationToken);
+		if (!decoded?.email || !decoded?.nom) {
+			return res.status(400).json({ message: "Token d'activation invalide." });
+		}
+
+		const { nom, email } = decoded;
+
+		const utilisateurExiste = await Utilisateur.findOne({ email });
+		if (utilisateurExiste) {
+			return res.status(400).json({ message: "Ce compte est déjà activé. Connectez-vous." });
+		}
+
+		if (!redis) {
+			return res.status(500).json({ message: "Redis est requis pour l'activation." });
+		}
+
+		const pendingHash = await redis.get(`pending:${email}`);
+		if (!pendingHash) {
+			return res.status(400).json({ message: "L'inscription a expiré. Recommencez depuis le début." });
+		}
+
+		const activationCode = Math.floor(1000 + Math.random() * 9000).toString();
+		const newToken = jwt.sign(
+			{ nom, email, activationCode },
+			process.env.ACTIVATION_SECRET,
+			{ expiresIn: "10m" }
+		);
+
+		await redis.setex(`activation:${email}`, 600, activationCode);
+		await redis.setex(`pending:${email}`, 600, pendingHash);
+
+		const emailContent = `<h1>Votre nouveau code d'activation : ${activationCode}</h1>`;
+		await sendMail(email, "Nouveau code d'activation STIB Alert", emailContent);
+
+		res.status(200).json({ message: `Nouveau code envoyé à ${email}`, activationToken: newToken });
+	} catch (error) {
+		res.status(500).json({ message: error.message });
+	}
+};
+
 // ✅ Activer le compte avec le Code OTP
 exports.activerCompte = async (req, res) => {
 	try {

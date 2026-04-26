@@ -29,6 +29,7 @@ const {
 
 router.post("/inscription", authLimiter, validateSignup, handleValidation, inscription);
 router.post("/activation", authLimiter, validateActivation, handleValidation, activerCompte);
+router.post("/renvoyer-code", authLimiter, utilisateurController.renvoyerCode);
 router.post("/connexion", authLimiter, validateLogin, handleValidation, connexion);
 router.post("/deconnexion", protect, deconnexion);
 

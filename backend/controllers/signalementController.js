@@ -356,27 +356,27 @@ exports.marquerResolu = async (req, res) =>
 
 exports.signalerFauxSignalement = async (req, res) => {
 	try {
+		const ip = req.ip || req.headers["x-forwarded-for"]?.split(",")[0].trim() || "unknown";
 		const signalement = await Signalement.findById(req.params.id);
 
 		if (!signalement) return res.status(404).json({ message: "Signalement introuvable" });
 
-		// 🔹 Incrémentation des signalements
+		const alreadyReported = signalement.abuseReports?.some((r) => r.ip === ip);
+		if (alreadyReported) {
+			return res.status(409).json({ message: "Vous avez déjà signalé ce signalement." });
+		}
+
+		signalement.abuseReports = signalement.abuseReports || [];
+		signalement.abuseReports.push({ ip });
 		signalement.signalements += 1;
-		await signalement.save();
 
-		// 🚨 Si un signalement est marqué comme faux 7 fois, il est supprimé
-		if (signalement.signalements >= 7) {
-			await Signalement.findByIdAndDelete(signalement._id);
-			return res.json({ message: "🚨 Ce signalement a été supprimé car trop de personnes l'ont signalé comme faux." });
-		}
-
-		// ⚠️ Si signalé 3 fois, on abaisse sa confiance
 		if (signalement.signalements >= 3) {
-			signalement.confiance = "basse";
-			await signalement.save();
+			await Signalement.findByIdAndDelete(signalement._id);
+			return res.json({ message: "Ce signalement a été supprimé car trop de personnes l'ont signalé comme faux." });
 		}
 
-		res.json({ message: "✅ Signalement signalé comme faux." });
+		await signalement.save();
+		res.json({ message: "Signalement signalé comme faux." });
 	} catch (error) {
 		res.status(500).json({ message: error.message });
 	}

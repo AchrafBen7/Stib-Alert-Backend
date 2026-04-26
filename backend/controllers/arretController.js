@@ -1,6 +1,59 @@
 const Arret = require("../models/Arret");
 const Ligne = require("../models/Ligne");
 const Signalement = require("../models/Signalement");
+
+function haversineMeters(lat1, lng1, lat2, lng2) {
+	const R = 6371000;
+	const dLat = ((lat2 - lat1) * Math.PI) / 180;
+	const dLng = ((lng2 - lng1) * Math.PI) / 180;
+	const a =
+		Math.sin(dLat / 2) ** 2 +
+		Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
+	return 2 * R * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+exports.arretsProches = async (req, res) => {
+	try {
+		const lat = parseFloat(req.query.lat);
+		const lng = parseFloat(req.query.lng);
+		const radius = parseFloat(req.query.radius) || 600;
+
+		if (isNaN(lat) || isNaN(lng)) {
+			return res.status(400).json({ message: "lat et lng sont requis." });
+		}
+
+		const arrets = await Arret.find().lean();
+
+		const avecDistance = arrets
+			.map((a) => ({ ...a, distance: haversineMeters(lat, lng, a.latitude, a.longitude) }))
+			.filter((a) => a.distance <= radius)
+			.sort((a, b) => a.distance - b.distance)
+			.slice(0, 10);
+
+		const enrichis = await Promise.all(
+			avecDistance.map(async (arret) => {
+				const lignes = await Ligne.find({ lineid: { $in: arret.lignesDesservies } }).lean();
+				return {
+					_id: arret._id,
+					nom: arret.nom,
+					latitude: arret.latitude,
+					longitude: arret.longitude,
+					distanceMeters: Math.round(arret.distance),
+					lignes: lignes.map((l) => ({
+						lineid: l.lineid,
+						typeTransport: l.typeTransport,
+						couleur: l.couleur,
+						destination: l.destination,
+					})),
+				};
+			})
+		);
+
+		res.json(enrichis);
+	} catch (error) {
+		res.status(500).json({ message: error.message });
+	}
+};
 // ✅ 1. Créer un nouvel arrêt (ex: Vanderkindere)
 exports.ajouterArret = async (req, res) => {
 	try {

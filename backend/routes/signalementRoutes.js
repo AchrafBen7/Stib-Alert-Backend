@@ -27,7 +27,6 @@ const {
 
 router.post(
 	"/",
-	protect,
 	signalementLimiter,
 	upload.single("photo"),
 	validateSignalement,
@@ -50,7 +49,7 @@ router.post("/:id/vote", protect, validateVote, handleValidation, voterSignaleme
 router.post("/:id/confirm", protect, validateMongoId, handleValidation, confirmerSignalement);
 router.post("/:id/still-blocked", protect, validateMongoId, handleValidation, marquerToujoursBloque);
 router.post("/:id/resolved", protect, validateMongoId, handleValidation, marquerResolu);
-router.post("/:id/signalement-faux", protect, validateMongoId, handleValidation, signalerFauxSignalement);
+router.post("/:id/signalement-faux", validateMongoId, handleValidation, signalerFauxSignalement);
 router.get("/:id/traduire", validateMongoId, handleValidation, signalementController.traduireSignalement);
 
 router.delete("/:id", protect, isAdmin, validateMongoId, handleValidation, supprimerSignalement);

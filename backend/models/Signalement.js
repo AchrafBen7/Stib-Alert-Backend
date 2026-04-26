@@ -3,7 +3,9 @@ const mongoose = require("mongoose");
 const signalementSchema = new mongoose.Schema(
 	{
 		utilisateurId: { type: mongoose.Schema.Types.ObjectId, ref: "Utilisateur", required: false },
-		arretId: { type: mongoose.Schema.Types.ObjectId, ref: "Arret", required: true }, // ✅ Doit être requis !
+		arretId: { type: mongoose.Schema.Types.ObjectId, ref: "Arret", required: false },
+		source: { type: String, enum: ["community", "stib_officiel"], default: "community" },
+		externalId: { type: String, default: null },
 		ligne: { type: String, required: true },
 		typeProbleme: {
 			type: String,
@@ -27,6 +29,7 @@ const signalementSchema = new mongoose.Schema(
 		votesPositifs: { type: Number, default: 0 }, // 👍 Approuvé par les utilisateurs
 		votesNegatifs: { type: Number, default: 0 }, // 👎 Jugé faux par les utilisateurs
 		signalements: { type: Number, default: 0 }, // 🚨 Nombre de signalements pour faux signalement
+		abuseReports: [{ ip: { type: String, required: true }, createdAt: { type: Date, default: Date.now } }],
 
 		// 📍 Coordonnées GPS du signalement
 		latitude: { type: Number, required: false },
@@ -62,6 +65,7 @@ const signalementSchema = new mongoose.Schema(
 const ttlDays = Number.parseInt(process.env.SIGNALEMENT_TTL_DAYS || "30", 10);
 
 signalementSchema.index({ dateSignalement: -1 });
+signalementSchema.index({ externalId: 1 }, { sparse: true });
 signalementSchema.index({ arretId: 1, dateSignalement: -1 });
 signalementSchema.index({ ligne: 1, dateSignalement: -1 });
 signalementSchema.index({ ligne: 1, arretId: 1, dateSignalement: -1 });
