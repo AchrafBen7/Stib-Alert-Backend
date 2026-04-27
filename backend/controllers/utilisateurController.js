@@ -9,6 +9,14 @@ const crypto = require("crypto");
 const { getWaitingTimes } = require("../services/belgianMobility");
 const { registerDevice } = require("../services/oneSignalService");
 
+const REFRESH_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+
+function generateRefreshToken() {
+	const raw = crypto.randomBytes(40).toString("hex");
+	const hash = crypto.createHash("sha256").update(raw).digest("hex");
+	return { raw, hash };
+}
+
 const buildFavorisDetails = async (favoris = []) => {
 	const favoriIds = favoris.map((favori) => favori._id || favori);
 	if (favoriIds.length === 0) return [];
@@ -205,10 +213,16 @@ exports.activerCompte = async (req, res) => {
 			await redis.setex(`auth:${token}`, 604800, JSON.stringify({ userId: utilisateur._id }));
 		}
 
+		const { raw: rawRefresh, hash: hashRefresh } = generateRefreshToken();
+		await Utilisateur.findByIdAndUpdate(utilisateur._id, {
+			refreshToken: hashRefresh,
+			refreshTokenExpiry: new Date(Date.now() + REFRESH_TOKEN_TTL_MS),
+		});
+
 		const sanitized = utilisateur.toObject();
 		delete sanitized.motDePasse;
 
-		res.status(201).json({ message: "Compte activé avec succès !", utilisateur: sanitized, token });
+		res.status(201).json({ message: "Compte activé avec succès !", utilisateur: sanitized, token, refreshToken: rawRefresh });
 	} catch (error) {
 		res.status(500).json({ message: error.message });
 	}
@@ -226,10 +240,15 @@ exports.connexion = async (req, res) => {
 
 		const token = jwt.sign({ userId: utilisateur._id }, process.env.JWT_SECRET, { expiresIn: "7d" });
 
-		// Stocker le token dans Redis
 		if (redis) {
 			await redis.setex(`auth:${token}`, 604800, JSON.stringify({ userId: utilisateur._id }));
 		}
+
+		const { raw: rawRefresh, hash: hashRefresh } = generateRefreshToken();
+		await Utilisateur.findByIdAndUpdate(utilisateur._id, {
+			refreshToken: hashRefresh,
+			refreshTokenExpiry: new Date(Date.now() + REFRESH_TOKEN_TTL_MS),
+		});
 
 		const sanitized = utilisateur.toObject();
 		delete sanitized.motDePasse;
@@ -238,6 +257,7 @@ exports.connexion = async (req, res) => {
 			message: "Connexion réussie",
 			utilisateur: sanitized,
 			token,
+			refreshToken: rawRefresh,
 		});
 	} catch (error) {
 		res.status(500).json({ message: error.message });
@@ -274,7 +294,44 @@ exports.deconnexion = async (req, res) => {
 		if (redis) {
 			await redis.del(`auth:${token}`);
 		}
+		if (req.user?.userId) {
+			await Utilisateur.findByIdAndUpdate(req.user.userId, {
+				refreshToken: null,
+				refreshTokenExpiry: null,
+			});
+		}
 		res.json({ message: "Déconnexion réussie !" });
+	} catch (error) {
+		res.status(500).json({ message: error.message });
+	}
+};
+
+exports.refresh = async (req, res) => {
+	try {
+		const { refreshToken } = req.body;
+		if (!refreshToken) {
+			return res.status(400).json({ message: "Refresh token manquant." });
+		}
+
+		const hash = crypto.createHash("sha256").update(refreshToken).digest("hex");
+		const utilisateur = await Utilisateur.findOne({ refreshToken: hash });
+
+		if (!utilisateur || !utilisateur.refreshTokenExpiry || utilisateur.refreshTokenExpiry < new Date()) {
+			return res.status(401).json({ message: "Refresh token invalide ou expiré." });
+		}
+
+		const newToken = jwt.sign({ userId: utilisateur._id }, process.env.JWT_SECRET, { expiresIn: "7d" });
+		if (redis) {
+			await redis.setex(`auth:${newToken}`, 604800, JSON.stringify({ userId: utilisateur._id }));
+		}
+
+		const { raw: rawRefresh, hash: hashRefresh } = generateRefreshToken();
+		await Utilisateur.findByIdAndUpdate(utilisateur._id, {
+			refreshToken: hashRefresh,
+			refreshTokenExpiry: new Date(Date.now() + REFRESH_TOKEN_TTL_MS),
+		});
+
+		res.json({ token: newToken, refreshToken: rawRefresh });
 	} catch (error) {
 		res.status(500).json({ message: error.message });
 	}

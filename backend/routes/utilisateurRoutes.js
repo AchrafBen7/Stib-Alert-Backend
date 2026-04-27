@@ -32,6 +32,7 @@ router.post("/activation", authLimiter, validateActivation, handleValidation, ac
 router.post("/renvoyer-code", authLimiter, utilisateurController.renvoyerCode);
 router.post("/connexion", authLimiter, validateLogin, handleValidation, connexion);
 router.post("/deconnexion", protect, deconnexion);
+router.post("/refresh", authLimiter, utilisateurController.refresh);
 
 router.get("/me", protect, voirMoi);
 

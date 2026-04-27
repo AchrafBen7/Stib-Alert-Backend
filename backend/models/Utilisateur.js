@@ -22,7 +22,9 @@ const utilisateurSchema = new mongoose.Schema(
 		notifications: { type: Boolean, default: true },
 		weeklyDigestEnabled: { type: Boolean, default: true },
 		role: { type: String, enum: ["Utilisateur", "Admin"], default: "Utilisateur" },
-		votes: [{ type: mongoose.Schema.Types.ObjectId, ref: "Signalement" }], // ✅ Liste des signalements votés
+		votes: [{ type: mongoose.Schema.Types.ObjectId, ref: "Signalement" }],
+		refreshToken: { type: String, default: null },
+		refreshTokenExpiry: { type: Date, default: null },
 	},
 	{ timestamps: true }
 );
