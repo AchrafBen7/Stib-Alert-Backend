@@ -2,6 +2,9 @@ const Signalement = require("../models/Signalement");
 const { getTravellersInformation } = require("./belgianMobility");
 const { sendAlertsForNewPerturbations } = require("./perturbationAlertService");
 
+let quotaBlockedUntil = 0;
+let lastQuotaLogAt = 0;
+
 const PROBLEM_TYPE_MAP = {
 	delay: "Retard",
 	retard: "Retard",
@@ -68,11 +71,67 @@ function buildSignalementFromItem(item) {
 	};
 }
 
+function nowMs() {
+	return Date.now();
+}
+
+function secondsUntilQuotaReset() {
+	return Math.max(Math.ceil((quotaBlockedUntil - nowMs()) / 1000), 0);
+}
+
+function shouldSkipForQuota() {
+	return quotaBlockedUntil > nowMs();
+}
+
+function setQuotaCooldown(error) {
+	const retryAfterSeconds = error.retryAfter && error.retryAfter > 0
+		? error.retryAfter
+		: 60 * 30;
+	quotaBlockedUntil = Math.max(quotaBlockedUntil, nowMs() + (retryAfterSeconds * 1000));
+}
+
+function logQuotaPauseOnce() {
+	const remaining = secondsUntilQuotaReset();
+	if (remaining <= 0) return;
+
+	// Avoid repeating the same quota warning on every interval tick.
+	if (nowMs() - lastQuotaLogAt < 60_000) {
+		return;
+	}
+
+	lastQuotaLogAt = nowMs();
+	console.warn(`[stib-seed] Pause quota active. Reprise dans ${remaining}s.`);
+}
+
 async function syncOfficialPerturbations() {
+	if (shouldSkipForQuota()) {
+		logQuotaPauseOnce();
+		return {
+			synced: 0,
+			resolved: 0,
+			skipped: true,
+			reason: "quota_cooldown",
+			retryAfterSeconds: secondsUntilQuotaReset(),
+		};
+	}
+
 	let result;
 	try {
 		result = await getTravellersInformation({});
 	} catch (error) {
+		if (error.isQuotaExceeded || error.status === 429) {
+			setQuotaCooldown(error);
+			logQuotaPauseOnce();
+			return {
+				synced: 0,
+				resolved: 0,
+				skipped: true,
+				reason: "quota_cooldown",
+				error: error.message,
+				retryAfterSeconds: secondsUntilQuotaReset(),
+			};
+		}
+
 		console.warn("[stib-seed] Impossible de récupérer TravellersInformation:", error.message);
 		return { synced: 0, resolved: 0, error: error.message };
 	}
@@ -155,7 +214,11 @@ function startStibOfficialSeedLoop() {
 	const intervalMs = intervalMinutes * 60 * 1000;
 	const timer = setInterval(() => {
 		syncOfficialPerturbations()
-			.then((r) => { if (r.synced > 0 || r.resolved > 0) console.log("[stib-seed]", r); })
+			.then((r) => {
+				if (r.synced > 0 || r.resolved > 0) {
+					console.log("[stib-seed]", r);
+				}
+			})
 			.catch((e) => console.error("[stib-seed]", e.message));
 	}, intervalMs);
 

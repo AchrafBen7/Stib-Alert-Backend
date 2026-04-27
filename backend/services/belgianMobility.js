@@ -1,5 +1,37 @@
+const redis = require("../config/redis");
+
 const DEFAULT_BASE_URL = "https://api.belgianmobility.io";
 const DEFAULT_API_KEY_HEADER = "x-api-key";
+
+// TTL in seconds for each endpoint — these are the only knobs to adjust
+const CACHE_TTL = {
+	TravellersInformation: 120,  // 2 min — changes rarely, high quota cost
+	WaitingTimes:          20,   // 20 s — real-time, cache short
+	VehiclePositions:      15,   // 15 s — real-time
+	ShapeFiles:            3600, // 1 h  — static
+	StopDetails:           3600, // 1 h  — static
+};
+
+async function cachedRequest(cacheKey, ttlSeconds, fetchFn) {
+	if (redis) {
+		try {
+			const cached = await redis.get(cacheKey);
+			if (cached) return JSON.parse(cached);
+		} catch (_) {
+			// Redis read failure → fall through to live request
+		}
+	}
+
+	const result = await fetchFn();
+
+	if (redis && ttlSeconds > 0) {
+		redis
+			.set(cacheKey, JSON.stringify(result), "EX", ttlSeconds)
+			.catch(() => {}); // fire-and-forget, never block on cache write
+	}
+
+	return result;
+}
 
 function getFetch() {
 	if (typeof fetch !== "function") {
@@ -11,6 +43,10 @@ function getFetch() {
 
 function getBaseUrl() {
 	return (process.env.BELGIAN_MOBILITY_API_BASE_URL || DEFAULT_BASE_URL).replace(/\/+$/, "");
+}
+
+function isMobilityTwinBaseUrl() {
+	return /api\.mobilitytwin\.brussels$/i.test(getBaseUrl());
 }
 
 function buildHeaders() {
@@ -72,6 +108,53 @@ function toArray(value) {
 	return [value];
 }
 
+function parseJsonIfNeeded(value) {
+	if (typeof value !== "string") return value;
+	const trimmed = value.trim();
+	if (!trimmed) return value;
+	if (!(trimmed.startsWith("{") || trimmed.startsWith("["))) return value;
+
+	try {
+		return JSON.parse(trimmed);
+	} catch {
+		return value;
+	}
+}
+
+function pickLocalizedText(value, preferredLangs = ["fr", "en", "nl"]) {
+	const parsed = parseJsonIfNeeded(value);
+
+	if (typeof parsed === "string") return parsed;
+
+	if (Array.isArray(parsed)) {
+		for (const item of parsed) {
+			const text = pickLocalizedText(item, preferredLangs);
+			if (text) return text;
+		}
+		return null;
+	}
+
+	if (!parsed || typeof parsed !== "object") return null;
+
+	if (Array.isArray(parsed.text)) {
+		for (const entry of parsed.text) {
+			const text = pickLocalizedText(entry, preferredLangs);
+			if (text) return text;
+		}
+	}
+
+	for (const lang of preferredLangs) {
+		const candidate = parsed[lang];
+		if (typeof candidate === "string" && candidate.trim()) return candidate;
+	}
+
+	for (const candidate of Object.values(parsed)) {
+		if (typeof candidate === "string" && candidate.trim()) return candidate;
+	}
+
+	return null;
+}
+
 function containsOneOf(values, queryValues) {
 	if (!queryValues.length) return true;
 
@@ -83,12 +166,37 @@ function containsOneOf(values, queryValues) {
 }
 
 function normalizeTravellerInformation(entry) {
+	const parsedLines = parseJsonIfNeeded(entry.lines);
+	const parsedStops = parseJsonIfNeeded(entry.points || entry.stops || entry.stop);
+	const parsedContent = parseJsonIfNeeded(entry.content);
+	const localizedText = pickLocalizedText(parsedContent);
+
+	const normalizedLines = Array.isArray(parsedLines)
+		? parsedLines.map((line) => {
+			if (typeof line === "string") return line;
+			if (line && typeof line === "object") {
+				return line.id || line.lineId || line.lineid || line.name || null;
+			}
+			return null;
+		}).filter(Boolean)
+		: (entry.line || entry.routes || parsedLines || []);
+
+	const normalizedStops = Array.isArray(parsedStops)
+		? parsedStops.map((stop) => {
+			if (typeof stop === "string") return stop;
+			if (stop && typeof stop === "object") {
+				return stop.id || stop.pointid || stop.pointId || stop.name || null;
+			}
+			return null;
+		}).filter(Boolean)
+		: (parsedStops || []);
+
 	return {
 		id: entry.id || entry._id || entry.messageid || entry.messageId || null,
-		title: entry.title || entry.titre || entry.header || entry.cause || null,
-		description: entry.description || entry.message || entry.text || entry.content || null,
-		lines: entry.lines || entry.line || entry.routes || [],
-		stops: entry.points || entry.stops || entry.stop || [],
+		title: entry.title || entry.titre || entry.header || entry.cause || localizedText || null,
+		description: entry.description || entry.message || entry.text || localizedText || entry.content || null,
+		lines: normalizedLines,
+		stops: normalizedStops,
 		priority: entry.priority || entry.severity || entry.level || null,
 		language: entry.language || entry.lang || null,
 		updatedAt: entry.updatedAt || entry.updated_at || entry.timestamp || entry.last_update || null,
@@ -97,24 +205,49 @@ function normalizeTravellerInformation(entry) {
 }
 
 function normalizeWaitingTime(entry) {
+	const passingTimes = parseJsonIfNeeded(entry.passingtimes);
+	const firstPassingTime = Array.isArray(passingTimes) ? passingTimes[0] : null;
+	const destination = pickLocalizedText(firstPassingTime?.destination);
+	let minutes = entry.minutes || entry.waitingTime || entry.waiting_time || entry.remaining_time || null;
+
+	if (minutes === null && firstPassingTime?.expectedArrivalTime) {
+		const etaMs = new Date(firstPassingTime.expectedArrivalTime).getTime() - Date.now();
+		if (Number.isFinite(etaMs)) {
+			minutes = Math.max(Math.round(etaMs / 60000), 0);
+		}
+	}
+
 	return {
 		stopId: entry.stopId || entry.stop_id || entry.pointid || entry.pointId || null,
-		stopName: entry.stopName || entry.stop_name || entry.name || null,
-		line: entry.line || entry.lineid || entry.route || null,
-		destination: entry.destination || entry.headsign || null,
-		minutes: entry.minutes || entry.waitingTime || entry.waiting_time || entry.remaining_time || null,
+		stopName: entry.stopName || entry.stop_name || entry.name || pickLocalizedText(entry.name) || null,
+		line: entry.line || entry.lineid || entry.lineId || entry.route || null,
+		destination: entry.destination || entry.headsign || destination || null,
+		minutes,
 		raw: entry,
 	};
 }
 
 function normalizeVehiclePosition(entry) {
+	const properties = entry.properties || entry.fields || entry.attributes || entry;
+
 	return {
-		vehicleId: entry.vehicleId || entry.vehicle_id || entry.id || null,
-		line: entry.line || entry.lineid || entry.route || null,
-		direction: entry.direction || entry.headsign || null,
-		latitude: entry.latitude || entry.lat || entry.position?.latitude || null,
-		longitude: entry.longitude || entry.lon || entry.lng || entry.position?.longitude || null,
-		updatedAt: entry.updatedAt || entry.updated_at || entry.timestamp || null,
+		vehicleId: properties.vehicleId || properties.vehicle_id || properties.uuid || entry.id || null,
+		line: properties.line || properties.lineid || properties.lineId || properties.route || null,
+		direction: properties.direction || properties.headsign || properties.destination || null,
+		latitude:
+			properties.latitude ||
+			properties.lat ||
+			properties.position?.latitude ||
+			entry.geometry?.coordinates?.[1] ||
+			null,
+		longitude:
+			properties.longitude ||
+			properties.lon ||
+			properties.lng ||
+			properties.position?.longitude ||
+			entry.geometry?.coordinates?.[0] ||
+			null,
+		updatedAt: properties.updatedAt || properties.updated_at || properties.timestamp || null,
 		raw: entry,
 	};
 }
@@ -169,7 +302,7 @@ function normalizeShapeFile(entry) {
 
 	return {
 		id: entry.id || entry._id || properties.id || properties.objectid || null,
-		line: properties.line || properties.lineid || properties.route || properties.route_id || null,
+		line: properties.line || properties.lineid || properties.lineId || properties.route || properties.route_id || properties.ligne || null,
 		transportType: properties.transportType || properties.mode || properties.type || properties.network || null,
 		direction: properties.direction || properties.destination || properties.headsign || null,
 		polylines,
@@ -182,10 +315,11 @@ function normalizeStopDetail(entry) {
 
 	return {
 		id: entry.id || entry._id || properties.id || properties.stopId || properties.stop_id || properties.pointid || properties.pointId || null,
-		name: properties.name || properties.stopName || properties.stop_name || properties.description || null,
+		name: pickLocalizedText(properties.name) || properties.name || properties.stopName || properties.stop_name || properties.description || null,
 		latitude:
 			properties.latitude ||
 			properties.lat ||
+			parseJsonIfNeeded(properties.gpscoordinates)?.latitude ||
 			properties.location?.latitude ||
 			entry.geometry?.coordinates?.[1] ||
 			null,
@@ -193,6 +327,7 @@ function normalizeStopDetail(entry) {
 			properties.longitude ||
 			properties.lon ||
 			properties.lng ||
+			parseJsonIfNeeded(properties.gpscoordinates)?.longitude ||
 			properties.location?.longitude ||
 			entry.geometry?.coordinates?.[0] ||
 			null,
@@ -212,6 +347,11 @@ async function requestDataset(pathname, query = {}) {
 		const error = new Error(`Belgian Mobility API error ${response.status}`);
 		error.status = response.status;
 		error.details = errorText;
+		error.requestUrl = requestUrl.toString();
+		error.retryAfter = Number.parseInt(response.headers.get("retry-after") || "", 10) || null;
+		error.isQuotaExceeded =
+			response.status === 403 &&
+			/quota exceeded|out of call volume quota/i.test(errorText);
 		throw error;
 	}
 
@@ -219,7 +359,13 @@ async function requestDataset(pathname, query = {}) {
 }
 
 async function getTravellersInformation(query = {}) {
-	const payload = await requestDataset("/api/datasets/stibmivb/rt/TravellersInformation", query);
+	const cacheKey = `stib:TravellersInformation`;
+	const payload = await cachedRequest(cacheKey, CACHE_TTL.TravellersInformation, () =>
+		requestDataset(
+			isMobilityTwinBaseUrl() ? "/stib/travellers-information" : "/api/datasets/stibmivb/rt/TravellersInformation",
+			query
+		)
+	);
 	const items = extractItems(payload);
 	const lineFilters = toArray(query.line || query.lines).map((value) => String(value).toLowerCase());
 	const stopFilters = toArray(query.stopId || query.stop || query.pointid).map((value) => String(value).toLowerCase());
@@ -235,33 +381,57 @@ async function getTravellersInformation(query = {}) {
 }
 
 async function getWaitingTimes(query = {}) {
-	const payload = await requestDataset("/api/datasets/stibmivb/rt/WaitingTimes", query);
+	const stopKey = toArray(query.stopId || query.stop || query.pointid).join(",") || "all";
+	const cacheKey = `stib:WaitingTimes:${stopKey}`;
+	const payload = await cachedRequest(cacheKey, CACHE_TTL.WaitingTimes, () =>
+		requestDataset(
+			isMobilityTwinBaseUrl() ? "/stib/waiting-times" : "/api/datasets/stibmivb/rt/WaitingTimes",
+			query
+		)
+	);
 	const items = extractItems(payload);
 	const stopFilters = toArray(query.stopId || query.stop || query.pointid).map((value) => String(value).toLowerCase());
 	const lineFilters = toArray(query.line || query.lines).map((value) => String(value).toLowerCase());
 
 	const normalized = items
 		.filter((entry) => containsOneOf(entry.stopId || entry.stop_id || entry.pointid, stopFilters))
-		.filter((entry) => containsOneOf(entry.line || entry.lineid || entry.route, lineFilters))
+		.filter((entry) => containsOneOf(entry.line || entry.lineid || entry.lineId || entry.route, lineFilters))
 		.map(normalizeWaitingTime);
 
 	return { payload, items: normalized };
 }
 
 async function getVehiclePositions(query = {}) {
-	const payload = await requestDataset("/api/datasets/stibmivb/rt/VehiclePositions", query);
+	const lineKey = toArray(query.line || query.lines).join(",") || "all";
+	const cacheKey = `stib:VehiclePositions:${lineKey}`;
+	const payload = await cachedRequest(cacheKey, CACHE_TTL.VehiclePositions, () =>
+		requestDataset(
+			isMobilityTwinBaseUrl() ? "/stib/vehicle-position" : "/api/datasets/stibmivb/rt/VehiclePositions",
+			query
+		)
+	);
 	const items = extractItems(payload);
 	const lineFilters = toArray(query.line || query.lines).map((value) => String(value).toLowerCase());
 
 	const normalized = items
-		.filter((entry) => containsOneOf(entry.line || entry.lineid || entry.route, lineFilters))
+		.filter((entry) => containsOneOf(
+			entry.line || entry.lineid || entry.lineId || entry.route || entry.properties?.lineId || entry.properties?.lineid,
+			lineFilters
+		))
 		.map(normalizeVehiclePosition);
 
 	return { payload, items: normalized };
 }
 
 async function getShapeFiles(query = {}) {
-	const payload = await requestDataset("/api/datasets/stibmivb/static/shape-files", query);
+	const lineKey = toArray(query.line || query.lines).join(",") || "all";
+	const cacheKey = `stib:ShapeFiles:${lineKey}`;
+	const payload = await cachedRequest(cacheKey, CACHE_TTL.ShapeFiles, () =>
+		requestDataset(
+			isMobilityTwinBaseUrl() ? "/stib/shapefile" : "/api/datasets/stibmivb/static/shape-files",
+			query
+		)
+	);
 	const items = extractItems(payload);
 	const lineFilters = toArray(query.line || query.lines).map((value) => String(value).toLowerCase());
 	const modeFilters = toArray(query.transportType || query.mode || query.type).map((value) => String(value).toLowerCase());
@@ -276,7 +446,14 @@ async function getShapeFiles(query = {}) {
 }
 
 async function getStopDetails(query = {}) {
-	const payload = await requestDataset("/api/datasets/stibmivb/static/stopDetails", query);
+	const stopKey = toArray(query.stopId || query.stop || query.pointid).join(",") || "all";
+	const cacheKey = `stib:StopDetails:${stopKey}`;
+	const payload = await cachedRequest(cacheKey, CACHE_TTL.StopDetails, () =>
+		requestDataset(
+			isMobilityTwinBaseUrl() ? "/stib/stop-details" : "/api/datasets/stibmivb/static/stopDetails",
+			query
+		)
+	);
 	const items = extractItems(payload);
 	const stopFilters = toArray(query.stopId || query.stop || query.pointid).map((value) => String(value).toLowerCase());
 
