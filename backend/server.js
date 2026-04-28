@@ -1,38 +1,13 @@
 require("dotenv").config();
-const express = require("express");
-const cors = require("cors");
-const helmet = require("helmet");
-const morgan = require("morgan");
-const mongoSanitize = require("express-mongo-sanitize");
 const connectDB = require("./config/db");
 const redis = require("./config/redis");
 const { initWebSocket } = require("./config/websocket");
-const { globalLimiter } = require("./middlewares/rateLimiters");
 const http = require("http");
-const cookieParser = require("cookie-parser");
 
-const app = express();
+const app = require("./app");
 const server = http.createServer(app);
 
 initWebSocket(server);
-
-const allowedOrigins = (process.env.CORS_ORIGINS || "")
-	.split(",")
-	.map((o) => o.trim())
-	.filter(Boolean);
-
-app.use(helmet());
-app.use(
-	cors({
-		origin: allowedOrigins.length ? allowedOrigins : true,
-		credentials: true,
-	})
-);
-app.use(express.json({ limit: "10mb" }));
-app.use(cookieParser());
-app.use(mongoSanitize());
-app.use(morgan(process.env.NODE_ENV === "production" ? "combined" : "dev"));
-app.use(globalLimiter);
 
 if (redis) {
 	redis.on("connect", () => console.log("✅ Redis connecté !"));
@@ -41,18 +16,7 @@ if (redis) {
 	console.warn("⚠️ Redis désactivé : REDIS_URL manquant.");
 }
 
-app.use("/api/signalements", require("./routes/signalementRoutes"));
-app.use("/api/utilisateurs", require("./routes/utilisateurRoutes"));
-app.use("/api/lignes", require("./routes/ligneRoutes"));
-app.use("/api/chatbot", require("./routes/chatbotRoutes"));
-app.use("/api/arrets", require("./routes/arretRoute"));
-app.use("/api/stib", require("./routes/stibRealtimeRoutes"));
-app.use("/api/transport", require("./routes/transportRoutes"));
-app.use("/api/assistant", require("./routes/assistantRoutes"));
-
 const { startStibOfficialSeedLoop } = require("./services/stibOfficialSeedService");
-
-app.get("/", (req, res) => res.send("STIB Alert API fonctionne !"));
 
 app.get("/privacy", (req, res) => {
 	res.setHeader("Content-Type", "text/html; charset=utf-8");
@@ -119,16 +83,6 @@ app.get("/privacy", (req, res) => {
   <p>Pour toute question relative à cette politique : <a href="mailto:privacy@stib-alert.be">privacy@stib-alert.be</a></p>
 </body>
 </html>`);
-});
-
-app.use((err, req, res, _next) => {
-	console.error("❌", err.message);
-	if (err.type === "entity.too.large") {
-		return res.status(413).json({ message: "Payload trop volumineux." });
-	}
-	res.status(err.status || 500).json({
-		message: err.publicMessage || "Erreur serveur.",
-	});
 });
 
 const PORT = process.env.PORT || 4000;

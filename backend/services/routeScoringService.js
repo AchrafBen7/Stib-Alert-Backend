@@ -14,6 +14,13 @@ const DEFAULT_WEIGHTS = {
 	corridorShape: 7.2,
 };
 
+const ACTIVE_MODE_LIMITS = {
+	walkMaxMinutes: 24,
+	bikeMaxMinutes: 32,
+	walkSoftPenaltyAfterMinutes: 14,
+	bikeSoftPenaltyAfterMinutes: 20,
+};
+
 function normalizeLine(line) {
 	return String(line || "").trim();
 }
@@ -26,6 +33,14 @@ function routeWalkDuration(route) {
 	}, 0);
 }
 
+function routeBikeDuration(route) {
+	return route.legs.reduce((sum, leg) => {
+		return sum + leg.steps
+			.filter((step) => step.travel_mode === "BICYCLING")
+			.reduce((acc, step) => acc + (step.duration?.value || 0), 0);
+	}, 0);
+}
+
 function routeTransfers(route) {
 	const transitSteps = route.legs.reduce((sum, leg) => sum + leg.steps.filter((step) => step.travel_mode === "TRANSIT").length, 0);
 	return Math.max(transitSteps - 1, 0);
@@ -33,6 +48,14 @@ function routeTransfers(route) {
 
 function routeTotalDuration(route) {
 	return route.legs.reduce((sum, leg) => sum + (leg.duration?.value || 0), 0);
+}
+
+function routePrimaryMode(route) {
+	const modes = route.legs.flatMap((leg) => (leg.steps || []).map((step) => String(step.travel_mode || "").toUpperCase()));
+	if (modes.includes("TRANSIT")) return "transit";
+	if (modes.includes("BICYCLING")) return "bike";
+	if (modes.includes("WALKING")) return "walk";
+	return "unknown";
 }
 
 function extractTransitLines(route) {
@@ -77,7 +100,67 @@ function toMinutes(valueSeconds) {
 	return Math.max(Math.round((valueSeconds || 0) / 60), 0);
 }
 
+function activeModeDurationPenalty({ primaryMode, totalDurationMinutes }) {
+	if (primaryMode === "walk") {
+		const overflow = Math.max(totalDurationMinutes - ACTIVE_MODE_LIMITS.walkSoftPenaltyAfterMinutes, 0);
+		return overflow * 3.4;
+	}
+	if (primaryMode === "bike") {
+		const overflow = Math.max(totalDurationMinutes - ACTIVE_MODE_LIMITS.bikeSoftPenaltyAfterMinutes, 0);
+		return overflow * 2.2;
+	}
+	return 0;
+}
+
+function isEligibleActiveAlternative(scoredRoute) {
+	const totalDurationMinutes = toMinutes(scoredRoute.totalDurationSeconds);
+	if (scoredRoute.primaryMode === "walk") {
+		return totalDurationMinutes <= ACTIVE_MODE_LIMITS.walkMaxMinutes;
+	}
+	if (scoredRoute.primaryMode === "bike") {
+		return totalDurationMinutes <= ACTIVE_MODE_LIMITS.bikeMaxMinutes;
+	}
+	return false;
+}
+
+function isTransitDisruptionImportant(bestTransitRoute) {
+	if (!bestTransitRoute) return false;
+	if ((bestTransitRoute.blockedLines || []).length > 0) return true;
+	if (bestTransitRoute.severity === SEVERITY.CRITICAL || bestTransitRoute.severity === SEVERITY.MAJOR) return true;
+	if ((bestTransitRoute.incidents || []).length >= 2) return true;
+	if ((bestTransitRoute.corridorGeographicPenalty || 0) >= 10) return true;
+	if ((bestTransitRoute.corridorShapePenalty || 0) >= 10) return true;
+	if ((bestTransitRoute.transferFragility || 0) >= 5) return true;
+	return false;
+}
+
+function shouldExposeWalkAlternative(walkRoute, bestTransitRoute) {
+	if (!walkRoute || !isEligibleActiveAlternative(walkRoute)) return false;
+	return isTransitDisruptionImportant(bestTransitRoute);
+}
+
+function shouldExposeBikeAlternative(bikeRoute, bestTransitRoute) {
+	if (!bikeRoute || !isEligibleActiveAlternative(bikeRoute)) return false;
+	if (!bestTransitRoute) return true;
+
+	const transitDuration = toMinutes(bestTransitRoute.totalDurationSeconds);
+	const bikeDuration = toMinutes(bikeRoute.totalDurationSeconds);
+	const significantlyFaster = bikeDuration <= Math.max(transitDuration - 6, 0);
+	const materiallyMoreReliable = bikeRoute.confidence >= bestTransitRoute.confidence + 0.12
+		|| bikeRoute.severity === SEVERITY.NORMAL && bestTransitRoute.severity !== SEVERITY.NORMAL;
+
+	return significantlyFaster || materiallyMoreReliable;
+}
+
 function computeWaitingStats(lines, departures) {
+	if (!lines.length) {
+		return {
+			averageWait: 0,
+			variance: 0,
+			sample: [],
+		};
+	}
+
 	const relevant = departures.filter((departure) => lines.includes(normalizeLine(departure.line)));
 	const values = relevant.slice(0, 5).map((departure) => departure.minutes).filter((value) => Number.isFinite(value));
 	if (!values.length) {
@@ -345,8 +428,26 @@ function computeHistoricalStopFragility(stopNames, fragilitySnapshots = [], requ
 	}, 0);
 }
 
-function buildReasons({ incidentPenalty, corridorGeographicPenalty, corridorShapePenalty, transferFragility, stopFragility, waitingStats, blockedLines, walkingMinutes }) {
+function buildReasons({
+	incidentPenalty,
+	corridorGeographicPenalty,
+	corridorShapePenalty,
+	transferFragility,
+	stopFragility,
+	waitingStats,
+	blockedLines,
+	walkingMinutes,
+	primaryMode,
+	totalDurationMinutes,
+}) {
 	const reasons = [];
+
+	if (primaryMode === "bike") {
+		reasons.push("Cette option evite les correspondances STIB et reste directe a velo.");
+	}
+	if (primaryMode === "walk" && totalDurationMinutes <= 22) {
+		reasons.push("Le trajet reste faisable a pied sans dependre du reseau.");
+	}
 
 	if (blockedLines.length) {
 		reasons.push(`J’évite la ligne ${blockedLines[0]} car elle reste fortement perturbée.`);
@@ -378,6 +479,23 @@ function buildReasons({ incidentPenalty, corridorGeographicPenalty, corridorShap
 
 function buildExplanationDetails(scoredRoute) {
 	const categories = [];
+
+	if (scoredRoute.primaryMode === "bike") {
+		categories.push({
+			key: "bike_route",
+			title: "Alternative velo",
+			impact: "positive",
+			detail: "Cette option s'appuie sur un trajet velo direct pour reduire la dependance au reseau STIB.",
+		});
+	}
+	if (scoredRoute.primaryMode === "walk") {
+		categories.push({
+			key: "walk_route",
+			title: "Alternative a pied",
+			impact: scoredRoute.totalDurationSeconds <= 20 * 60 ? "positive" : "medium",
+			detail: "Cette option peut etre realisee a pied si tu preferes eviter les perturbations du reseau.",
+		});
+	}
 
 	if (scoredRoute.blockedLines?.length) {
 		categories.push({
@@ -461,7 +579,7 @@ function buildRouteSteps(route, shapeIndex = new Map()) {
 				const endPoint = step.end_location?.lat != null && step.end_location?.lng != null
 					? { lat: step.end_location.lat, lng: step.end_location.lng }
 					: null;
-				steps.push({
+			steps.push({
 					order: order++,
 					mode: "walk",
 					instruction,
@@ -469,6 +587,33 @@ function buildRouteSteps(route, shapeIndex = new Map()) {
 					line: null,
 					destination: null,
 					stopName: departureStop || null,
+					arrivalStopName: null,
+					stopsCount: null,
+					startLatitude: step.start_location?.lat ?? null,
+					startLongitude: step.start_location?.lng ?? null,
+					targetLatitude: step.end_location?.lat ?? null,
+					targetLongitude: step.end_location?.lng ?? null,
+					path: dedupeCoordinates([startPoint, endPoint].filter(Boolean)),
+				});
+				continue;
+			}
+
+			if (step.travel_mode === "BICYCLING") {
+				const instruction = cleanInstruction(step.html_instructions) || `Pedale ${durationMinutes} min jusqu'a destination.`;
+				const startPoint = step.start_location?.lat != null && step.start_location?.lng != null
+					? { lat: step.start_location.lat, lng: step.start_location.lng }
+					: null;
+				const endPoint = step.end_location?.lat != null && step.end_location?.lng != null
+					? { lat: step.end_location.lat, lng: step.end_location.lng }
+					: null;
+				steps.push({
+					order: order++,
+					mode: "bike",
+					instruction,
+					durationMinutes,
+					line: null,
+					destination: null,
+					stopName: null,
 					arrivalStopName: null,
 					stopsCount: null,
 					startLatitude: step.start_location?.lat ?? null,
@@ -531,8 +676,10 @@ function buildRouteSteps(route, shapeIndex = new Map()) {
 function scoreSingleRoute(route, context, weights = DEFAULT_WEIGHTS) {
 	const totalDurationSeconds = routeTotalDuration(route);
 	const walkingDurationSeconds = routeWalkDuration(route);
+	const bikingDurationSeconds = routeBikeDuration(route);
 	const transfers = routeTransfers(route);
 	const lines = [...new Set(extractTransitLines(route))];
+	const primaryMode = routePrimaryMode(route);
 	const stopNames = collectTransitStops(route);
 	const transferStops = collectTransferStops(route);
 	const routeCoords = extractRouteCoordinates(route);
@@ -559,10 +706,14 @@ function scoreSingleRoute(route, context, weights = DEFAULT_WEIGHTS) {
 		computeStopFragility(stopNames, incidents)
 		+ computeHistoricalStopFragility(stopNames, context.fragilitySnapshots, context.requestDate, lines);
 	const walkingMinutes = toMinutes(walkingDurationSeconds);
+	const bikingMinutes = toMinutes(bikingDurationSeconds);
+	const totalDurationMinutes = toMinutes(totalDurationSeconds);
+	const activeModePenalty = activeModeDurationPenalty({ primaryMode, totalDurationMinutes });
 
 	const score =
 		(totalDurationSeconds / 60) * weights.duration +
 		walkingMinutes * weights.walking +
+		bikingMinutes * 0.65 +
 		transfers * weights.transfers +
 		waitingStats.averageWait * weights.waitingAverage +
 		waitingStats.variance * weights.waitingVariance +
@@ -571,7 +722,8 @@ function scoreSingleRoute(route, context, weights = DEFAULT_WEIGHTS) {
 		corridorShapePenalty * weights.corridorShape +
 		transferFragility * weights.transferFragility +
 		stopFragility * weights.stopFragility +
-		blockedLines.length * weights.blockedLine;
+		blockedLines.length * weights.blockedLine +
+		activeModePenalty;
 
 	const severityInfo = summarizeSeverity(incidents);
 	const reasons = buildReasons({
@@ -583,6 +735,8 @@ function scoreSingleRoute(route, context, weights = DEFAULT_WEIGHTS) {
 		waitingStats,
 		blockedLines,
 		walkingMinutes,
+		primaryMode,
+		totalDurationMinutes,
 	});
 	const steps = buildRouteSteps(route, shapeIndex);
 
@@ -591,8 +745,10 @@ function scoreSingleRoute(route, context, weights = DEFAULT_WEIGHTS) {
 		score,
 		totalDurationSeconds,
 		walkingDurationSeconds,
+		bikingDurationSeconds,
 		transfers,
 		lines,
+		primaryMode,
 		incidents,
 		severity: severityInfo.severity,
 		confidence: severityInfo.confidence,
@@ -603,12 +759,21 @@ function scoreSingleRoute(route, context, weights = DEFAULT_WEIGHTS) {
 		stopFragility,
 		transferFragility,
 		blockedLines,
+		activeModePenalty,
 		reasons,
 		steps,
 	};
 }
 
 function buildExplanation(scoredRoute, label) {
+	if (scoredRoute.primaryMode === "bike") {
+		return `${label}. Ce trajet a velo reduit la dependance au reseau STIB tout en restant direct.`;
+	}
+
+	if (scoredRoute.primaryMode === "walk") {
+		return `${label}. Ce trajet a pied permet d'eviter le reseau STIB sur une distance encore raisonnable.`;
+	}
+
 	if (!scoredRoute.incidents.length) {
 		return `${label}. Aucun incident fort n’est détecté sur ce corridor et l’attente paraît stable.`;
 	}
@@ -642,8 +807,13 @@ function scoreRoutes({ routes, incidents, departures, lignesBloquees = [], shape
 	}
 
 	const bestOverall = scored[0];
+	const bestTransitRoute = scored.find((item) => item.primaryMode === "transit");
 	const fastest = scored.slice().sort((a, b) => a.totalDurationSeconds - b.totalDurationSeconds)[0];
 	const leastWalking = scored.slice().sort((a, b) => a.walkingDurationSeconds - b.walkingDurationSeconds)[0];
+	const bikeRouteCandidate = scored.find((item) => item.primaryMode === "bike");
+	const walkRouteCandidate = scored.find((item) => item.primaryMode === "walk");
+	const bikeRoute = shouldExposeBikeAlternative(bikeRouteCandidate, bestTransitRoute) ? bikeRouteCandidate : null;
+	const walkRoute = shouldExposeWalkAlternative(walkRouteCandidate, bestTransitRoute) ? walkRouteCandidate : null;
 	const mostReliable = scored.slice().sort((a, b) => {
 		const reliabilityA = a.incidents.length * 8 + a.waitingVariance * 2.4 + a.transferFragility * 2 + a.corridorGeographicPenalty * 1.8 + a.stopFragility * 1.6;
 		const reliabilityB = b.incidents.length * 8 + b.waitingVariance * 2.4 + b.transferFragility * 2 + b.corridorGeographicPenalty * 1.8 + b.stopFragility * 1.6;
@@ -655,6 +825,8 @@ function scoreRoutes({ routes, incidents, departures, lignesBloquees = [], shape
 		{ type: "most_reliable", label: "Plus fiable", data: mostReliable },
 		{ type: "fastest", label: "Plus rapide", data: fastest },
 		{ type: "least_walking", label: "Moins de marche", data: leastWalking },
+		...(bikeRoute ? [{ type: "bike", label: "Alternative velo", data: bikeRoute }] : []),
+		...(walkRoute ? [{ type: "walk", label: "Alternative a pied", data: walkRoute }] : []),
 		...scored.slice(1, 3).map((item, index) => ({
 			type: `alternative_${index + 1}`,
 			label: `Alternative ${index + 1}`,

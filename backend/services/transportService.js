@@ -2,7 +2,11 @@ const Arret = require("../models/Arret");
 const Ligne = require("../models/Ligne");
 const Signalement = require("../models/Signalement");
 const { getTravellersInformation, getWaitingTimes, getVehiclePositions, getShapeFiles } = require("./belgianMobility");
-const { fetchItinerairesGoogle } = require("./googleDirections");
+const {
+	fetchItinerairesGoogle,
+	fetchItinerairesGoogleWalk,
+	fetchItinerairesGoogleBike,
+} = require("./googleDirections");
 const cache = require("./memoryCache");
 const { buildCommunityMeta } = require("./signalementCommunityService");
 const { scoreRoutes } = require("./routeScoringService");
@@ -24,8 +28,19 @@ const TTL = {
 	routeRecommend: 90_000,
 };
 
+const OFFICIAL_STATUS = {
+	AVAILABLE: "available",
+	LIMITED: "limited",
+	UNAVAILABLE: "unavailable",
+};
+
 function stableKey(prefix, payload) {
 	return `${prefix}:${JSON.stringify(payload)}`;
+}
+
+function roundedCoordinate(value) {
+	if (typeof value !== "number" || !Number.isFinite(value)) return null;
+	return Number(value.toFixed(3));
 }
 
 function normalizeLine(line) {
@@ -100,11 +115,100 @@ async function getCachedShapeFiles(query) {
 	);
 }
 
+async function getCachedDatasetWithStatus({ keyPrefix, query, ttlMs, loader, emptyValue }) {
+	const key = stableKey(keyPrefix, query);
+	const fresh = cache.get(key);
+	if (fresh?.value !== undefined) {
+		return {
+			data: fresh.value,
+			officialDataStatus: OFFICIAL_STATUS.AVAILABLE,
+			officialDataMessage: null,
+		};
+	}
+
+	const stale = cache.get(key, { allowStale: true });
+
+	try {
+		const value = await loader(query);
+		cache.set(key, value, ttlMs);
+		return {
+			data: value,
+			officialDataStatus: OFFICIAL_STATUS.AVAILABLE,
+			officialDataMessage: null,
+		};
+	} catch (error) {
+		if (stale?.value !== undefined) {
+			return {
+				data: stale.value,
+				officialDataStatus: OFFICIAL_STATUS.LIMITED,
+				officialDataMessage: "Les donnees officielles STIB sont temporairement limitees. Affichage du dernier etat connu.",
+			};
+		}
+
+		return {
+			data: emptyValue,
+			officialDataStatus: OFFICIAL_STATUS.UNAVAILABLE,
+			officialDataMessage: "Les donnees officielles STIB sont temporairement indisponibles. Les informations communautaires restent actives.",
+			error,
+		};
+	}
+}
+
+async function getTravellersInformationWithStatus(query) {
+	return getCachedDatasetWithStatus({
+		keyPrefix: "travellers-information",
+		query,
+		ttlMs: TTL.travellersInformation,
+		loader: getTravellersInformation,
+		emptyValue: { payload: null, items: [] },
+	});
+}
+
+async function getWaitingTimesWithStatus(query) {
+	return getCachedDatasetWithStatus({
+		keyPrefix: "waiting-times",
+		query,
+		ttlMs: TTL.waitingTimes,
+		loader: getWaitingTimes,
+		emptyValue: { payload: null, items: [] },
+	});
+}
+
+async function getVehiclePositionsWithStatus(query) {
+	return getCachedDatasetWithStatus({
+		keyPrefix: "vehicle-positions",
+		query,
+		ttlMs: TTL.vehiclePositions,
+		loader: getVehiclePositions,
+		emptyValue: { payload: null, items: [] },
+	});
+}
+
+function mergeOfficialStatuses(statuses = []) {
+	const normalized = statuses.filter(Boolean);
+	if (normalized.includes(OFFICIAL_STATUS.UNAVAILABLE)) return OFFICIAL_STATUS.UNAVAILABLE;
+	if (normalized.includes(OFFICIAL_STATUS.LIMITED)) return OFFICIAL_STATUS.LIMITED;
+	return OFFICIAL_STATUS.AVAILABLE;
+}
+
+function firstOfficialMessage(messages = []) {
+	return messages.find(Boolean) || null;
+}
+
 async function getCachedDirections(query) {
 	return cache.remember(
 		stableKey("google-directions", query),
 		TTL.routeRecommend,
-		async () => fetchItinerairesGoogle(query.depart, query.destination)
+		async () => {
+			switch (query.mode) {
+			case "walking":
+				return fetchItinerairesGoogleWalk(query.depart, query.destination);
+			case "bicycling":
+				return fetchItinerairesGoogleBike(query.depart, query.destination);
+			default:
+				return fetchItinerairesGoogle(query.depart, query.destination);
+			}
+		}
 	);
 }
 
@@ -190,11 +294,17 @@ async function getTransportStop(stopId) {
 			throw error;
 		}
 
-		const [signalements, waitingTimes, officialIncidents] = await Promise.all([
+		const [signalements, waitingTimesResult, officialIncidentsResult] = await Promise.all([
 			getRecentSignalements({ stopIds: [stop._id] }),
-			stop.stop_id ? getCachedWaitingTimes({ stopId: stop.stop_id }) : { items: [] },
-			getCachedTravellersInformation({ stopId: stop.stop_id || stop.nom }),
+			stop.stop_id ? getWaitingTimesWithStatus({ stopId: stop.stop_id }) : {
+				data: { items: [] },
+				officialDataStatus: OFFICIAL_STATUS.AVAILABLE,
+				officialDataMessage: null,
+			},
+			getTravellersInformationWithStatus({ stopId: stop.stop_id || stop.nom }),
 		]);
+		const waitingTimes = waitingTimesResult.data;
+		const officialIncidents = officialIncidentsResult.data;
 
 		const activeIncidents = [
 			...signalements.map(mapIncident),
@@ -224,6 +334,14 @@ async function getTransportStop(stopId) {
 				lines: stop.lignesDesservies || [],
 			},
 			...severityInfo,
+			officialDataStatus: mergeOfficialStatuses([
+				waitingTimesResult.officialDataStatus,
+				officialIncidentsResult.officialDataStatus,
+			]),
+			officialDataMessage: firstOfficialMessage([
+				waitingTimesResult.officialDataMessage,
+				officialIncidentsResult.officialDataMessage,
+			]),
 			activeIncidents,
 			nextDepartures,
 			recommendedAlternatives: [],
@@ -249,12 +367,19 @@ async function getTransportLine(lineId) {
 		const stopIds = stops.map((stop) => stop._id);
 		const stopRealtimeIds = stops.map((stop) => stop.stop_id).filter(Boolean);
 
-		const [signalements, waitingTimes, vehicles, officialIncidents] = await Promise.all([
+		const [signalements, waitingTimesResult, vehiclesResult, officialIncidentsResult] = await Promise.all([
 			getRecentSignalements({ line: lineId, stopIds }),
-			stopRealtimeIds.length ? getCachedWaitingTimes({ line: lineId, stopId: stopRealtimeIds }) : { items: [] },
-			getCachedVehiclePositions({ line: lineId }),
-			getCachedTravellersInformation({ line: lineId }),
+			stopRealtimeIds.length ? getWaitingTimesWithStatus({ line: lineId, stopId: stopRealtimeIds }) : {
+				data: { items: [] },
+				officialDataStatus: OFFICIAL_STATUS.AVAILABLE,
+				officialDataMessage: null,
+			},
+			getVehiclePositionsWithStatus({ line: lineId }),
+			getTravellersInformationWithStatus({ line: lineId }),
 		]);
+		const waitingTimes = waitingTimesResult.data;
+		const vehicles = vehiclesResult.data;
+		const officialIncidents = officialIncidentsResult.data;
 
 		const activeIncidents = [
 			...signalements.map(mapIncident),
@@ -289,6 +414,16 @@ async function getTransportLine(lineId) {
 				})),
 			},
 			...severityInfo,
+			officialDataStatus: mergeOfficialStatuses([
+				waitingTimesResult.officialDataStatus,
+				vehiclesResult.officialDataStatus,
+				officialIncidentsResult.officialDataStatus,
+			]),
+			officialDataMessage: firstOfficialMessage([
+				waitingTimesResult.officialDataMessage,
+				vehiclesResult.officialDataMessage,
+				officialIncidentsResult.officialDataMessage,
+			]),
 			activeIncidents,
 			nextDepartures,
 			vehicles: vehicles.items.slice(0, 50),
@@ -298,51 +433,77 @@ async function getTransportLine(lineId) {
 }
 
 async function getTransportOverview({ lat, lng } = {}) {
-	const nearestStops = await Arret.find()
-		.limit(6)
-		.lean();
+	return cache.remember(
+		stableKey("transport-overview", {
+			lat: roundedCoordinate(lat),
+			lng: roundedCoordinate(lng),
+		}),
+		15_000,
+		async () => {
+			const nearestStops = await Arret.find()
+				.limit(6)
+				.lean();
 
-	const [overviewStops, officialIncidents] = await Promise.all([
-		Promise.all(nearestStops.map((stop) => getTransportStop(stop._id))),
-		getCachedTravellersInformation({}),
-	]);
+			const [overviewStops, officialIncidentsResult] = await Promise.all([
+				Promise.all(nearestStops.map((stop) => getTransportStop(stop._id))),
+				getTravellersInformationWithStatus({}),
+			]);
+			const officialIncidents = officialIncidentsResult.data;
 
-	const activeIncidents = officialIncidents.items.slice(0, 10).map((item) => ({
-		id: item.id,
-		type: item.title || "Information STIB",
-		description: item.description,
-		severity: SEVERITY.MAJOR,
-		confidence: 0.85,
-		source: "official",
-		line: Array.isArray(item.lines) ? item.lines[0] : item.lines || null,
-		stop: null,
-		date: item.updatedAt || null,
-	}));
+			const activeIncidents = officialIncidents.items.slice(0, 10).map((item) => ({
+				id: item.id,
+				type: item.title || "Information STIB",
+				description: item.description,
+				severity: SEVERITY.MAJOR,
+				confidence: 0.85,
+				source: "official",
+				line: Array.isArray(item.lines) ? item.lines[0] : item.lines || null,
+				stop: null,
+				date: item.updatedAt || null,
+			}));
 
-	const severityInfo = summarizeSeverity([
-		...overviewStops.map((stop) => ({ severity: stop.severity, confidence: stop.confidence })),
-		...activeIncidents,
-	]);
+			const severityInfo = summarizeSeverity([
+				...overviewStops.map((stop) => ({ severity: stop.severity, confidence: stop.confidence })),
+				...activeIncidents,
+			]);
 
-	return {
-		context: {
-			lat: lat || null,
-			lng: lng || null,
-		},
-		...severityInfo,
-		realtimeStatus: severityInfo.realtimeStatus,
-		activeIncidents,
-		stops: overviewStops.map((stop) => stop.stop),
-		nextDepartures: overviewStops.flatMap((stop) => stop.nextDepartures).slice(0, 8),
-		recommendedAlternatives: [],
-	};
+			return {
+				context: {
+					lat: lat || null,
+					lng: lng || null,
+				},
+				...severityInfo,
+				realtimeStatus: severityInfo.realtimeStatus,
+				officialDataStatus: mergeOfficialStatuses([
+					officialIncidentsResult.officialDataStatus,
+					...overviewStops.map((stop) => stop.officialDataStatus),
+				]),
+				officialDataMessage: firstOfficialMessage([
+					officialIncidentsResult.officialDataMessage,
+					...overviewStops.map((stop) => stop.officialDataMessage),
+				]),
+				activeIncidents,
+				stops: overviewStops.map((stop) => stop.stop),
+				nextDepartures: overviewStops.flatMap((stop) => stop.nextDepartures).slice(0, 8),
+				recommendedAlternatives: [],
+			};
+		}
+	);
 }
 
 async function recommendRoute({ depart, destination, lignesBloquees = [] }) {
-	const [routes, officialIncidents] = await Promise.all([
-		getCachedDirections({ depart, destination }),
-		getCachedTravellersInformation({}),
+	const [transitRoutes, walkingRoutes, bikingRoutes, officialIncidentsResult] = await Promise.all([
+		getCachedDirections({ depart, destination, mode: "transit" }),
+		getCachedDirections({ depart, destination, mode: "walking" }),
+		getCachedDirections({ depart, destination, mode: "bicycling" }),
+		getTravellersInformationWithStatus({}),
 	]);
+	const officialIncidents = officialIncidentsResult.data;
+	const routes = [
+		...transitRoutes,
+		...walkingRoutes.slice(0, 1),
+		...bikingRoutes.slice(0, 1),
+	];
 
 	if (!routes.length) {
 		return {
@@ -350,6 +511,8 @@ async function recommendRoute({ depart, destination, lignesBloquees = [] }) {
 			severity: SEVERITY.MINOR,
 			confidence: 0.55,
 			realtimeStatus: "fallback",
+			officialDataStatus: officialIncidentsResult.officialDataStatus,
+			officialDataMessage: officialIncidentsResult.officialDataMessage,
 			activeIncidents: [],
 			nextDepartures: [],
 			recommendedAlternatives: [],
@@ -384,11 +547,12 @@ async function recommendRoute({ depart, destination, lignesBloquees = [] }) {
 		})),
 	].filter((incident) => !lignesBloquees.includes(normalizeLine(incident.line)));
 
-	const [waitingTimes, shapeFiles, fragilitySnapshots] = await Promise.all([
-		getCachedWaitingTimes({ line: allLines }),
+	const [waitingTimesResult, shapeFiles, fragilitySnapshots] = await Promise.all([
+		getWaitingTimesWithStatus({ line: allLines }),
 		getCachedShapeFiles({ line: allLines }),
 		getFragilitySnapshots({ lines: allLines, hourBucket: requestDate.getHours() }),
 	]);
+	const waitingTimes = waitingTimesResult.data;
 	const departures = summarizeDepartures(waitingTimes.items);
 	const scoring = scoreRoutes({
 		routes,
@@ -404,6 +568,14 @@ async function recommendRoute({ depart, destination, lignesBloquees = [] }) {
 	return {
 		request: { depart, destination, lignesBloquees },
 		...severityInfo,
+		officialDataStatus: mergeOfficialStatuses([
+			officialIncidentsResult.officialDataStatus,
+			waitingTimesResult.officialDataStatus,
+		]),
+		officialDataMessage: firstOfficialMessage([
+			officialIncidentsResult.officialDataMessage,
+			waitingTimesResult.officialDataMessage,
+		]),
 		activeIncidents: incidents.slice(0, 10),
 		nextDepartures: departures.slice(0, 6),
 		recommendedAlternatives: scoring.alternatives,

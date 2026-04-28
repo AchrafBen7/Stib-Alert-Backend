@@ -17,6 +17,45 @@ function generateRefreshToken() {
 	return { raw, hash };
 }
 
+async function buildAuthResponse(utilisateur) {
+	const token = jwt.sign({ userId: utilisateur._id }, process.env.JWT_SECRET, { expiresIn: "7d" });
+
+	if (redis) {
+		try {
+			await redis.setex(`auth:${token}`, 604800, JSON.stringify({
+				userId: utilisateur._id,
+				email: utilisateur.email,
+				nom: utilisateur.nom,
+				role: utilisateur.role,
+			}));
+		} catch (error) {
+			console.warn("[AUTH] Redis auth cache write failed:", error.message);
+		}
+	}
+
+	let rawRefresh = null;
+	try {
+		const generated = generateRefreshToken();
+		rawRefresh = generated.raw;
+		await Utilisateur.findByIdAndUpdate(utilisateur._id, {
+			refreshToken: generated.hash,
+			refreshTokenExpiry: new Date(Date.now() + REFRESH_TOKEN_TTL_MS),
+		});
+	} catch (error) {
+		rawRefresh = null;
+		console.warn("[AUTH] Refresh token persistence failed:", error.message);
+	}
+
+	const sanitized = utilisateur.toObject ? utilisateur.toObject() : { ...utilisateur };
+	delete sanitized.motDePasse;
+
+	return {
+		utilisateur: sanitized,
+		token,
+		refreshToken: rawRefresh,
+	};
+}
+
 const buildFavorisDetails = async (favoris = []) => {
 	const favoriIds = favoris.map((favori) => favori._id || favori);
 	if (favoriIds.length === 0) return [];
@@ -200,29 +239,25 @@ exports.activerCompte = async (req, res) => {
 		const { nom, email } = decoded;
 		const utilisateurExiste = await Utilisateur.findOne({ email });
 		if (utilisateurExiste) {
-			return res.status(400).json({ message: "Utilisateur déjà activé." });
+			await Promise.allSettled([
+				redis.del(`activation:${email}`),
+				redis.del(`pending:${email}`),
+			]);
+			const auth = await buildAuthResponse(utilisateurExiste);
+			return res.status(200).json({
+				message: "Compte deja active. Session ouverte avec succes.",
+				...auth,
+			});
 		}
 
 		const utilisateur = await Utilisateur.create({ nom, email, motDePasse: storedHash });
 
-		await redis.del(`activation:${email}`);
-		await redis.del(`pending:${email}`);
-
-		const token = jwt.sign({ userId: utilisateur._id }, process.env.JWT_SECRET, { expiresIn: "7d" });
-		if (redis) {
-			await redis.setex(`auth:${token}`, 604800, JSON.stringify({ userId: utilisateur._id }));
-		}
-
-		const { raw: rawRefresh, hash: hashRefresh } = generateRefreshToken();
-		await Utilisateur.findByIdAndUpdate(utilisateur._id, {
-			refreshToken: hashRefresh,
-			refreshTokenExpiry: new Date(Date.now() + REFRESH_TOKEN_TTL_MS),
-		});
-
-		const sanitized = utilisateur.toObject();
-		delete sanitized.motDePasse;
-
-		res.status(201).json({ message: "Compte activé avec succès !", utilisateur: sanitized, token, refreshToken: rawRefresh });
+		await Promise.allSettled([
+			redis.del(`activation:${email}`),
+			redis.del(`pending:${email}`),
+		]);
+		const auth = await buildAuthResponse(utilisateur);
+		res.status(201).json({ message: "Compte activé avec succès !", ...auth });
 	} catch (error) {
 		res.status(500).json({ message: error.message });
 	}
@@ -237,28 +272,8 @@ exports.connexion = async (req, res) => {
 		if (!utilisateur || !(await bcrypt.compare(motDePasse, utilisateur.motDePasse))) {
 			return res.status(401).json({ message: "Email ou mot de passe incorrect." });
 		}
-
-		const token = jwt.sign({ userId: utilisateur._id }, process.env.JWT_SECRET, { expiresIn: "7d" });
-
-		if (redis) {
-			await redis.setex(`auth:${token}`, 604800, JSON.stringify({ userId: utilisateur._id }));
-		}
-
-		const { raw: rawRefresh, hash: hashRefresh } = generateRefreshToken();
-		await Utilisateur.findByIdAndUpdate(utilisateur._id, {
-			refreshToken: hashRefresh,
-			refreshTokenExpiry: new Date(Date.now() + REFRESH_TOKEN_TTL_MS),
-		});
-
-		const sanitized = utilisateur.toObject();
-		delete sanitized.motDePasse;
-
-		res.json({
-			message: "Connexion réussie",
-			utilisateur: sanitized,
-			token,
-			refreshToken: rawRefresh,
-		});
+		const auth = await buildAuthResponse(utilisateur);
+		res.json({ message: "Connexion réussie", ...auth });
 	} catch (error) {
 		res.status(500).json({ message: error.message });
 	}
@@ -319,19 +334,8 @@ exports.refresh = async (req, res) => {
 		if (!utilisateur || !utilisateur.refreshTokenExpiry || utilisateur.refreshTokenExpiry < new Date()) {
 			return res.status(401).json({ message: "Refresh token invalide ou expiré." });
 		}
-
-		const newToken = jwt.sign({ userId: utilisateur._id }, process.env.JWT_SECRET, { expiresIn: "7d" });
-		if (redis) {
-			await redis.setex(`auth:${newToken}`, 604800, JSON.stringify({ userId: utilisateur._id }));
-		}
-
-		const { raw: rawRefresh, hash: hashRefresh } = generateRefreshToken();
-		await Utilisateur.findByIdAndUpdate(utilisateur._id, {
-			refreshToken: hashRefresh,
-			refreshTokenExpiry: new Date(Date.now() + REFRESH_TOKEN_TTL_MS),
-		});
-
-		res.json({ token: newToken, refreshToken: rawRefresh });
+		const auth = await buildAuthResponse(utilisateur);
+		res.json({ token: auth.token, refreshToken: auth.refreshToken });
 	} catch (error) {
 		res.status(500).json({ message: error.message });
 	}

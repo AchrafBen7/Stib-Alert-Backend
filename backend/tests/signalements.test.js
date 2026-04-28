@@ -1,0 +1,105 @@
+const request = require("supertest");
+const app = require("../app");
+const { connect, disconnect, clearAll } = require("./mongoSetup");
+const { registerAndLogin, createSignalement } = require("./helpers");
+
+beforeAll(connect);
+afterAll(disconnect);
+beforeEach(clearAll);
+
+describe("GET /api/signalements", () => {
+    it("returns 200 and an array", async () => {
+        const res = await request(app).get("/api/signalements");
+        expect(res.status).toBe(200);
+        expect(Array.isArray(res.body)).toBe(true);
+    });
+
+    it("filters by ligne query param", async () => {
+        const { token } = await registerAndLogin("filter@test.com");
+        await createSignalement(token, { ligne: "71" });
+        await createSignalement(token, { ligne: "92" });
+
+        const res = await request(app).get("/api/signalements?ligne=71");
+        expect(res.status).toBe(200);
+        const lines = res.body.map((s) => s.ligne);
+        expect(lines.every((l) => l === "71")).toBe(true);
+    });
+});
+
+describe("POST /api/signalements", () => {
+    it("returns 201 and creates signalement when authenticated", async () => {
+        const { token } = await registerAndLogin("creator@test.com");
+
+        const res = await request(app)
+            .post("/api/signalements")
+            .set("Authorization", `Bearer ${token}`)
+            .send({
+                ligne: "71",
+                typeProbleme: "Retard",
+                description: "Retard important à Ixelles",
+                latitude: 50.85,
+                longitude: 4.35,
+            });
+
+        expect(res.status).toBe(201);
+        const body = res.body.signalement || res.body;
+        expect(body).toHaveProperty("ligne", "71");
+        expect(body).toHaveProperty("typeProbleme", "Retard");
+    });
+
+    it("returns 401 when unauthenticated", async () => {
+        const res = await request(app)
+            .post("/api/signalements")
+            .send({
+                ligne: "71",
+                typeProbleme: "Retard",
+                description: "Test",
+            });
+
+        expect(res.status).toBe(401);
+    });
+
+    it("returns 400 when typeProbleme is invalid", async () => {
+        const { token } = await registerAndLogin("badtype@test.com");
+
+        const res = await request(app)
+            .post("/api/signalements")
+            .set("Authorization", `Bearer ${token}`)
+            .send({
+                ligne: "71",
+                typeProbleme: "InvalidType",
+                description: "Test",
+            });
+
+        expect(res.status).toBe(400);
+    });
+});
+
+describe("POST /api/signalements/:id/vote", () => {
+    it("returns 200 and records the vote", async () => {
+        const { token } = await registerAndLogin("voter@test.com");
+        const sig = await createSignalement(token);
+        const sigId = sig._id || sig.id;
+
+        const res = await request(app)
+            .post(`/api/signalements/${sigId}/vote`)
+            .set("Authorization", `Bearer ${token}`)
+            .send({ vote: "positif" });
+
+        expect(res.status).toBe(200);
+    });
+});
+
+describe("POST /api/signalements/:id/resolved", () => {
+    it("returns 200 and marks signalement as resolved", async () => {
+        const { token } = await registerAndLogin("resolver@test.com");
+        const sig = await createSignalement(token);
+        const sigId = sig._id || sig.id;
+
+        const res = await request(app)
+            .post(`/api/signalements/${sigId}/resolved`)
+            .set("Authorization", `Bearer ${token}`);
+
+        expect(res.status).toBe(200);
+    });
+});

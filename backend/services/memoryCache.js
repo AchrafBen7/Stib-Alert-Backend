@@ -1,4 +1,5 @@
 const store = new Map();
+const inFlight = new Map();
 
 function get(key, { allowStale = false } = {}) {
 	const entry = store.get(key);
@@ -32,18 +33,28 @@ async function remember(key, ttlMs, factory, { staleOnError = true } = {}) {
 	const fresh = get(key);
 	if (fresh) return fresh.value;
 
+	const pending = inFlight.get(key);
+	if (pending) return pending;
+
 	const stale = staleOnError ? get(key, { allowStale: true }) : null;
 
-	try {
-		const value = await factory();
-		set(key, value, ttlMs);
-		return value;
-	} catch (error) {
-		if (stale?.value !== undefined) {
-			return stale.value;
+	const work = (async () => {
+		try {
+			const value = await factory();
+			set(key, value, ttlMs);
+			return value;
+		} catch (error) {
+			if (stale?.value !== undefined) {
+				return stale.value;
+			}
+			throw error;
+		} finally {
+			inFlight.delete(key);
 		}
-		throw error;
-	}
+	})();
+
+	inFlight.set(key, work);
+	return work;
 }
 
 module.exports = {

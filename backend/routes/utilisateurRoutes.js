@@ -15,7 +15,12 @@ const {
 
 const protect = require("../middlewares/authMiddleware");
 const { requireSelf } = require("../middlewares/ownership");
-const { authLimiter } = require("../middlewares/rateLimiters");
+const {
+	signupLimiter,
+	activationLimiter,
+	loginLimiter,
+	refreshLimiter,
+} = require("../middlewares/rateLimiters");
 const {
 	validateSignup,
 	validateLogin,
@@ -27,12 +32,12 @@ const {
 	handleValidation,
 } = require("../middlewares/validators");
 
-router.post("/inscription", authLimiter, validateSignup, handleValidation, inscription);
-router.post("/activation", authLimiter, validateActivation, handleValidation, activerCompte);
-router.post("/renvoyer-code", authLimiter, utilisateurController.renvoyerCode);
-router.post("/connexion", authLimiter, validateLogin, handleValidation, connexion);
+router.post("/inscription", signupLimiter, validateSignup, handleValidation, inscription);
+router.post("/activation", activationLimiter, validateActivation, handleValidation, activerCompte);
+router.post("/renvoyer-code", activationLimiter, utilisateurController.renvoyerCode);
+router.post("/connexion", loginLimiter, validateLogin, handleValidation, connexion);
 router.post("/deconnexion", protect, deconnexion);
-router.post("/refresh", authLimiter, utilisateurController.refresh);
+router.post("/refresh", refreshLimiter, utilisateurController.refresh);
 
 router.get("/me", protect, voirMoi);
 

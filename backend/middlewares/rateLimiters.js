@@ -9,10 +9,38 @@ const makeLimiter = (windowMs, max, message) =>
 		message: { message },
 	});
 
-exports.authLimiter = makeLimiter(
+const makeAuthLimiter = (windowMs, max, message) =>
+	rateLimit({
+		windowMs,
+		max,
+		standardHeaders: true,
+		legacyHeaders: false,
+		skipSuccessfulRequests: true,
+		message: { message },
+	});
+
+exports.signupLimiter = makeLimiter(
 	15 * 60 * 1000,
-	10,
-	"Trop de tentatives d'authentification. Réessayez dans 15 minutes."
+	5,
+	"Trop de tentatives d'inscription. Réessayez dans 15 minutes."
+);
+
+exports.activationLimiter = makeAuthLimiter(
+	15 * 60 * 1000,
+	12,
+	"Trop de tentatives d'activation. Réessayez dans 15 minutes."
+);
+
+exports.loginLimiter = makeAuthLimiter(
+	15 * 60 * 1000,
+	20,
+	"Trop de tentatives de connexion. Réessayez dans 15 minutes."
+);
+
+exports.refreshLimiter = makeAuthLimiter(
+	15 * 60 * 1000,
+	40,
+	"Trop de rafraichissements de session. Réessayez dans quelques minutes."
 );
 
 exports.signalementLimiter = makeLimiter(

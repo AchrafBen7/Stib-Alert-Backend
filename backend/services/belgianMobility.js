@@ -2,6 +2,9 @@ const redis = require("../config/redis");
 
 const DEFAULT_BASE_URL = "https://api.belgianmobility.io";
 const DEFAULT_API_KEY_HEADER = "x-api-key";
+const STALE_CACHE_SUFFIX = ":stale";
+const MIN_STALE_TTL_SECONDS = 5 * 60;
+const MAX_STALE_TTL_SECONDS = 24 * 60 * 60;
 
 // TTL in seconds for each endpoint — these are the only knobs to adjust
 const CACHE_TTL = {
@@ -12,25 +15,148 @@ const CACHE_TTL = {
 	StopDetails:           3600, // 1 h  — static
 };
 
-async function cachedRequest(cacheKey, ttlSeconds, fetchFn) {
+const localCache = new Map();
+const inFlightRequests = new Map();
+const rateLimitedUntil = new Map();
+
+function nowMs() {
+	return Date.now();
+}
+
+function buildLocalCacheEntry(value, ttlSeconds) {
+	return {
+		value,
+		expiresAt: nowMs() + Math.max(ttlSeconds, 0) * 1000,
+	};
+}
+
+function getLocalCachedValue(key, { allowExpired = false } = {}) {
+	const entry = localCache.get(key);
+	if (!entry) return null;
+	if (entry.expiresAt > nowMs()) return entry.value;
+	if (allowExpired) return entry.value;
+	localCache.delete(key);
+	return null;
+}
+
+function setLocalCachedValue(key, value, ttlSeconds) {
+	localCache.set(key, buildLocalCacheEntry(value, ttlSeconds));
+}
+
+function computeStaleTtlSeconds(ttlSeconds) {
+	return Math.min(Math.max(ttlSeconds * 12, MIN_STALE_TTL_SECONDS), MAX_STALE_TTL_SECONDS);
+}
+
+async function readCachedValue(cacheKey) {
+	const localValue = getLocalCachedValue(cacheKey);
+	if (localValue !== null) return localValue;
+
 	if (redis) {
 		try {
 			const cached = await redis.get(cacheKey);
-			if (cached) return JSON.parse(cached);
+			if (cached) {
+				const parsed = JSON.parse(cached);
+				setLocalCachedValue(cacheKey, parsed, 5);
+				return parsed;
+			}
 		} catch (_) {
-			// Redis read failure → fall through to live request
+			// Redis read failure → fall through
 		}
 	}
 
-	const result = await fetchFn();
+	return null;
+}
 
-	if (redis && ttlSeconds > 0) {
-		redis
-			.set(cacheKey, JSON.stringify(result), "EX", ttlSeconds)
-			.catch(() => {}); // fire-and-forget, never block on cache write
+async function readStaleCachedValue(cacheKey) {
+	const staleKey = `${cacheKey}${STALE_CACHE_SUFFIX}`;
+	const localValue = getLocalCachedValue(staleKey, { allowExpired: true });
+	if (localValue !== null) return localValue;
+
+	if (redis) {
+		try {
+			const cached = await redis.get(staleKey);
+			if (cached) {
+				const parsed = JSON.parse(cached);
+				setLocalCachedValue(staleKey, parsed, computeStaleTtlSeconds(30));
+				return parsed;
+			}
+		} catch (_) {
+			// Redis read failure → fall through
+		}
 	}
 
-	return result;
+	return null;
+}
+
+async function writeCachedValue(cacheKey, value, ttlSeconds) {
+	setLocalCachedValue(cacheKey, value, ttlSeconds);
+	setLocalCachedValue(`${cacheKey}${STALE_CACHE_SUFFIX}`, value, computeStaleTtlSeconds(ttlSeconds));
+
+	if (redis && ttlSeconds > 0) {
+		const staleTtlSeconds = computeStaleTtlSeconds(ttlSeconds);
+		Promise.allSettled([
+			redis.set(cacheKey, JSON.stringify(value), "EX", ttlSeconds),
+			redis.set(`${cacheKey}${STALE_CACHE_SUFFIX}`, JSON.stringify(value), "EX", staleTtlSeconds),
+		]).catch(() => {});
+	}
+}
+
+function getCooldownRemainingSeconds(cacheKey) {
+	const blockedUntil = rateLimitedUntil.get(cacheKey) || 0;
+	return Math.max(Math.ceil((blockedUntil - nowMs()) / 1000), 0);
+}
+
+function setRateLimitCooldown(cacheKey, retryAfterSeconds) {
+	const seconds = retryAfterSeconds && retryAfterSeconds > 0 ? retryAfterSeconds : 15;
+	rateLimitedUntil.set(cacheKey, nowMs() + seconds * 1000);
+}
+
+function buildRateLimitError(cacheKey) {
+	const retryAfter = getCooldownRemainingSeconds(cacheKey);
+	const error = new Error("Belgian Mobility API cooldown active");
+	error.status = 429;
+	error.details = JSON.stringify({
+		statusCode: 429,
+		message: `Rate limit cooldown active. Try again in ${retryAfter} seconds.`,
+	});
+	error.retryAfter = retryAfter;
+	error.isQuotaExceeded = false;
+	return error;
+}
+
+async function cachedRequest(cacheKey, ttlSeconds, fetchFn) {
+	const cached = await readCachedValue(cacheKey);
+	if (cached !== null) return cached;
+
+	if (getCooldownRemainingSeconds(cacheKey) > 0) {
+		const stale = await readStaleCachedValue(cacheKey);
+		if (stale !== null) return stale;
+		throw buildRateLimitError(cacheKey);
+	}
+
+	const pending = inFlightRequests.get(cacheKey);
+	if (pending) return pending;
+
+	const work = (async () => {
+		try {
+			const result = await fetchFn();
+			rateLimitedUntil.delete(cacheKey);
+			await writeCachedValue(cacheKey, result, ttlSeconds);
+			return result;
+		} catch (error) {
+			if (error.status === 429 || error.isQuotaExceeded) {
+				setRateLimitCooldown(cacheKey, error.retryAfter);
+				const stale = await readStaleCachedValue(cacheKey);
+				if (stale !== null) return stale;
+			}
+			throw error;
+		} finally {
+			inFlightRequests.delete(cacheKey);
+		}
+	})();
+
+	inFlightRequests.set(cacheKey, work);
+	return work;
 }
 
 function getFetch() {

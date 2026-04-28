@@ -14,24 +14,27 @@ async function fetchJson(url) {
 	}
 }
 
-/**
- * Récupère les itinéraires de Google Directions API
- * @param {string} depart - L'adresse ou l'arrêt de départ
- * @param {string} destination - L'adresse ou l'arrêt d'arrivée
- * @returns {Promise<Array>} - Liste d'itinéraires
- */
-async function fetchItinerairesGoogle(depart, destination) {
+async function fetchDirections({
+	depart,
+	destination,
+	mode = "transit",
+	transitModes = ["bus", "subway", "tram"],
+	alternatives = true,
+}) {
 	try {
 		const params = new URLSearchParams({
 			origin: depart,
 			destination: destination,
-			mode: "transit",
-			transit_mode: "bus|subway|tram",
+			mode,
 			key: GOOGLE_API_KEY,
 			language: "fr",
 			region: "BE",
-			alternatives: "true",
+			alternatives: alternatives ? "true" : "false",
 		});
+
+		if (mode === "transit" && transitModes.length) {
+			params.set("transit_mode", transitModes.join("|"));
+		}
 
 		const response = await fetchJson(`https://maps.googleapis.com/maps/api/directions/json?${params.toString()}`);
 
@@ -47,11 +50,45 @@ async function fetchItinerairesGoogle(depart, destination) {
 			return [];
 		}
 
-		return data.routes;
+		return data.routes || [];
 	} catch (error) {
 		console.error("Erreur API Google Directions:", error.message);
 		return [];
 	}
+}
+
+/**
+ * Récupère les itinéraires STIB / transit.
+ * @param {string} depart
+ * @param {string} destination
+ * @returns {Promise<Array>}
+ */
+async function fetchItinerairesGoogle(depart, destination) {
+	return fetchDirections({
+		depart,
+		destination,
+		mode: "transit",
+		transitModes: ["bus", "subway", "tram"],
+		alternatives: true,
+	});
+}
+
+async function fetchItinerairesGoogleWalk(depart, destination) {
+	return fetchDirections({
+		depart,
+		destination,
+		mode: "walking",
+		alternatives: false,
+	});
+}
+
+async function fetchItinerairesGoogleBike(depart, destination) {
+	return fetchDirections({
+		depart,
+		destination,
+		mode: "bicycling",
+		alternatives: false,
+	});
 }
 
 /**
@@ -79,4 +116,9 @@ async function getAdresseFromCoord(lat, lng) {
 	}
 }
 
-module.exports = { fetchItinerairesGoogle, getAdresseFromCoord };
+module.exports = {
+	fetchItinerairesGoogle,
+	fetchItinerairesGoogleWalk,
+	fetchItinerairesGoogleBike,
+	getAdresseFromCoord,
+};

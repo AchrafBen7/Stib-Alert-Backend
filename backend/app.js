@@ -1,0 +1,41 @@
+const express = require("express");
+const cors = require("cors");
+const helmet = require("helmet");
+const mongoSanitize = require("express-mongo-sanitize");
+const cookieParser = require("cookie-parser");
+const { globalLimiter } = require("./middlewares/rateLimiters");
+
+const app = express();
+
+app.use(helmet());
+app.use(cors({ origin: true, credentials: true }));
+app.use(express.json({ limit: "10mb" }));
+app.use(cookieParser());
+app.use(mongoSanitize());
+if (process.env.NODE_ENV !== "test") {
+    const morgan = require("morgan");
+    app.use(morgan("dev"));
+}
+app.use(globalLimiter);
+
+app.use("/api/signalements", require("./routes/signalementRoutes"));
+app.use("/api/utilisateurs", require("./routes/utilisateurRoutes"));
+app.use("/api/lignes", require("./routes/ligneRoutes"));
+app.use("/api/chatbot", require("./routes/chatbotRoutes"));
+app.use("/api/arrets", require("./routes/arretRoute"));
+app.use("/api/stib", require("./routes/stibRealtimeRoutes"));
+app.use("/api/transport", require("./routes/transportRoutes"));
+app.use("/api/assistant", require("./routes/assistantRoutes"));
+
+app.get("/", (req, res) => res.send("STIB Alert API fonctionne !"));
+
+app.use((err, req, res, _next) => {
+    if (err.type === "entity.too.large") {
+        return res.status(413).json({ message: "Payload trop volumineux." });
+    }
+    res.status(err.status || 500).json({
+        message: err.publicMessage || "Erreur serveur.",
+    });
+});
+
+module.exports = app;
