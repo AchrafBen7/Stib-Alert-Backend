@@ -2,6 +2,7 @@ const redis = require("../config/redis");
 
 const DEFAULT_BASE_URL = "https://api.belgianmobility.io";
 const DEFAULT_API_KEY_HEADER = "x-api-key";
+const AZURE_APIM_API_KEY_HEADER = "bmc-partner-key";
 const STALE_CACHE_SUFFIX = ":stale";
 const MIN_STALE_TTL_SECONDS = 5 * 60;
 const MAX_STALE_TTL_SECONDS = 24 * 60 * 60;
@@ -175,13 +176,19 @@ function isMobilityTwinBaseUrl() {
 	return /api\.mobilitytwin\.brussels$/i.test(getBaseUrl());
 }
 
+function isAzureApimBaseUrl() {
+	return /api-management-opendata-production\.azure-api\.net$/i.test(getBaseUrl());
+}
+
 function buildHeaders() {
 	const headers = {
 		Accept: "application/json",
 	};
 
 	const apiKey = process.env.BELGIAN_MOBILITY_API_KEY;
-	const apiKeyHeader = process.env.BELGIAN_MOBILITY_API_KEY_HEADER || DEFAULT_API_KEY_HEADER;
+	const apiKeyHeader =
+		process.env.BELGIAN_MOBILITY_API_KEY_HEADER ||
+		(isAzureApimBaseUrl() ? AZURE_APIM_API_KEY_HEADER : DEFAULT_API_KEY_HEADER);
 	const bearerToken = process.env.BELGIAN_MOBILITY_BEARER_TOKEN;
 
 	if (apiKey) {
