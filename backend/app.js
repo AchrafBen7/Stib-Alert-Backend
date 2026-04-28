@@ -7,6 +7,9 @@ const { globalLimiter } = require("./middlewares/rateLimiters");
 
 const app = express();
 
+// Render is behind a reverse proxy; use forwarded client IPs for rate limiting.
+app.set("trust proxy", 1);
+
 app.use(helmet());
 app.use(cors({ origin: true, credentials: true }));
 app.use(express.json({ limit: "10mb" }));
