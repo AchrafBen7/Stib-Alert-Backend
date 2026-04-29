@@ -1,0 +1,50 @@
+[
+  {
+    "id": "sample-heysel-expo-spring",
+    "source": "seed",
+    "title": "Salon Brussels Expo",
+    "venue": "Heysel / Brussels Expo",
+    "zoneLabel": "Heysel",
+    "latitude": 50.8982,
+    "longitude": 4.3365,
+    "startsAt": "2026-04-29T16:00:00+02:00",
+    "endsAt": "2026-04-29T23:00:00+02:00",
+    "expectedAttendance": 18000,
+    "impactLevel": "high",
+    "impactedLines": ["6", "7", "51"],
+    "impactedStops": ["Heysel", "Roi Baudouin", "Palais 12"],
+    "notesFr": "Affluence probable en fin d'après-midi autour du plateau du Heysel."
+  },
+  {
+    "id": "sample-schuman-eu-summit",
+    "source": "seed",
+    "title": "Sommet européen",
+    "venue": "Quartier Schuman",
+    "zoneLabel": "Schuman",
+    "latitude": 50.8425,
+    "longitude": 4.3826,
+    "startsAt": "2026-04-30T08:00:00+02:00",
+    "endsAt": "2026-04-30T19:00:00+02:00",
+    "expectedAttendance": 9000,
+    "impactLevel": "moderate",
+    "impactedLines": ["1", "5", "12", "21", "27", "36", "79"],
+    "impactedStops": ["Schuman", "Maelbeek", "Luxembourg"],
+    "notesFr": "Flux renforcé autour des institutions européennes et du quartier Léopold."
+  },
+  {
+    "id": "sample-city-center-evening",
+    "source": "seed",
+    "title": "Soirée événementielle centre-ville",
+    "venue": "Centre-ville",
+    "zoneLabel": "De Brouckère",
+    "latitude": 50.8504,
+    "longitude": 4.3521,
+    "startsAt": "2026-04-29T18:00:00+02:00",
+    "endsAt": "2026-04-30T01:00:00+02:00",
+    "expectedAttendance": 12000,
+    "impactLevel": "moderate",
+    "impactedLines": ["1", "5", "3", "4", "29", "46", "47", "88", "95"],
+    "impactedStops": ["De Brouckère", "Bourse", "Gare Centrale"],
+    "notesFr": "Risque d'affluence en soirée autour du centre et des grands pôles de correspondance."
+  }
+]

@@ -1,0 +1,2442 @@
+{
+  "generatedAt": "2026-04-29T10:09:44.487Z",
+  "source": "Static snapshot — ing.arena.brussels, forest-national.be, abconcerts.be, bozar.be",
+  "venuesCount": 13,
+  "eventsCount": 88,
+  "venues": [
+    {
+      "id": "ing-arena",
+      "name": "ING Arena (Palais 12)",
+      "capacity": 12000,
+      "lat": 50.8987,
+      "lng": 4.3403,
+      "radiusMeters": 600,
+      "primaryLines": [
+        "6",
+        "7",
+        "51"
+      ],
+      "address": "Place de Belgique 1, 1020 Bruxelles",
+      "note": "Plateau du Heysel — métro Heysel.",
+      "url": "https://ing.arena.brussels/"
+    },
+    {
+      "id": "king-baudouin-stadium",
+      "name": "Stade Roi Baudouin",
+      "capacity": 50000,
+      "lat": 50.8954,
+      "lng": 4.334,
+      "radiusMeters": 800,
+      "primaryLines": [
+        "6",
+        "7",
+        "51"
+      ],
+      "address": "Avenue de Marathon 135, 1020 Bruxelles",
+      "note": "Matchs Diables Rouges + grands concerts. Heysel.",
+      "url": "https://kingbaudouinstadium.be/"
+    },
+    {
+      "id": "lotto-park",
+      "name": "Lotto Park (RSC Anderlecht)",
+      "capacity": 21500,
+      "lat": 50.8341,
+      "lng": 4.299,
+      "radiusMeters": 700,
+      "primaryLines": [
+        "5"
+      ],
+      "address": "Avenue Théo Verbeeck 2, 1070 Anderlecht",
+      "note": "Stade d'Anderlecht — métro Saint-Guidon.",
+      "url": "https://www.rsca.be/"
+    },
+    {
+      "id": "forest-national",
+      "name": "Forest National",
+      "capacity": 8000,
+      "lat": 50.8124,
+      "lng": 4.3217,
+      "radiusMeters": 600,
+      "primaryLines": [
+        "32",
+        "82",
+        "97",
+        "50"
+      ],
+      "address": "Avenue du Globe 36, 1190 Forest",
+      "note": "Tram 82, bus 50. Saturé après concerts.",
+      "url": "https://www.forest-national.be/"
+    },
+    {
+      "id": "ancienne-belgique",
+      "name": "Ancienne Belgique (AB)",
+      "capacity": 2000,
+      "lat": 50.847,
+      "lng": 4.3486,
+      "radiusMeters": 400,
+      "primaryLines": [
+        "1",
+        "5",
+        "3",
+        "4"
+      ],
+      "address": "Boulevard Anspach 110, 1000 Bruxelles",
+      "note": "Centre — métro Bourse / De Brouckère.",
+      "url": "https://www.abconcerts.be/"
+    },
+    {
+      "id": "bozar",
+      "name": "Bozar (Palais des Beaux-Arts)",
+      "capacity": 2200,
+      "lat": 50.8424,
+      "lng": 4.3573,
+      "radiusMeters": 400,
+      "primaryLines": [
+        "1",
+        "5",
+        "92",
+        "93"
+      ],
+      "address": "Rue Ravenstein 23, 1000 Bruxelles",
+      "note": "Centre — métro Gare Centrale / Parc.",
+      "url": "https://www.bozar.be/"
+    },
+    {
+      "id": "cirque-royal",
+      "name": "Cirque Royal",
+      "capacity": 2000,
+      "lat": 50.8501,
+      "lng": 4.3661,
+      "radiusMeters": 400,
+      "primaryLines": [
+        "2",
+        "6",
+        "92",
+        "93"
+      ],
+      "address": "Rue de l'Enseignement 81, 1000 Bruxelles",
+      "note": "Métro Madou / Parc.",
+      "url": "https://www.cirque-royal.brussels/"
+    },
+    {
+      "id": "botanique",
+      "name": "Botanique",
+      "capacity": 1500,
+      "lat": 50.8543,
+      "lng": 4.3623,
+      "radiusMeters": 400,
+      "primaryLines": [
+        "2",
+        "6",
+        "92",
+        "93",
+        "61"
+      ],
+      "address": "Rue Royale 236, 1210 Saint-Josse-ten-Noode",
+      "note": "Métro Botanique / Rogier.",
+      "url": "https://www.botanique.be/"
+    },
+    {
+      "id": "la-monnaie",
+      "name": "La Monnaie / De Munt",
+      "capacity": 1150,
+      "lat": 50.8503,
+      "lng": 4.353,
+      "radiusMeters": 350,
+      "primaryLines": [
+        "1",
+        "5",
+        "3",
+        "4"
+      ],
+      "address": "Place de la Monnaie, 1000 Bruxelles",
+      "note": "Opéra national — métro De Brouckère.",
+      "url": "https://www.lamonnaiedemunt.be/"
+    },
+    {
+      "id": "flagey",
+      "name": "Flagey",
+      "capacity": 800,
+      "lat": 50.8281,
+      "lng": 4.3725,
+      "radiusMeters": 350,
+      "primaryLines": [
+        "81",
+        "38",
+        "59",
+        "71"
+      ],
+      "address": "Place Sainte-Croix, 1050 Ixelles",
+      "note": "Place Flagey — Ixelles.",
+      "url": "https://www.flagey.be/"
+    },
+    {
+      "id": "la-madeleine",
+      "name": "La Madeleine",
+      "capacity": 1000,
+      "lat": 50.8461,
+      "lng": 4.356,
+      "radiusMeters": 350,
+      "primaryLines": [
+        "1",
+        "5"
+      ],
+      "address": "Duquesnoystraat 14, 1000 Bruxelles",
+      "note": "Centre — métro Gare Centrale.",
+      "url": "https://www.lamadeleine.be/"
+    },
+    {
+      "id": "kvs",
+      "name": "KVS (Koninklijke Vlaamse Schouwburg)",
+      "capacity": 750,
+      "lat": 50.853,
+      "lng": 4.3494,
+      "radiusMeters": 350,
+      "primaryLines": [
+        "1",
+        "5"
+      ],
+      "address": "Arduinkaai 7, 1000 Bruxelles",
+      "note": "Théâtre flamand — métro Sainte-Catherine.",
+      "url": "https://www.kvs.be/"
+    },
+    {
+      "id": "atomium-expos",
+      "name": "Brussels Expo / Atomium",
+      "capacity": 30000,
+      "lat": 50.8951,
+      "lng": 4.3416,
+      "radiusMeters": 800,
+      "primaryLines": [
+        "6",
+        "7",
+        "51"
+      ],
+      "address": "Place de Belgique 1, 1020 Bruxelles",
+      "note": "Salons & expos — métro Heysel.",
+      "url": "https://www.brussels-expo.com/"
+    }
+  ],
+  "events": [
+    {
+      "id": "ing-rufus-2026-05-03",
+      "venueId": "ing-arena",
+      "title": "RÜFÜS DU SOL",
+      "date": "2026-05-03",
+      "time": "20:00",
+      "category": "concert",
+      "soldOut": true,
+      "url": "https://ing.arena.brussels/show/rufus-du-sol/",
+      "expectedAttendance": 12000,
+      "venue": {
+        "id": "ing-arena",
+        "name": "ING Arena (Palais 12)",
+        "address": "Place de Belgique 1, 1020 Bruxelles",
+        "lat": 50.8987,
+        "lng": 4.3403,
+        "capacity": 12000,
+        "primaryLines": [
+          "6",
+          "7",
+          "51"
+        ],
+        "url": "https://ing.arena.brussels/",
+        "note": "Plateau du Heysel — métro Heysel."
+      }
+    },
+    {
+      "id": "ing-circus-2026-05-06",
+      "venueId": "ing-arena",
+      "title": "The Circus Daily Game",
+      "date": "2026-05-06",
+      "time": "20:30",
+      "category": "spectacle",
+      "url": "https://ing.arena.brussels/show/the-circus-daily-game/",
+      "expectedAttendance": 12000,
+      "venue": {
+        "id": "ing-arena",
+        "name": "ING Arena (Palais 12)",
+        "address": "Place de Belgique 1, 1020 Bruxelles",
+        "lat": 50.8987,
+        "lng": 4.3403,
+        "capacity": 12000,
+        "primaryLines": [
+          "6",
+          "7",
+          "51"
+        ],
+        "url": "https://ing.arena.brussels/",
+        "note": "Plateau du Heysel — métro Heysel."
+      }
+    },
+    {
+      "id": "ing-damso-2026-05-13",
+      "venueId": "ing-arena",
+      "title": "Damso",
+      "date": "2026-05-13",
+      "time": "20:00",
+      "category": "concert",
+      "soldOut": true,
+      "url": "https://ing.arena.brussels/show/damso-13-05/",
+      "expectedAttendance": 12000,
+      "venue": {
+        "id": "ing-arena",
+        "name": "ING Arena (Palais 12)",
+        "address": "Place de Belgique 1, 1020 Bruxelles",
+        "lat": 50.8987,
+        "lng": 4.3403,
+        "capacity": 12000,
+        "primaryLines": [
+          "6",
+          "7",
+          "51"
+        ],
+        "url": "https://ing.arena.brussels/",
+        "note": "Plateau du Heysel — métro Heysel."
+      }
+    },
+    {
+      "id": "ing-damso-2026-05-14",
+      "venueId": "ing-arena",
+      "title": "Damso",
+      "date": "2026-05-14",
+      "time": "20:00",
+      "category": "concert",
+      "soldOut": true,
+      "url": "https://ing.arena.brussels/show/damso-14-05/",
+      "expectedAttendance": 12000,
+      "venue": {
+        "id": "ing-arena",
+        "name": "ING Arena (Palais 12)",
+        "address": "Place de Belgique 1, 1020 Bruxelles",
+        "lat": 50.8987,
+        "lng": 4.3403,
+        "capacity": 12000,
+        "primaryLines": [
+          "6",
+          "7",
+          "51"
+        ],
+        "url": "https://ing.arena.brussels/",
+        "note": "Plateau du Heysel — métro Heysel."
+      }
+    },
+    {
+      "id": "ing-staracademy-2026-05-15",
+      "venueId": "ing-arena",
+      "title": "Star Academy Tour 2026",
+      "date": "2026-05-15",
+      "time": "20:00",
+      "category": "spectacle",
+      "url": "https://ing.arena.brussels/show/star-academy-tour-2026/",
+      "expectedAttendance": 12000,
+      "venue": {
+        "id": "ing-arena",
+        "name": "ING Arena (Palais 12)",
+        "address": "Place de Belgique 1, 1020 Bruxelles",
+        "lat": 50.8987,
+        "lng": 4.3403,
+        "capacity": 12000,
+        "primaryLines": [
+          "6",
+          "7",
+          "51"
+        ],
+        "url": "https://ing.arena.brussels/",
+        "note": "Plateau du Heysel — métro Heysel."
+      }
+    },
+    {
+      "id": "ing-pfl-2026-05-23",
+      "venueId": "ing-arena",
+      "title": "PFL Brussels: Habirora vs. Henderson",
+      "date": "2026-05-23",
+      "time": "17:00",
+      "category": "sport",
+      "url": "https://ing.arena.brussels/show/pfl-bruxelles-habirora-vs-henderson/",
+      "expectedAttendance": 12000,
+      "venue": {
+        "id": "ing-arena",
+        "name": "ING Arena (Palais 12)",
+        "address": "Place de Belgique 1, 1020 Bruxelles",
+        "lat": 50.8987,
+        "lng": 4.3403,
+        "capacity": 12000,
+        "primaryLines": [
+          "6",
+          "7",
+          "51"
+        ],
+        "url": "https://ing.arena.brussels/",
+        "note": "Plateau du Heysel — métro Heysel."
+      }
+    },
+    {
+      "id": "ing-staracademy-2026-05-31",
+      "venueId": "ing-arena",
+      "title": "Star Academy Tour 2026",
+      "date": "2026-05-31",
+      "time": "19:00",
+      "category": "spectacle",
+      "url": "https://ing.arena.brussels/show/star-academy-tour-2026-2/",
+      "expectedAttendance": 12000,
+      "venue": {
+        "id": "ing-arena",
+        "name": "ING Arena (Palais 12)",
+        "address": "Place de Belgique 1, 1020 Bruxelles",
+        "lat": 50.8987,
+        "lng": 4.3403,
+        "capacity": 12000,
+        "primaryLines": [
+          "6",
+          "7",
+          "51"
+        ],
+        "url": "https://ing.arena.brussels/",
+        "note": "Plateau du Heysel — métro Heysel."
+      }
+    },
+    {
+      "id": "ing-magicmen-2026-06-13",
+      "venueId": "ing-arena",
+      "title": "Magic Men",
+      "date": "2026-06-13",
+      "time": "20:00",
+      "category": "spectacle",
+      "url": "https://ing.arena.brussels/show/magic-men/",
+      "expectedAttendance": 12000,
+      "venue": {
+        "id": "ing-arena",
+        "name": "ING Arena (Palais 12)",
+        "address": "Place de Belgique 1, 1020 Bruxelles",
+        "lat": 50.8987,
+        "lng": 4.3403,
+        "capacity": 12000,
+        "primaryLines": [
+          "6",
+          "7",
+          "51"
+        ],
+        "url": "https://ing.arena.brussels/",
+        "note": "Plateau du Heysel — métro Heysel."
+      }
+    },
+    {
+      "id": "ing-kaytranada-2026-06-14",
+      "venueId": "ing-arena",
+      "title": "Kaytranada",
+      "date": "2026-06-14",
+      "time": "20:00",
+      "category": "concert",
+      "url": "https://ing.arena.brussels/show/kaytranada-2/",
+      "expectedAttendance": 12000,
+      "venue": {
+        "id": "ing-arena",
+        "name": "ING Arena (Palais 12)",
+        "address": "Place de Belgique 1, 1020 Bruxelles",
+        "lat": 50.8987,
+        "lng": 4.3403,
+        "capacity": 12000,
+        "primaryLines": [
+          "6",
+          "7",
+          "51"
+        ],
+        "url": "https://ing.arena.brussels/",
+        "note": "Plateau du Heysel — métro Heysel."
+      }
+    },
+    {
+      "id": "ing-cactus-2026-06-20",
+      "venueId": "ing-arena",
+      "title": "Le Grand Cactus",
+      "date": "2026-06-20",
+      "time": "20:00",
+      "category": "spectacle",
+      "url": "https://ing.arena.brussels/show/le-grand-cactus/",
+      "expectedAttendance": 12000,
+      "venue": {
+        "id": "ing-arena",
+        "name": "ING Arena (Palais 12)",
+        "address": "Place de Belgique 1, 1020 Bruxelles",
+        "lat": 50.8987,
+        "lng": 4.3403,
+        "capacity": 12000,
+        "primaryLines": [
+          "6",
+          "7",
+          "51"
+        ],
+        "url": "https://ing.arena.brussels/",
+        "note": "Plateau du Heysel — métro Heysel."
+      }
+    },
+    {
+      "id": "ing-robyn-2026-06-30",
+      "venueId": "ing-arena",
+      "title": "Robyn",
+      "date": "2026-06-30",
+      "time": "20:00",
+      "category": "concert",
+      "url": "https://ing.arena.brussels/show/robyn/",
+      "expectedAttendance": 12000,
+      "venue": {
+        "id": "ing-arena",
+        "name": "ING Arena (Palais 12)",
+        "address": "Place de Belgique 1, 1020 Bruxelles",
+        "lat": 50.8987,
+        "lng": 4.3403,
+        "capacity": 12000,
+        "primaryLines": [
+          "6",
+          "7",
+          "51"
+        ],
+        "url": "https://ing.arena.brussels/",
+        "note": "Plateau du Heysel — métro Heysel."
+      }
+    },
+    {
+      "id": "ing-cirque-soleil-2026-09-30",
+      "venueId": "ing-arena",
+      "title": "Cirque du Soleil — OVO",
+      "date": "2026-09-30",
+      "time": "20:00",
+      "category": "spectacle",
+      "expectedAttendance": 12000,
+      "venue": {
+        "id": "ing-arena",
+        "name": "ING Arena (Palais 12)",
+        "address": "Place de Belgique 1, 1020 Bruxelles",
+        "lat": 50.8987,
+        "lng": 4.3403,
+        "capacity": 12000,
+        "primaryLines": [
+          "6",
+          "7",
+          "51"
+        ],
+        "url": "https://ing.arena.brussels/",
+        "note": "Plateau du Heysel — métro Heysel."
+      }
+    },
+    {
+      "id": "ing-cirque-soleil-2026-10-02",
+      "venueId": "ing-arena",
+      "title": "Cirque du Soleil — OVO",
+      "date": "2026-10-02",
+      "time": "20:00",
+      "category": "spectacle",
+      "expectedAttendance": 12000,
+      "venue": {
+        "id": "ing-arena",
+        "name": "ING Arena (Palais 12)",
+        "address": "Place de Belgique 1, 1020 Bruxelles",
+        "lat": 50.8987,
+        "lng": 4.3403,
+        "capacity": 12000,
+        "primaryLines": [
+          "6",
+          "7",
+          "51"
+        ],
+        "url": "https://ing.arena.brussels/",
+        "note": "Plateau du Heysel — métro Heysel."
+      }
+    },
+    {
+      "id": "ing-cirque-soleil-2026-10-03",
+      "venueId": "ing-arena",
+      "title": "Cirque du Soleil — OVO",
+      "date": "2026-10-03",
+      "time": "20:00",
+      "category": "spectacle",
+      "expectedAttendance": 12000,
+      "venue": {
+        "id": "ing-arena",
+        "name": "ING Arena (Palais 12)",
+        "address": "Place de Belgique 1, 1020 Bruxelles",
+        "lat": 50.8987,
+        "lng": 4.3403,
+        "capacity": 12000,
+        "primaryLines": [
+          "6",
+          "7",
+          "51"
+        ],
+        "url": "https://ing.arena.brussels/",
+        "note": "Plateau du Heysel — métro Heysel."
+      }
+    },
+    {
+      "id": "ing-plk-2026-10-24",
+      "venueId": "ing-arena",
+      "title": "PLK",
+      "date": "2026-10-24",
+      "time": "20:00",
+      "category": "concert",
+      "url": "https://ing.arena.brussels/show/plk-2/",
+      "expectedAttendance": 12000,
+      "venue": {
+        "id": "ing-arena",
+        "name": "ING Arena (Palais 12)",
+        "address": "Place de Belgique 1, 1020 Bruxelles",
+        "lat": 50.8987,
+        "lng": 4.3403,
+        "capacity": 12000,
+        "primaryLines": [
+          "6",
+          "7",
+          "51"
+        ],
+        "url": "https://ing.arena.brussels/",
+        "note": "Plateau du Heysel — métro Heysel."
+      }
+    },
+    {
+      "id": "ing-djadja-2026-10-25",
+      "venueId": "ing-arena",
+      "title": "Djadja & Dinaz",
+      "date": "2026-10-25",
+      "time": "20:00",
+      "category": "concert",
+      "url": "https://ing.arena.brussels/show/djadja-dinaz-2/",
+      "expectedAttendance": 12000,
+      "venue": {
+        "id": "ing-arena",
+        "name": "ING Arena (Palais 12)",
+        "address": "Place de Belgique 1, 1020 Bruxelles",
+        "lat": 50.8987,
+        "lng": 4.3403,
+        "capacity": 12000,
+        "primaryLines": [
+          "6",
+          "7",
+          "51"
+        ],
+        "url": "https://ing.arena.brussels/",
+        "note": "Plateau du Heysel — métro Heysel."
+      }
+    },
+    {
+      "id": "ing-orelsan-2026-11-12",
+      "venueId": "ing-arena",
+      "title": "Orelsan",
+      "date": "2026-11-12",
+      "time": "20:00",
+      "category": "concert",
+      "url": "https://ing.arena.brussels/show/orelsan-4/",
+      "expectedAttendance": 12000,
+      "venue": {
+        "id": "ing-arena",
+        "name": "ING Arena (Palais 12)",
+        "address": "Place de Belgique 1, 1020 Bruxelles",
+        "lat": 50.8987,
+        "lng": 4.3403,
+        "capacity": 12000,
+        "primaryLines": [
+          "6",
+          "7",
+          "51"
+        ],
+        "url": "https://ing.arena.brussels/",
+        "note": "Plateau du Heysel — métro Heysel."
+      }
+    },
+    {
+      "id": "fn-azaya-2026-07-03",
+      "venueId": "forest-national",
+      "title": "Azaya",
+      "date": "2026-07-03",
+      "time": "20:00",
+      "category": "concert",
+      "url": "https://www.forest-national.be/evenement/azaya-e80c612d",
+      "expectedAttendance": 8000,
+      "venue": {
+        "id": "forest-national",
+        "name": "Forest National",
+        "address": "Avenue du Globe 36, 1190 Forest",
+        "lat": 50.8124,
+        "lng": 4.3217,
+        "capacity": 8000,
+        "primaryLines": [
+          "32",
+          "82",
+          "97",
+          "50"
+        ],
+        "url": "https://www.forest-national.be/",
+        "note": "Tram 82, bus 50. Saturé après concerts."
+      }
+    },
+    {
+      "id": "fn-benmazue-2026-12-06",
+      "venueId": "forest-national",
+      "title": "Ben Mazué",
+      "date": "2026-12-06",
+      "time": "20:00",
+      "category": "concert",
+      "url": "https://www.forest-national.be/evenement/ben-mazue-f8386ec3",
+      "expectedAttendance": 8000,
+      "venue": {
+        "id": "forest-national",
+        "name": "Forest National",
+        "address": "Avenue du Globe 36, 1190 Forest",
+        "lat": 50.8124,
+        "lng": 4.3217,
+        "capacity": 8000,
+        "primaryLines": [
+          "32",
+          "82",
+          "97",
+          "50"
+        ],
+        "url": "https://www.forest-national.be/",
+        "note": "Tram 82, bus 50. Saturé après concerts."
+      }
+    },
+    {
+      "id": "fn-morrissey-2026-12-31",
+      "venueId": "forest-national",
+      "title": "Morrissey — New Year's Eve 2026",
+      "date": "2026-12-31",
+      "time": "21:00",
+      "category": "concert",
+      "url": "https://www.forest-national.be/evenement/morrissey-e152a071",
+      "expectedAttendance": 8000,
+      "venue": {
+        "id": "forest-national",
+        "name": "Forest National",
+        "address": "Avenue du Globe 36, 1190 Forest",
+        "lat": 50.8124,
+        "lng": 4.3217,
+        "capacity": 8000,
+        "primaryLines": [
+          "32",
+          "82",
+          "97",
+          "50"
+        ],
+        "url": "https://www.forest-national.be/",
+        "note": "Tram 82, bus 50. Saturé après concerts."
+      }
+    },
+    {
+      "id": "fn-omah-lay",
+      "venueId": "forest-national",
+      "title": "Omah Lay",
+      "date": "2026-06-15",
+      "time": "20:00",
+      "category": "concert",
+      "url": "https://www.forest-national.be/evenement/omah-lay-d2312be",
+      "expectedAttendance": 8000,
+      "venue": {
+        "id": "forest-national",
+        "name": "Forest National",
+        "address": "Avenue du Globe 36, 1190 Forest",
+        "lat": 50.8124,
+        "lng": 4.3217,
+        "capacity": 8000,
+        "primaryLines": [
+          "32",
+          "82",
+          "97",
+          "50"
+        ],
+        "url": "https://www.forest-national.be/",
+        "note": "Tram 82, bus 50. Saturé après concerts."
+      }
+    },
+    {
+      "id": "fn-prodigy",
+      "venueId": "forest-national",
+      "title": "The Prodigy",
+      "date": "2026-09-12",
+      "time": "20:00",
+      "category": "concert",
+      "url": "https://www.forest-national.be/evenement/the-prodigy-cf361f2e",
+      "expectedAttendance": 8000,
+      "venue": {
+        "id": "forest-national",
+        "name": "Forest National",
+        "address": "Avenue du Globe 36, 1190 Forest",
+        "lat": 50.8124,
+        "lng": 4.3217,
+        "capacity": 8000,
+        "primaryLines": [
+          "32",
+          "82",
+          "97",
+          "50"
+        ],
+        "url": "https://www.forest-national.be/",
+        "note": "Tram 82, bus 50. Saturé après concerts."
+      }
+    },
+    {
+      "id": "fn-jungle",
+      "venueId": "forest-national",
+      "title": "Jungle",
+      "date": "2026-11-08",
+      "time": "20:00",
+      "category": "concert",
+      "url": "https://www.forest-national.be/evenement/jungle-9d3f3442",
+      "expectedAttendance": 8000,
+      "venue": {
+        "id": "forest-national",
+        "name": "Forest National",
+        "address": "Avenue du Globe 36, 1190 Forest",
+        "lat": 50.8124,
+        "lng": 4.3217,
+        "capacity": 8000,
+        "primaryLines": [
+          "32",
+          "82",
+          "97",
+          "50"
+        ],
+        "url": "https://www.forest-national.be/",
+        "note": "Tram 82, bus 50. Saturé après concerts."
+      }
+    },
+    {
+      "id": "fn-judas-priest",
+      "venueId": "forest-national",
+      "title": "Judas Priest",
+      "date": "2026-06-21",
+      "time": "20:00",
+      "category": "concert",
+      "url": "https://www.forest-national.be/evenement/judas-priest-5bf74d14",
+      "expectedAttendance": 8000,
+      "venue": {
+        "id": "forest-national",
+        "name": "Forest National",
+        "address": "Avenue du Globe 36, 1190 Forest",
+        "lat": 50.8124,
+        "lng": 4.3217,
+        "capacity": 8000,
+        "primaryLines": [
+          "32",
+          "82",
+          "97",
+          "50"
+        ],
+        "url": "https://www.forest-national.be/",
+        "note": "Tram 82, bus 50. Saturé après concerts."
+      }
+    },
+    {
+      "id": "fn-myles-smith",
+      "venueId": "forest-national",
+      "title": "Myles Smith",
+      "date": "2026-11-25",
+      "time": "20:00",
+      "category": "concert",
+      "url": "https://www.forest-national.be/evenement/myles-smith-b1777250",
+      "expectedAttendance": 8000,
+      "venue": {
+        "id": "forest-national",
+        "name": "Forest National",
+        "address": "Avenue du Globe 36, 1190 Forest",
+        "lat": 50.8124,
+        "lng": 4.3217,
+        "capacity": 8000,
+        "primaryLines": [
+          "32",
+          "82",
+          "97",
+          "50"
+        ],
+        "url": "https://www.forest-national.be/",
+        "note": "Tram 82, bus 50. Saturé après concerts."
+      }
+    },
+    {
+      "id": "fn-joji",
+      "venueId": "forest-national",
+      "title": "Joji",
+      "date": "2026-09-18",
+      "time": "20:00",
+      "category": "concert",
+      "url": "https://www.forest-national.be/evenement/joji-ad015451",
+      "expectedAttendance": 8000,
+      "venue": {
+        "id": "forest-national",
+        "name": "Forest National",
+        "address": "Avenue du Globe 36, 1190 Forest",
+        "lat": 50.8124,
+        "lng": 4.3217,
+        "capacity": 8000,
+        "primaryLines": [
+          "32",
+          "82",
+          "97",
+          "50"
+        ],
+        "url": "https://www.forest-national.be/",
+        "note": "Tram 82, bus 50. Saturé après concerts."
+      }
+    },
+    {
+      "id": "fn-massive-attack",
+      "venueId": "forest-national",
+      "title": "Massive Attack",
+      "date": "2026-10-15",
+      "time": "20:00",
+      "category": "concert",
+      "url": "https://www.forest-national.be/evenement/massive-attack-ffe98c8c",
+      "expectedAttendance": 8000,
+      "venue": {
+        "id": "forest-national",
+        "name": "Forest National",
+        "address": "Avenue du Globe 36, 1190 Forest",
+        "lat": 50.8124,
+        "lng": 4.3217,
+        "capacity": 8000,
+        "primaryLines": [
+          "32",
+          "82",
+          "97",
+          "50"
+        ],
+        "url": "https://www.forest-national.be/",
+        "note": "Tram 82, bus 50. Saturé après concerts."
+      }
+    },
+    {
+      "id": "fn-romeo-juliette",
+      "venueId": "forest-national",
+      "title": "Roméo & Juliette",
+      "date": "2026-10-30",
+      "time": "20:00",
+      "category": "spectacle",
+      "url": "https://www.forest-national.be/evenement/romeo-juliette-be73a6c8",
+      "expectedAttendance": 8000,
+      "venue": {
+        "id": "forest-national",
+        "name": "Forest National",
+        "address": "Avenue du Globe 36, 1190 Forest",
+        "lat": 50.8124,
+        "lng": 4.3217,
+        "capacity": 8000,
+        "primaryLines": [
+          "32",
+          "82",
+          "97",
+          "50"
+        ],
+        "url": "https://www.forest-national.be/",
+        "note": "Tram 82, bus 50. Saturé après concerts."
+      }
+    },
+    {
+      "id": "fn-jarry",
+      "venueId": "forest-national",
+      "title": "Jarry",
+      "date": "2026-11-15",
+      "time": "20:00",
+      "category": "spectacle",
+      "url": "https://www.forest-national.be/evenement/jarry-1a8114b1",
+      "expectedAttendance": 8000,
+      "venue": {
+        "id": "forest-national",
+        "name": "Forest National",
+        "address": "Avenue du Globe 36, 1190 Forest",
+        "lat": 50.8124,
+        "lng": 4.3217,
+        "capacity": 8000,
+        "primaryLines": [
+          "32",
+          "82",
+          "97",
+          "50"
+        ],
+        "url": "https://www.forest-national.be/",
+        "note": "Tram 82, bus 50. Saturé après concerts."
+      }
+    },
+    {
+      "id": "ab-nightlab-2026-04-29",
+      "venueId": "ancienne-belgique",
+      "title": "Nightlab w/ Blck Mamba",
+      "date": "2026-04-29",
+      "time": "20:00",
+      "category": "concert",
+      "soldOut": true,
+      "url": "https://www.abconcerts.be/fr/agenda/nightlab/a10Qw00000E95y8IAB",
+      "expectedAttendance": 2000,
+      "venue": {
+        "id": "ancienne-belgique",
+        "name": "Ancienne Belgique (AB)",
+        "address": "Boulevard Anspach 110, 1000 Bruxelles",
+        "lat": 50.847,
+        "lng": 4.3486,
+        "capacity": 2000,
+        "primaryLines": [
+          "1",
+          "5",
+          "3",
+          "4"
+        ],
+        "url": "https://www.abconcerts.be/",
+        "note": "Centre — métro Bourse / De Brouckère."
+      }
+    },
+    {
+      "id": "ab-seefeel-2026-04-29",
+      "venueId": "ancienne-belgique",
+      "title": "Seefeel + echofarmer",
+      "date": "2026-04-29",
+      "time": "20:00",
+      "category": "concert",
+      "url": "https://www.abconcerts.be/fr/agenda/seefeel/a10Qw00000ELgCIIA1",
+      "expectedAttendance": 2000,
+      "venue": {
+        "id": "ancienne-belgique",
+        "name": "Ancienne Belgique (AB)",
+        "address": "Boulevard Anspach 110, 1000 Bruxelles",
+        "lat": 50.847,
+        "lng": 4.3486,
+        "capacity": 2000,
+        "primaryLines": [
+          "1",
+          "5",
+          "3",
+          "4"
+        ],
+        "url": "https://www.abconcerts.be/",
+        "note": "Centre — métro Bourse / De Brouckère."
+      }
+    },
+    {
+      "id": "ab-triggerfinger-2026-04-29",
+      "venueId": "ancienne-belgique",
+      "title": "Triggerfinger + Hideous",
+      "date": "2026-04-29",
+      "time": "20:00",
+      "category": "concert",
+      "url": "https://www.abconcerts.be/fr/agenda/triggerfinger/a10Qw000009UZkjIAG",
+      "expectedAttendance": 2000,
+      "venue": {
+        "id": "ancienne-belgique",
+        "name": "Ancienne Belgique (AB)",
+        "address": "Boulevard Anspach 110, 1000 Bruxelles",
+        "lat": 50.847,
+        "lng": 4.3486,
+        "capacity": 2000,
+        "primaryLines": [
+          "1",
+          "5",
+          "3",
+          "4"
+        ],
+        "url": "https://www.abconcerts.be/",
+        "note": "Centre — métro Bourse / De Brouckère."
+      }
+    },
+    {
+      "id": "ab-michelle-david-2026-04-30",
+      "venueId": "ancienne-belgique",
+      "title": "Michelle David & The True Tones",
+      "date": "2026-04-30",
+      "time": "20:00",
+      "category": "concert",
+      "soldOut": true,
+      "url": "https://www.abconcerts.be/fr/agenda/michelle-david-the-true-tones/a10Qw00000EKhITIA1",
+      "expectedAttendance": 2000,
+      "venue": {
+        "id": "ancienne-belgique",
+        "name": "Ancienne Belgique (AB)",
+        "address": "Boulevard Anspach 110, 1000 Bruxelles",
+        "lat": 50.847,
+        "lng": 4.3486,
+        "capacity": 2000,
+        "primaryLines": [
+          "1",
+          "5",
+          "3",
+          "4"
+        ],
+        "url": "https://www.abconcerts.be/",
+        "note": "Centre — métro Bourse / De Brouckère."
+      }
+    },
+    {
+      "id": "ab-admiral-freebee-2026-04-30",
+      "venueId": "ancienne-belgique",
+      "title": "Admiral Freebee",
+      "date": "2026-04-30",
+      "time": "20:00",
+      "category": "concert",
+      "url": "https://www.abconcerts.be/fr/agenda/admiral-freebee/a10Qw000005yNOfIAM",
+      "expectedAttendance": 2000,
+      "venue": {
+        "id": "ancienne-belgique",
+        "name": "Ancienne Belgique (AB)",
+        "address": "Boulevard Anspach 110, 1000 Bruxelles",
+        "lat": 50.847,
+        "lng": 4.3486,
+        "capacity": 2000,
+        "primaryLines": [
+          "1",
+          "5",
+          "3",
+          "4"
+        ],
+        "url": "https://www.abconcerts.be/",
+        "note": "Centre — métro Bourse / De Brouckère."
+      }
+    },
+    {
+      "id": "ab-tk-2026-05-01",
+      "venueId": "ancienne-belgique",
+      "title": "TK",
+      "date": "2026-05-01",
+      "time": "20:00",
+      "category": "concert",
+      "cancelled": true,
+      "url": "https://www.abconcerts.be/fr/agenda/tk/a10Qw00000GrWjhIAF",
+      "expectedAttendance": 2000,
+      "venue": {
+        "id": "ancienne-belgique",
+        "name": "Ancienne Belgique (AB)",
+        "address": "Boulevard Anspach 110, 1000 Bruxelles",
+        "lat": 50.847,
+        "lng": 4.3486,
+        "capacity": 2000,
+        "primaryLines": [
+          "1",
+          "5",
+          "3",
+          "4"
+        ],
+        "url": "https://www.abconcerts.be/",
+        "note": "Centre — métro Bourse / De Brouckère."
+      }
+    },
+    {
+      "id": "ab-united-sluts-2026-05-01",
+      "venueId": "ancienne-belgique",
+      "title": "United Sluts Party",
+      "date": "2026-05-01",
+      "time": "21:00",
+      "category": "concert",
+      "url": "https://www.abconcerts.be/fr/agenda/united-sluts-party/a10Qw00000GFeaDIAT",
+      "expectedAttendance": 2000,
+      "venue": {
+        "id": "ancienne-belgique",
+        "name": "Ancienne Belgique (AB)",
+        "address": "Boulevard Anspach 110, 1000 Bruxelles",
+        "lat": 50.847,
+        "lng": 4.3486,
+        "capacity": 2000,
+        "primaryLines": [
+          "1",
+          "5",
+          "3",
+          "4"
+        ],
+        "url": "https://www.abconcerts.be/",
+        "note": "Centre — métro Bourse / De Brouckère."
+      }
+    },
+    {
+      "id": "ab-impronight-2026-05-02",
+      "venueId": "ancienne-belgique",
+      "title": "Impro'Night Aladar",
+      "date": "2026-05-02",
+      "time": "20:00",
+      "category": "concert",
+      "url": "https://www.abconcerts.be/fr/agenda/impronight-aladar/a10Qw00000FrWFdIAN",
+      "expectedAttendance": 2000,
+      "venue": {
+        "id": "ancienne-belgique",
+        "name": "Ancienne Belgique (AB)",
+        "address": "Boulevard Anspach 110, 1000 Bruxelles",
+        "lat": 50.847,
+        "lng": 4.3486,
+        "capacity": 2000,
+        "primaryLines": [
+          "1",
+          "5",
+          "3",
+          "4"
+        ],
+        "url": "https://www.abconcerts.be/",
+        "note": "Centre — métro Bourse / De Brouckère."
+      }
+    },
+    {
+      "id": "ab-dyce-2026-05-02",
+      "venueId": "ancienne-belgique",
+      "title": "Dyce",
+      "date": "2026-05-02",
+      "time": "20:00",
+      "category": "concert",
+      "url": "https://www.abconcerts.be/fr/agenda/dyce/a10Qw00000FRiynIAD",
+      "expectedAttendance": 2000,
+      "venue": {
+        "id": "ancienne-belgique",
+        "name": "Ancienne Belgique (AB)",
+        "address": "Boulevard Anspach 110, 1000 Bruxelles",
+        "lat": 50.847,
+        "lng": 4.3486,
+        "capacity": 2000,
+        "primaryLines": [
+          "1",
+          "5",
+          "3",
+          "4"
+        ],
+        "url": "https://www.abconcerts.be/",
+        "note": "Centre — métro Bourse / De Brouckère."
+      }
+    },
+    {
+      "id": "bz-vagabond-2026-04-29",
+      "venueId": "bozar",
+      "title": "Workshop Ana Vaz at Argos",
+      "date": "2026-04-29",
+      "time": "10:00",
+      "category": "conference",
+      "url": "https://www.bozar.be/fr/calendrier/vagabond-cinema-workshop-ana-vaz-argos",
+      "expectedAttendance": 2200,
+      "venue": {
+        "id": "bozar",
+        "name": "Bozar (Palais des Beaux-Arts)",
+        "address": "Rue Ravenstein 23, 1000 Bruxelles",
+        "lat": 50.8424,
+        "lng": 4.3573,
+        "capacity": 2200,
+        "primaryLines": [
+          "1",
+          "5",
+          "92",
+          "93"
+        ],
+        "url": "https://www.bozar.be/",
+        "note": "Centre — métro Gare Centrale / Parc."
+      }
+    },
+    {
+      "id": "bz-noite-2026-04-29",
+      "venueId": "bozar",
+      "title": "É Noite Na América — Ana Vaz",
+      "date": "2026-04-29",
+      "time": "19:00",
+      "category": "conference",
+      "url": "https://www.bozar.be/fr/calendrier/e-noite-na-america-ana-vaz",
+      "expectedAttendance": 2200,
+      "venue": {
+        "id": "bozar",
+        "name": "Bozar (Palais des Beaux-Arts)",
+        "address": "Rue Ravenstein 23, 1000 Bruxelles",
+        "lat": 50.8424,
+        "lng": 4.3573,
+        "capacity": 2200,
+        "primaryLines": [
+          "1",
+          "5",
+          "92",
+          "93"
+        ],
+        "url": "https://www.bozar.be/",
+        "note": "Centre — métro Gare Centrale / Parc."
+      }
+    },
+    {
+      "id": "bz-meet-thinker-2026-04-29",
+      "venueId": "bozar",
+      "title": "Meet the Thinker: James Bridle",
+      "date": "2026-04-29",
+      "time": "19:30",
+      "category": "conference",
+      "url": "https://www.bozar.be/fr/calendrier/meet-thinker-james-bridle",
+      "expectedAttendance": 2200,
+      "venue": {
+        "id": "bozar",
+        "name": "Bozar (Palais des Beaux-Arts)",
+        "address": "Rue Ravenstein 23, 1000 Bruxelles",
+        "lat": 50.8424,
+        "lng": 4.3573,
+        "capacity": 2200,
+        "primaryLines": [
+          "1",
+          "5",
+          "92",
+          "93"
+        ],
+        "url": "https://www.bozar.be/",
+        "note": "Centre — métro Gare Centrale / Parc."
+      }
+    },
+    {
+      "id": "bz-sofa-2026-04-30",
+      "venueId": "bozar",
+      "title": "Sofa Session #4 — Facing Ugliness",
+      "date": "2026-04-30",
+      "time": "18:00",
+      "category": "conference",
+      "url": "https://www.bozar.be/fr/calendrier/sofa-session-4-facing-ugliness",
+      "expectedAttendance": 2200,
+      "venue": {
+        "id": "bozar",
+        "name": "Bozar (Palais des Beaux-Arts)",
+        "address": "Rue Ravenstein 23, 1000 Bruxelles",
+        "lat": 50.8424,
+        "lng": 4.3573,
+        "capacity": 2200,
+        "primaryLines": [
+          "1",
+          "5",
+          "92",
+          "93"
+        ],
+        "url": "https://www.bozar.be/",
+        "note": "Centre — métro Gare Centrale / Parc."
+      }
+    },
+    {
+      "id": "bz-allover-2026-04-30",
+      "venueId": "bozar",
+      "title": "Bozar all over the P(a)lace — Avril",
+      "date": "2026-04-30",
+      "time": "18:00",
+      "category": "festival",
+      "url": "https://www.bozar.be/fr/calendrier/bozar-all-over-palace-avril",
+      "expectedAttendance": 2200,
+      "venue": {
+        "id": "bozar",
+        "name": "Bozar (Palais des Beaux-Arts)",
+        "address": "Rue Ravenstein 23, 1000 Bruxelles",
+        "lat": 50.8424,
+        "lng": 4.3573,
+        "capacity": 2200,
+        "primaryLines": [
+          "1",
+          "5",
+          "92",
+          "93"
+        ],
+        "url": "https://www.bozar.be/",
+        "note": "Centre — métro Gare Centrale / Parc."
+      }
+    },
+    {
+      "id": "bz-paul-simon-2026-04-30",
+      "venueId": "bozar",
+      "title": "Paul Simon — A Quiet Celebration",
+      "date": "2026-04-30",
+      "time": "20:00",
+      "category": "concert",
+      "url": "https://www.bozar.be/fr/calendrier/paul-simon",
+      "expectedAttendance": 2200,
+      "venue": {
+        "id": "bozar",
+        "name": "Bozar (Palais des Beaux-Arts)",
+        "address": "Rue Ravenstein 23, 1000 Bruxelles",
+        "lat": 50.8424,
+        "lng": 4.3573,
+        "capacity": 2200,
+        "primaryLines": [
+          "1",
+          "5",
+          "92",
+          "93"
+        ],
+        "url": "https://www.bozar.be/",
+        "note": "Centre — métro Gare Centrale / Parc."
+      }
+    },
+    {
+      "id": "bz-picture-perfect",
+      "venueId": "bozar",
+      "title": "Picture Perfect (expo)",
+      "date": "2026-08-16",
+      "category": "expo",
+      "expectedAttendance": 500,
+      "url": "https://www.bozar.be/fr/calendrier/picture-perfect",
+      "venue": {
+        "id": "bozar",
+        "name": "Bozar (Palais des Beaux-Arts)",
+        "address": "Rue Ravenstein 23, 1000 Bruxelles",
+        "lat": 50.8424,
+        "lng": 4.3573,
+        "capacity": 2200,
+        "primaryLines": [
+          "1",
+          "5",
+          "92",
+          "93"
+        ],
+        "url": "https://www.bozar.be/",
+        "note": "Centre — métro Gare Centrale / Parc."
+      }
+    },
+    {
+      "id": "bz-bellezza",
+      "venueId": "bozar",
+      "title": "Bellezza e Bruttezza (expo)",
+      "date": "2026-06-14",
+      "category": "expo",
+      "expectedAttendance": 500,
+      "url": "https://www.bozar.be/fr/calendrier/bellezza-e-bruttezza",
+      "venue": {
+        "id": "bozar",
+        "name": "Bozar (Palais des Beaux-Arts)",
+        "address": "Rue Ravenstein 23, 1000 Bruxelles",
+        "lat": 50.8424,
+        "lng": 4.3573,
+        "capacity": 2200,
+        "primaryLines": [
+          "1",
+          "5",
+          "92",
+          "93"
+        ],
+        "url": "https://www.bozar.be/",
+        "note": "Centre — métro Gare Centrale / Parc."
+      }
+    },
+    {
+      "id": "bz-ho-tzu-nyen",
+      "venueId": "bozar",
+      "title": "Ho Tzu Nyen — P for Power (expo)",
+      "date": "2026-06-14",
+      "category": "expo",
+      "expectedAttendance": 500,
+      "url": "https://www.bozar.be/fr/calendrier/ho-tzu-nyen-p-power",
+      "venue": {
+        "id": "bozar",
+        "name": "Bozar (Palais des Beaux-Arts)",
+        "address": "Rue Ravenstein 23, 1000 Bruxelles",
+        "lat": 50.8424,
+        "lng": 4.3573,
+        "capacity": 2200,
+        "primaryLines": [
+          "1",
+          "5",
+          "92",
+          "93"
+        ],
+        "url": "https://www.bozar.be/",
+        "note": "Centre — métro Gare Centrale / Parc."
+      }
+    },
+    {
+      "id": "bz-emmylou-2026-09-03",
+      "venueId": "bozar",
+      "title": "Emmylou Harris — European Farewell Tour",
+      "date": "2026-09-03",
+      "time": "20:00",
+      "category": "concert",
+      "url": "https://www.bozar.be/fr/calendrier/emmylou-harris",
+      "expectedAttendance": 2200,
+      "venue": {
+        "id": "bozar",
+        "name": "Bozar (Palais des Beaux-Arts)",
+        "address": "Rue Ravenstein 23, 1000 Bruxelles",
+        "lat": 50.8424,
+        "lng": 4.3573,
+        "capacity": 2200,
+        "primaryLines": [
+          "1",
+          "5",
+          "92",
+          "93"
+        ],
+        "url": "https://www.bozar.be/",
+        "note": "Centre — métro Gare Centrale / Parc."
+      }
+    },
+    {
+      "id": "bz-carminho-2026-09-09",
+      "venueId": "bozar",
+      "title": "Carminho",
+      "date": "2026-09-09",
+      "time": "20:00",
+      "category": "concert",
+      "url": "https://www.bozar.be/fr/calendrier/carminho-0",
+      "expectedAttendance": 2200,
+      "venue": {
+        "id": "bozar",
+        "name": "Bozar (Palais des Beaux-Arts)",
+        "address": "Rue Ravenstein 23, 1000 Bruxelles",
+        "lat": 50.8424,
+        "lng": 4.3573,
+        "capacity": 2200,
+        "primaryLines": [
+          "1",
+          "5",
+          "92",
+          "93"
+        ],
+        "url": "https://www.bozar.be/",
+        "note": "Centre — métro Gare Centrale / Parc."
+      }
+    },
+    {
+      "id": "bz-bno-vinnitskaya-2026-09-11",
+      "venueId": "bozar",
+      "title": "Belgian National Orchestra — Mahler's Titan",
+      "date": "2026-09-11",
+      "time": "20:00",
+      "category": "concert",
+      "url": "https://www.bozar.be/fr/calendrier/belgian-national-orchestra-halls-vinnitskaya",
+      "expectedAttendance": 2200,
+      "venue": {
+        "id": "bozar",
+        "name": "Bozar (Palais des Beaux-Arts)",
+        "address": "Rue Ravenstein 23, 1000 Bruxelles",
+        "lat": 50.8424,
+        "lng": 4.3573,
+        "capacity": 2200,
+        "primaryLines": [
+          "1",
+          "5",
+          "92",
+          "93"
+        ],
+        "url": "https://www.bozar.be/",
+        "note": "Centre — métro Gare Centrale / Parc."
+      }
+    },
+    {
+      "id": "bz-bno-yoon-2026-09-24",
+      "venueId": "bozar",
+      "title": "Belgian National Orchestra & Yoon — Sheherazade",
+      "date": "2026-09-24",
+      "time": "19:00",
+      "category": "concert",
+      "url": "https://www.bozar.be/fr/calendrier/belgian-national-orchestra-yoon",
+      "expectedAttendance": 2200,
+      "venue": {
+        "id": "bozar",
+        "name": "Bozar (Palais des Beaux-Arts)",
+        "address": "Rue Ravenstein 23, 1000 Bruxelles",
+        "lat": 50.8424,
+        "lng": 4.3573,
+        "capacity": 2200,
+        "primaryLines": [
+          "1",
+          "5",
+          "92",
+          "93"
+        ],
+        "url": "https://www.bozar.be/",
+        "note": "Centre — métro Gare Centrale / Parc."
+      }
+    },
+    {
+      "id": "bz-marionettes-2026-09-27",
+      "venueId": "bozar",
+      "title": "Salzburger Marionettentheater & Isabelle Faust",
+      "date": "2026-09-27",
+      "category": "spectacle",
+      "url": "https://www.bozar.be/fr/calendrier/salzburger-marionettentheater-ensemble-isabelle-faust",
+      "expectedAttendance": 2200,
+      "venue": {
+        "id": "bozar",
+        "name": "Bozar (Palais des Beaux-Arts)",
+        "address": "Rue Ravenstein 23, 1000 Bruxelles",
+        "lat": 50.8424,
+        "lng": 4.3573,
+        "capacity": 2200,
+        "primaryLines": [
+          "1",
+          "5",
+          "92",
+          "93"
+        ],
+        "url": "https://www.bozar.be/",
+        "note": "Centre — métro Gare Centrale / Parc."
+      }
+    },
+    {
+      "id": "bz-tempete-2026-10-02",
+      "venueId": "bozar",
+      "title": "La Tempête — Monteverdi. Vespro della Beata Vergine",
+      "date": "2026-10-02",
+      "time": "20:00",
+      "category": "concert",
+      "url": "https://www.bozar.be/fr/calendrier/la-tempete",
+      "expectedAttendance": 2200,
+      "venue": {
+        "id": "bozar",
+        "name": "Bozar (Palais des Beaux-Arts)",
+        "address": "Rue Ravenstein 23, 1000 Bruxelles",
+        "lat": 50.8424,
+        "lng": 4.3573,
+        "capacity": 2200,
+        "primaryLines": [
+          "1",
+          "5",
+          "92",
+          "93"
+        ],
+        "url": "https://www.bozar.be/",
+        "note": "Centre — métro Gare Centrale / Parc."
+      }
+    },
+    {
+      "id": "bz-souad-massi-2026-10-03",
+      "venueId": "bozar",
+      "title": "Souad Massi — Zagate Tour",
+      "date": "2026-10-03",
+      "time": "20:00",
+      "category": "concert",
+      "url": "https://www.bozar.be/fr/calendrier/souad-massi-0",
+      "expectedAttendance": 2200,
+      "venue": {
+        "id": "bozar",
+        "name": "Bozar (Palais des Beaux-Arts)",
+        "address": "Rue Ravenstein 23, 1000 Bruxelles",
+        "lat": 50.8424,
+        "lng": 4.3573,
+        "capacity": 2200,
+        "primaryLines": [
+          "1",
+          "5",
+          "92",
+          "93"
+        ],
+        "url": "https://www.bozar.be/",
+        "note": "Centre — métro Gare Centrale / Parc."
+      }
+    },
+    {
+      "id": "bz-beatrice-rana-2026-10-04",
+      "venueId": "bozar",
+      "title": "Beatrice Rana — Bach, Clementi & Schumann",
+      "date": "2026-10-04",
+      "time": "19:00",
+      "category": "concert",
+      "url": "https://www.bozar.be/fr/calendrier/beatrice-rana-0",
+      "expectedAttendance": 2200,
+      "venue": {
+        "id": "bozar",
+        "name": "Bozar (Palais des Beaux-Arts)",
+        "address": "Rue Ravenstein 23, 1000 Bruxelles",
+        "lat": 50.8424,
+        "lng": 4.3573,
+        "capacity": 2200,
+        "primaryLines": [
+          "1",
+          "5",
+          "92",
+          "93"
+        ],
+        "url": "https://www.bozar.be/",
+        "note": "Centre — métro Gare Centrale / Parc."
+      }
+    },
+    {
+      "id": "bz-jill-scott-2026-10-05",
+      "venueId": "bozar",
+      "title": "Jill Scott — To Whom This May Concern Tour",
+      "date": "2026-10-05",
+      "time": "20:00",
+      "category": "concert",
+      "url": "https://www.bozar.be/fr/calendrier/jill-scott",
+      "expectedAttendance": 2200,
+      "venue": {
+        "id": "bozar",
+        "name": "Bozar (Palais des Beaux-Arts)",
+        "address": "Rue Ravenstein 23, 1000 Bruxelles",
+        "lat": 50.8424,
+        "lng": 4.3573,
+        "capacity": 2200,
+        "primaryLines": [
+          "1",
+          "5",
+          "92",
+          "93"
+        ],
+        "url": "https://www.bozar.be/",
+        "note": "Centre — métro Gare Centrale / Parc."
+      }
+    },
+    {
+      "id": "bz-freiburger-2027-01-10",
+      "venueId": "bozar",
+      "title": "Freiburger Barockorchester & Jeanine De Bique — Mozart",
+      "date": "2027-01-10",
+      "time": "19:00",
+      "category": "concert",
+      "url": "https://www.bozar.be/fr/calendrier/freiburger-barockorchester-jeanine-de-bique",
+      "expectedAttendance": 2200,
+      "venue": {
+        "id": "bozar",
+        "name": "Bozar (Palais des Beaux-Arts)",
+        "address": "Rue Ravenstein 23, 1000 Bruxelles",
+        "lat": 50.8424,
+        "lng": 4.3573,
+        "capacity": 2200,
+        "primaryLines": [
+          "1",
+          "5",
+          "92",
+          "93"
+        ],
+        "url": "https://www.bozar.be/",
+        "note": "Centre — métro Gare Centrale / Parc."
+      }
+    },
+    {
+      "id": "bz-lpo-bihlmaier-2027-01-14",
+      "venueId": "bozar",
+      "title": "London Philharmonic Orchestra & Bihlmaier — Grieg & Sibelius",
+      "date": "2027-01-14",
+      "time": "20:00",
+      "category": "concert",
+      "url": "https://www.bozar.be/fr/calendrier/london-philharmonic-orchestra-bihlmaier",
+      "expectedAttendance": 2200,
+      "venue": {
+        "id": "bozar",
+        "name": "Bozar (Palais des Beaux-Arts)",
+        "address": "Rue Ravenstein 23, 1000 Bruxelles",
+        "lat": 50.8424,
+        "lng": 4.3573,
+        "capacity": 2200,
+        "primaryLines": [
+          "1",
+          "5",
+          "92",
+          "93"
+        ],
+        "url": "https://www.bozar.be/",
+        "note": "Centre — métro Gare Centrale / Parc."
+      }
+    },
+    {
+      "id": "bz-cuarteto-casals-2027-01-17",
+      "venueId": "bozar",
+      "title": "Cuarteto Casals — Haydn & Schubert",
+      "date": "2027-01-17",
+      "time": "17:00",
+      "category": "concert",
+      "url": "https://www.bozar.be/fr/calendrier/cuarteto-casals-0",
+      "expectedAttendance": 2200,
+      "venue": {
+        "id": "bozar",
+        "name": "Bozar (Palais des Beaux-Arts)",
+        "address": "Rue Ravenstein 23, 1000 Bruxelles",
+        "lat": 50.8424,
+        "lng": 4.3573,
+        "capacity": 2200,
+        "primaryLines": [
+          "1",
+          "5",
+          "92",
+          "93"
+        ],
+        "url": "https://www.bozar.be/",
+        "note": "Centre — métro Gare Centrale / Parc."
+      }
+    },
+    {
+      "id": "bz-talens-lyriques-2027-01-21",
+      "venueId": "bozar",
+      "title": "Les Talens Lyriques & Christophe Rousset — Pergolesi",
+      "date": "2027-01-21",
+      "time": "20:00",
+      "category": "concert",
+      "url": "https://www.bozar.be/fr/calendrier/les-talens-lyriques-christophe-rousset",
+      "expectedAttendance": 2200,
+      "venue": {
+        "id": "bozar",
+        "name": "Bozar (Palais des Beaux-Arts)",
+        "address": "Rue Ravenstein 23, 1000 Bruxelles",
+        "lat": 50.8424,
+        "lng": 4.3573,
+        "capacity": 2200,
+        "primaryLines": [
+          "1",
+          "5",
+          "92",
+          "93"
+        ],
+        "url": "https://www.bozar.be/",
+        "note": "Centre — métro Gare Centrale / Parc."
+      }
+    },
+    {
+      "id": "bz-lithuanian-2027-01-22",
+      "venueId": "bozar",
+      "title": "Lithuanian National Symphony Orchestra — Wagner, Puccini",
+      "date": "2027-01-22",
+      "time": "20:00",
+      "category": "concert",
+      "url": "https://www.bozar.be/fr/calendrier/lithuanian-national-symphony-orchestra-grigorian-montvidas",
+      "expectedAttendance": 2200,
+      "venue": {
+        "id": "bozar",
+        "name": "Bozar (Palais des Beaux-Arts)",
+        "address": "Rue Ravenstein 23, 1000 Bruxelles",
+        "lat": 50.8424,
+        "lng": 4.3573,
+        "capacity": 2200,
+        "primaryLines": [
+          "1",
+          "5",
+          "92",
+          "93"
+        ],
+        "url": "https://www.bozar.be/",
+        "note": "Centre — métro Gare Centrale / Parc."
+      }
+    },
+    {
+      "id": "bz-bno-hermus-2027-01-24",
+      "venueId": "bozar",
+      "title": "Belgian National Orchestra — Between Fire and Faith",
+      "date": "2027-01-24",
+      "time": "15:00",
+      "category": "concert",
+      "url": "https://www.bozar.be/fr/calendrier/belgian-national-orchestra-hermus-meeuwsen",
+      "expectedAttendance": 2200,
+      "venue": {
+        "id": "bozar",
+        "name": "Bozar (Palais des Beaux-Arts)",
+        "address": "Rue Ravenstein 23, 1000 Bruxelles",
+        "lat": 50.8424,
+        "lng": 4.3573,
+        "capacity": 2200,
+        "primaryLines": [
+          "1",
+          "5",
+          "92",
+          "93"
+        ],
+        "url": "https://www.bozar.be/",
+        "note": "Centre — métro Gare Centrale / Parc."
+      }
+    },
+    {
+      "id": "bz-collegium-vocale-2027-01-31",
+      "venueId": "bozar",
+      "title": "Collegium Vocale Gent & Herreweghe — Bach H-Moll Messe",
+      "date": "2027-01-31",
+      "time": "19:00",
+      "category": "concert",
+      "url": "https://www.bozar.be/fr/calendrier/collegium-vocale-gent-herreweghe",
+      "expectedAttendance": 2200,
+      "venue": {
+        "id": "bozar",
+        "name": "Bozar (Palais des Beaux-Arts)",
+        "address": "Rue Ravenstein 23, 1000 Bruxelles",
+        "lat": 50.8424,
+        "lng": 4.3573,
+        "capacity": 2200,
+        "primaryLines": [
+          "1",
+          "5",
+          "92",
+          "93"
+        ],
+        "url": "https://www.bozar.be/",
+        "note": "Centre — métro Gare Centrale / Parc."
+      }
+    },
+    {
+      "id": "bz-sacre-printemps-2027-02-05",
+      "venueId": "bozar",
+      "title": "Belgian National Orchestra & Halls — Le Sacre du Printemps",
+      "date": "2027-02-05",
+      "time": "20:00",
+      "category": "concert",
+      "url": "https://www.bozar.be/fr/calendrier/belgian-national-orchestra-halls",
+      "expectedAttendance": 2200,
+      "venue": {
+        "id": "bozar",
+        "name": "Bozar (Palais des Beaux-Arts)",
+        "address": "Rue Ravenstein 23, 1000 Bruxelles",
+        "lat": 50.8424,
+        "lng": 4.3573,
+        "capacity": 2200,
+        "primaryLines": [
+          "1",
+          "5",
+          "92",
+          "93"
+        ],
+        "url": "https://www.bozar.be/",
+        "note": "Centre — métro Gare Centrale / Parc."
+      }
+    },
+    {
+      "id": "bz-immersive-cinema-2026-10-06",
+      "venueId": "bozar",
+      "title": "Immersive Cinema 26-27",
+      "date": "2026-10-06",
+      "category": "expo",
+      "expectedAttendance": 800,
+      "url": "https://www.bozar.be/fr/calendrier/immersive-cinema-26-27",
+      "venue": {
+        "id": "bozar",
+        "name": "Bozar (Palais des Beaux-Arts)",
+        "address": "Rue Ravenstein 23, 1000 Bruxelles",
+        "lat": 50.8424,
+        "lng": 4.3573,
+        "capacity": 2200,
+        "primaryLines": [
+          "1",
+          "5",
+          "92",
+          "93"
+        ],
+        "url": "https://www.bozar.be/",
+        "note": "Centre — métro Gare Centrale / Parc."
+      }
+    },
+    {
+      "id": "ing-disney-2026-12-18",
+      "venueId": "ing-arena",
+      "title": "Disney On Ice",
+      "date": "2026-12-18",
+      "time": "19:30",
+      "category": "spectacle",
+      "url": "https://ing.arena.brussels/",
+      "expectedAttendance": 12000,
+      "venue": {
+        "id": "ing-arena",
+        "name": "ING Arena (Palais 12)",
+        "address": "Place de Belgique 1, 1020 Bruxelles",
+        "lat": 50.8987,
+        "lng": 4.3403,
+        "capacity": 12000,
+        "primaryLines": [
+          "6",
+          "7",
+          "51"
+        ],
+        "url": "https://ing.arena.brussels/",
+        "note": "Plateau du Heysel — métro Heysel."
+      }
+    },
+    {
+      "id": "ing-disney-2026-12-19",
+      "venueId": "ing-arena",
+      "title": "Disney On Ice",
+      "date": "2026-12-19",
+      "time": "15:00",
+      "category": "spectacle",
+      "url": "https://ing.arena.brussels/",
+      "expectedAttendance": 12000,
+      "venue": {
+        "id": "ing-arena",
+        "name": "ING Arena (Palais 12)",
+        "address": "Place de Belgique 1, 1020 Bruxelles",
+        "lat": 50.8987,
+        "lng": 4.3403,
+        "capacity": 12000,
+        "primaryLines": [
+          "6",
+          "7",
+          "51"
+        ],
+        "url": "https://ing.arena.brussels/",
+        "note": "Plateau du Heysel — métro Heysel."
+      }
+    },
+    {
+      "id": "ing-disney-2026-12-20",
+      "venueId": "ing-arena",
+      "title": "Disney On Ice",
+      "date": "2026-12-20",
+      "time": "15:00",
+      "category": "spectacle",
+      "url": "https://ing.arena.brussels/",
+      "expectedAttendance": 12000,
+      "venue": {
+        "id": "ing-arena",
+        "name": "ING Arena (Palais 12)",
+        "address": "Place de Belgique 1, 1020 Bruxelles",
+        "lat": 50.8987,
+        "lng": 4.3403,
+        "capacity": 12000,
+        "primaryLines": [
+          "6",
+          "7",
+          "51"
+        ],
+        "url": "https://ing.arena.brussels/",
+        "note": "Plateau du Heysel — métro Heysel."
+      }
+    },
+    {
+      "id": "ing-holiday-on-ice-2027-01-15",
+      "venueId": "ing-arena",
+      "title": "Holiday on Ice — Horizons",
+      "date": "2027-01-15",
+      "time": "20:00",
+      "category": "spectacle",
+      "expectedAttendance": 12000,
+      "venue": {
+        "id": "ing-arena",
+        "name": "ING Arena (Palais 12)",
+        "address": "Place de Belgique 1, 1020 Bruxelles",
+        "lat": 50.8987,
+        "lng": 4.3403,
+        "capacity": 12000,
+        "primaryLines": [
+          "6",
+          "7",
+          "51"
+        ],
+        "url": "https://ing.arena.brussels/",
+        "note": "Plateau du Heysel — métro Heysel."
+      }
+    },
+    {
+      "id": "ing-holiday-on-ice-2027-01-16",
+      "venueId": "ing-arena",
+      "title": "Holiday on Ice — Horizons",
+      "date": "2027-01-16",
+      "time": "20:00",
+      "category": "spectacle",
+      "expectedAttendance": 12000,
+      "venue": {
+        "id": "ing-arena",
+        "name": "ING Arena (Palais 12)",
+        "address": "Place de Belgique 1, 1020 Bruxelles",
+        "lat": 50.8987,
+        "lng": 4.3403,
+        "capacity": 12000,
+        "primaryLines": [
+          "6",
+          "7",
+          "51"
+        ],
+        "url": "https://ing.arena.brussels/",
+        "note": "Plateau du Heysel — métro Heysel."
+      }
+    },
+    {
+      "id": "ing-holiday-on-ice-2027-01-17",
+      "venueId": "ing-arena",
+      "title": "Holiday on Ice — Horizons",
+      "date": "2027-01-17",
+      "time": "15:00",
+      "category": "spectacle",
+      "expectedAttendance": 12000,
+      "venue": {
+        "id": "ing-arena",
+        "name": "ING Arena (Palais 12)",
+        "address": "Place de Belgique 1, 1020 Bruxelles",
+        "lat": 50.8987,
+        "lng": 4.3403,
+        "capacity": 12000,
+        "primaryLines": [
+          "6",
+          "7",
+          "51"
+        ],
+        "url": "https://ing.arena.brussels/",
+        "note": "Plateau du Heysel — métro Heysel."
+      }
+    },
+    {
+      "id": "ing-andre-rieu-2027-02-20",
+      "venueId": "ing-arena",
+      "title": "André Rieu",
+      "date": "2027-02-20",
+      "time": "20:00",
+      "category": "concert",
+      "expectedAttendance": 12000,
+      "venue": {
+        "id": "ing-arena",
+        "name": "ING Arena (Palais 12)",
+        "address": "Place de Belgique 1, 1020 Bruxelles",
+        "lat": 50.8987,
+        "lng": 4.3403,
+        "capacity": 12000,
+        "primaryLines": [
+          "6",
+          "7",
+          "51"
+        ],
+        "url": "https://ing.arena.brussels/",
+        "note": "Plateau du Heysel — métro Heysel."
+      }
+    },
+    {
+      "id": "ing-eric-antoine-2027-03-13",
+      "venueId": "ing-arena",
+      "title": "Eric Antoine",
+      "date": "2027-03-13",
+      "time": "20:00",
+      "category": "spectacle",
+      "expectedAttendance": 12000,
+      "venue": {
+        "id": "ing-arena",
+        "name": "ING Arena (Palais 12)",
+        "address": "Place de Belgique 1, 1020 Bruxelles",
+        "lat": 50.8987,
+        "lng": 4.3403,
+        "capacity": 12000,
+        "primaryLines": [
+          "6",
+          "7",
+          "51"
+        ],
+        "url": "https://ing.arena.brussels/",
+        "note": "Plateau du Heysel — métro Heysel."
+      }
+    },
+    {
+      "id": "fn-stromae-2027-02-12",
+      "venueId": "forest-national",
+      "title": "Stromae (date supplémentaire)",
+      "date": "2027-02-12",
+      "time": "20:00",
+      "category": "concert",
+      "expectedAttendance": 8000,
+      "venue": {
+        "id": "forest-national",
+        "name": "Forest National",
+        "address": "Avenue du Globe 36, 1190 Forest",
+        "lat": 50.8124,
+        "lng": 4.3217,
+        "capacity": 8000,
+        "primaryLines": [
+          "32",
+          "82",
+          "97",
+          "50"
+        ],
+        "url": "https://www.forest-national.be/",
+        "note": "Tram 82, bus 50. Saturé après concerts."
+      }
+    },
+    {
+      "id": "fn-stromae-2027-02-13",
+      "venueId": "forest-national",
+      "title": "Stromae (date supplémentaire)",
+      "date": "2027-02-13",
+      "time": "20:00",
+      "category": "concert",
+      "expectedAttendance": 8000,
+      "venue": {
+        "id": "forest-national",
+        "name": "Forest National",
+        "address": "Avenue du Globe 36, 1190 Forest",
+        "lat": 50.8124,
+        "lng": 4.3217,
+        "capacity": 8000,
+        "primaryLines": [
+          "32",
+          "82",
+          "97",
+          "50"
+        ],
+        "url": "https://www.forest-national.be/",
+        "note": "Tram 82, bus 50. Saturé après concerts."
+      }
+    },
+    {
+      "id": "fn-mika-2027-03-05",
+      "venueId": "forest-national",
+      "title": "Mika",
+      "date": "2027-03-05",
+      "time": "20:00",
+      "category": "concert",
+      "expectedAttendance": 8000,
+      "venue": {
+        "id": "forest-national",
+        "name": "Forest National",
+        "address": "Avenue du Globe 36, 1190 Forest",
+        "lat": 50.8124,
+        "lng": 4.3217,
+        "capacity": 8000,
+        "primaryLines": [
+          "32",
+          "82",
+          "97",
+          "50"
+        ],
+        "url": "https://www.forest-national.be/",
+        "note": "Tram 82, bus 50. Saturé après concerts."
+      }
+    },
+    {
+      "id": "fn-vianney-2027-03-20",
+      "venueId": "forest-national",
+      "title": "Vianney",
+      "date": "2027-03-20",
+      "time": "20:00",
+      "category": "concert",
+      "expectedAttendance": 8000,
+      "venue": {
+        "id": "forest-national",
+        "name": "Forest National",
+        "address": "Avenue du Globe 36, 1190 Forest",
+        "lat": 50.8124,
+        "lng": 4.3217,
+        "capacity": 8000,
+        "primaryLines": [
+          "32",
+          "82",
+          "97",
+          "50"
+        ],
+        "url": "https://www.forest-national.be/",
+        "note": "Tram 82, bus 50. Saturé après concerts."
+      }
+    },
+    {
+      "id": "fn-clara-luciani-2027-04-10",
+      "venueId": "forest-national",
+      "title": "Clara Luciani",
+      "date": "2027-04-10",
+      "time": "20:00",
+      "category": "concert",
+      "expectedAttendance": 8000,
+      "venue": {
+        "id": "forest-national",
+        "name": "Forest National",
+        "address": "Avenue du Globe 36, 1190 Forest",
+        "lat": 50.8124,
+        "lng": 4.3217,
+        "capacity": 8000,
+        "primaryLines": [
+          "32",
+          "82",
+          "97",
+          "50"
+        ],
+        "url": "https://www.forest-national.be/",
+        "note": "Tram 82, bus 50. Saturé après concerts."
+      }
+    },
+    {
+      "id": "lp-rsca-club-brugge-2026-10-25",
+      "venueId": "lotto-park",
+      "title": "RSC Anderlecht vs Club Brugge",
+      "date": "2026-10-25",
+      "time": "18:30",
+      "category": "sport",
+      "expectedAttendance": 21500,
+      "venue": {
+        "id": "lotto-park",
+        "name": "Lotto Park (RSC Anderlecht)",
+        "address": "Avenue Théo Verbeeck 2, 1070 Anderlecht",
+        "lat": 50.8341,
+        "lng": 4.299,
+        "capacity": 21500,
+        "primaryLines": [
+          "5"
+        ],
+        "url": "https://www.rsca.be/",
+        "note": "Stade d'Anderlecht — métro Saint-Guidon."
+      }
+    },
+    {
+      "id": "lp-rsca-standard-2026-11-22",
+      "venueId": "lotto-park",
+      "title": "RSC Anderlecht vs Standard de Liège",
+      "date": "2026-11-22",
+      "time": "20:45",
+      "category": "sport",
+      "expectedAttendance": 21500,
+      "venue": {
+        "id": "lotto-park",
+        "name": "Lotto Park (RSC Anderlecht)",
+        "address": "Avenue Théo Verbeeck 2, 1070 Anderlecht",
+        "lat": 50.8341,
+        "lng": 4.299,
+        "capacity": 21500,
+        "primaryLines": [
+          "5"
+        ],
+        "url": "https://www.rsca.be/",
+        "note": "Stade d'Anderlecht — métro Saint-Guidon."
+      }
+    },
+    {
+      "id": "lp-rsca-genk-2027-01-31",
+      "venueId": "lotto-park",
+      "title": "RSC Anderlecht vs KRC Genk",
+      "date": "2027-01-31",
+      "time": "16:00",
+      "category": "sport",
+      "expectedAttendance": 21500,
+      "venue": {
+        "id": "lotto-park",
+        "name": "Lotto Park (RSC Anderlecht)",
+        "address": "Avenue Théo Verbeeck 2, 1070 Anderlecht",
+        "lat": 50.8341,
+        "lng": 4.299,
+        "capacity": 21500,
+        "primaryLines": [
+          "5"
+        ],
+        "url": "https://www.rsca.be/",
+        "note": "Stade d'Anderlecht — métro Saint-Guidon."
+      }
+    },
+    {
+      "id": "lp-rsca-gantoise-2027-03-14",
+      "venueId": "lotto-park",
+      "title": "RSC Anderlecht vs La Gantoise",
+      "date": "2027-03-14",
+      "time": "16:00",
+      "category": "sport",
+      "expectedAttendance": 21500,
+      "venue": {
+        "id": "lotto-park",
+        "name": "Lotto Park (RSC Anderlecht)",
+        "address": "Avenue Théo Verbeeck 2, 1070 Anderlecht",
+        "lat": 50.8341,
+        "lng": 4.299,
+        "capacity": 21500,
+        "primaryLines": [
+          "5"
+        ],
+        "url": "https://www.rsca.be/",
+        "note": "Stade d'Anderlecht — métro Saint-Guidon."
+      }
+    },
+    {
+      "id": "krb-memorial-van-damme-2026-09-04",
+      "venueId": "king-baudouin-stadium",
+      "title": "Mémorial Van Damme — Wanda Diamond League",
+      "date": "2026-09-04",
+      "time": "20:00",
+      "category": "sport",
+      "expectedAttendance": 50000,
+      "venue": {
+        "id": "king-baudouin-stadium",
+        "name": "Stade Roi Baudouin",
+        "address": "Avenue de Marathon 135, 1020 Bruxelles",
+        "lat": 50.8954,
+        "lng": 4.334,
+        "capacity": 50000,
+        "primaryLines": [
+          "6",
+          "7",
+          "51"
+        ],
+        "url": "https://kingbaudouinstadium.be/",
+        "note": "Matchs Diables Rouges + grands concerts. Heysel."
+      }
+    },
+    {
+      "id": "krb-belgique-pays-bas-2026-11-15",
+      "venueId": "king-baudouin-stadium",
+      "title": "Belgique vs Pays-Bas — Qualif. Coupe du Monde",
+      "date": "2026-11-15",
+      "time": "20:45",
+      "category": "sport",
+      "expectedAttendance": 50000,
+      "venue": {
+        "id": "king-baudouin-stadium",
+        "name": "Stade Roi Baudouin",
+        "address": "Avenue de Marathon 135, 1020 Bruxelles",
+        "lat": 50.8954,
+        "lng": 4.334,
+        "capacity": 50000,
+        "primaryLines": [
+          "6",
+          "7",
+          "51"
+        ],
+        "url": "https://kingbaudouinstadium.be/",
+        "note": "Matchs Diables Rouges + grands concerts. Heysel."
+      }
+    },
+    {
+      "id": "krb-belgique-france-2027-03-27",
+      "venueId": "king-baudouin-stadium",
+      "title": "Belgique vs France — Match amical",
+      "date": "2027-03-27",
+      "time": "20:45",
+      "category": "sport",
+      "expectedAttendance": 50000,
+      "venue": {
+        "id": "king-baudouin-stadium",
+        "name": "Stade Roi Baudouin",
+        "address": "Avenue de Marathon 135, 1020 Bruxelles",
+        "lat": 50.8954,
+        "lng": 4.334,
+        "capacity": 50000,
+        "primaryLines": [
+          "6",
+          "7",
+          "51"
+        ],
+        "url": "https://kingbaudouinstadium.be/",
+        "note": "Matchs Diables Rouges + grands concerts. Heysel."
+      }
+    },
+    {
+      "id": "expo-salon-auto-2027-01-15",
+      "venueId": "atomium-expos",
+      "title": "Brussels Motor Show 2027",
+      "date": "2027-01-15",
+      "category": "festival",
+      "expectedAttendance": 30000,
+      "venue": {
+        "id": "atomium-expos",
+        "name": "Brussels Expo / Atomium",
+        "address": "Place de Belgique 1, 1020 Bruxelles",
+        "lat": 50.8951,
+        "lng": 4.3416,
+        "capacity": 30000,
+        "primaryLines": [
+          "6",
+          "7",
+          "51"
+        ],
+        "url": "https://www.brussels-expo.com/",
+        "note": "Salons & expos — métro Heysel."
+      }
+    },
+    {
+      "id": "expo-batibouw-2027-02-25",
+      "venueId": "atomium-expos",
+      "title": "Batibouw 2027",
+      "date": "2027-02-25",
+      "category": "festival",
+      "expectedAttendance": 25000,
+      "venue": {
+        "id": "atomium-expos",
+        "name": "Brussels Expo / Atomium",
+        "address": "Place de Belgique 1, 1020 Bruxelles",
+        "lat": 50.8951,
+        "lng": 4.3416,
+        "capacity": 30000,
+        "primaryLines": [
+          "6",
+          "7",
+          "51"
+        ],
+        "url": "https://www.brussels-expo.com/",
+        "note": "Salons & expos — métro Heysel."
+      }
+    },
+    {
+      "id": "expo-salon-vacances-2027-02-05",
+      "venueId": "atomium-expos",
+      "title": "Salon des Vacances 2027",
+      "date": "2027-02-05",
+      "category": "festival",
+      "expectedAttendance": 15000,
+      "venue": {
+        "id": "atomium-expos",
+        "name": "Brussels Expo / Atomium",
+        "address": "Place de Belgique 1, 1020 Bruxelles",
+        "lat": 50.8951,
+        "lng": 4.3416,
+        "capacity": 30000,
+        "primaryLines": [
+          "6",
+          "7",
+          "51"
+        ],
+        "url": "https://www.brussels-expo.com/",
+        "note": "Salons & expos — métro Heysel."
+      }
+    }
+  ]
+}

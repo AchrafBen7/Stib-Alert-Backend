@@ -444,6 +444,7 @@ async function buildAssistantContext({ userId = null, lat, lng } = {}) {
 			realtimeStatus: overview.realtimeStatus,
 			nextDepartures: overview.nextDepartures.slice(0, 4),
 			activeIncidentsCount: overview.activeIncidents.length,
+			perturbationSummary: overview.perturbationSummary || null,
 		},
 	};
 }
@@ -454,7 +455,7 @@ async function getHomeBrief({ userId = null, lat, lng } = {}) {
 	const copy = buildHomeCopy(overview);
 	return envelope("home", copy.type, overview.severity, overview.confidence, {
 		title: copy.title,
-		message: copy.message,
+		message: overview.perturbationSummary?.longText || copy.message,
 		shortMessage: copy.title,
 		actions: copy.actions,
 		source: "transport_overview",
@@ -463,6 +464,7 @@ async function getHomeBrief({ userId = null, lat, lng } = {}) {
 			realtimeStatus: overview.realtimeStatus,
 			nextDepartures: overview.nextDepartures.slice(0, 3),
 			activeIncidentsCount: overview.activeIncidents.length,
+			perturbationSummary: overview.perturbationSummary || null,
 		},
 	});
 }
@@ -483,6 +485,7 @@ async function getRouteBrief({ userId = null, depart, destination, lignesBloquee
 			nextDepartures: recommendation.nextDepartures.slice(0, 3),
 			activeIncidentsCount: recommendation.activeIncidents.length,
 			recommendedAlternatives: recommendation.recommendedAlternatives.slice(0, 3),
+			perturbationSummary: recommendation.perturbationSummary || null,
 		},
 	});
 }
@@ -551,6 +554,7 @@ async function getReportHelp({ userId = null, step, stopName, line, problemType,
 			realtimeStatus: context.transport.realtimeStatus,
 			nextDepartures: context.transport.nextDepartures,
 			activeIncidentsCount: context.transport.activeIncidentsCount,
+			perturbationSummary: context.transport.perturbationSummary || null,
 		},
 	});
 }
@@ -595,6 +599,7 @@ async function getCommuteBrief({ userId = null, preferredStopId = null, lat, lng
 				realtimeStatus: context.transport.realtimeStatus,
 				nextDepartures: context.transport.nextDepartures,
 				activeIncidentsCount: context.transport.activeIncidentsCount,
+				perturbationSummary: context.transport.perturbationSummary || null,
 			},
 		});
 	}
@@ -649,6 +654,7 @@ async function getCommuteBrief({ userId = null, preferredStopId = null, lat, lng
 			nextDepartures: recommendation?.nextDepartures || context.transport.nextDepartures,
 			activeIncidentsCount: recommendation?.activeIncidents?.length ?? context.transport.activeIncidentsCount,
 			recommendedAlternatives: recommendation?.recommendedAlternatives?.slice(0, 3) || null,
+			perturbationSummary: recommendation?.perturbationSummary || context.transport.perturbationSummary || null,
 			commuteDecision: timing.decision,
 			briefingStage: timing.stage,
 			minutesUntilDeparture,
@@ -758,6 +764,7 @@ async function getCommandReply({ userId = null, message, screen = "home", lat, l
 			realtimeStatus: context.transport.realtimeStatus,
 			nextDepartures: context.transport.nextDepartures,
 			activeIncidentsCount: context.transport.activeIncidentsCount,
+			perturbationSummary: context.transport.perturbationSummary || null,
 		},
 	});
 }

@@ -17,6 +17,8 @@ const {
 	severityFromSignalement,
 	summarizeSeverity,
 } = require("./transportSeverity");
+const { buildPerturbationSummary } = require("./perturbationSummaryService");
+const { buildCrowdingRisk } = require("./eventCrowdingService");
 
 const TTL = {
 	waitingTimes: 20_000,
@@ -323,6 +325,31 @@ async function getTransportStop(stopId) {
 
 		const nextDepartures = summarizeDepartures(waitingTimes.items);
 		const severityInfo = computeRealtimeStatus({ incidents: activeIncidents, departures: nextDepartures });
+		const officialDataStatus = mergeOfficialStatuses([
+			waitingTimesResult.officialDataStatus,
+			officialIncidentsResult.officialDataStatus,
+		]);
+		const officialDataMessage = firstOfficialMessage([
+			waitingTimesResult.officialDataMessage,
+			officialIncidentsResult.officialDataMessage,
+		]);
+		const perturbationSummary = buildPerturbationSummary({
+			severity: severityInfo.severity,
+			incidents: activeIncidents,
+			departures: nextDepartures,
+			officialDataStatus,
+			officialDataMessage,
+			crowdingRisk: buildCrowdingRisk({
+				stop: {
+					name: stop.nom,
+					latitude: stop.latitude ?? null,
+					longitude: stop.longitude ?? null,
+					lines: stop.lignesDesservies || [],
+				},
+				lines: stop.lignesDesservies || [],
+				stopNames: [stop.nom],
+			}),
+		});
 
 		return {
 			stop: {
@@ -334,14 +361,9 @@ async function getTransportStop(stopId) {
 				lines: stop.lignesDesservies || [],
 			},
 			...severityInfo,
-			officialDataStatus: mergeOfficialStatuses([
-				waitingTimesResult.officialDataStatus,
-				officialIncidentsResult.officialDataStatus,
-			]),
-			officialDataMessage: firstOfficialMessage([
-				waitingTimesResult.officialDataMessage,
-				officialIncidentsResult.officialDataMessage,
-			]),
+			officialDataStatus,
+			officialDataMessage,
+			perturbationSummary,
 			activeIncidents,
 			nextDepartures,
 			recommendedAlternatives: [],
@@ -398,6 +420,34 @@ async function getTransportLine(lineId) {
 
 		const nextDepartures = summarizeDepartures(waitingTimes.items, lineId);
 		const severityInfo = computeRealtimeStatus({ incidents: activeIncidents, departures: nextDepartures });
+		const officialDataStatus = mergeOfficialStatuses([
+			waitingTimesResult.officialDataStatus,
+			vehiclesResult.officialDataStatus,
+			officialIncidentsResult.officialDataStatus,
+		]);
+		const officialDataMessage = firstOfficialMessage([
+			waitingTimesResult.officialDataMessage,
+			vehiclesResult.officialDataMessage,
+			officialIncidentsResult.officialDataMessage,
+		]);
+		const perturbationSummary = buildPerturbationSummary({
+			severity: severityInfo.severity,
+			incidents: activeIncidents,
+			departures: nextDepartures,
+			officialDataStatus,
+			officialDataMessage,
+			crowdingRisk: buildCrowdingRisk({
+				lineId,
+				lines: [lineId],
+				stops: stops.map((stop) => ({
+					name: stop.nom,
+					latitude: stop.latitude ?? null,
+					longitude: stop.longitude ?? null,
+					lines: stop.lignesDesservies || [],
+				})),
+				stopNames: stops.map((stop) => stop.nom),
+			}),
+		});
 
 		return {
 			line: {
@@ -414,16 +464,9 @@ async function getTransportLine(lineId) {
 				})),
 			},
 			...severityInfo,
-			officialDataStatus: mergeOfficialStatuses([
-				waitingTimesResult.officialDataStatus,
-				vehiclesResult.officialDataStatus,
-				officialIncidentsResult.officialDataStatus,
-			]),
-			officialDataMessage: firstOfficialMessage([
-				waitingTimesResult.officialDataMessage,
-				vehiclesResult.officialDataMessage,
-				officialIncidentsResult.officialDataMessage,
-			]),
+			officialDataStatus,
+			officialDataMessage,
+			perturbationSummary,
 			activeIncidents,
 			nextDepartures,
 			vehicles: vehicles.items.slice(0, 50),
@@ -466,6 +509,34 @@ async function getTransportOverview({ lat, lng } = {}) {
 				...overviewStops.map((stop) => ({ severity: stop.severity, confidence: stop.confidence })),
 				...activeIncidents,
 			]);
+			const officialDataStatus = mergeOfficialStatuses([
+				officialIncidentsResult.officialDataStatus,
+				...overviewStops.map((stop) => stop.officialDataStatus),
+			]);
+			const officialDataMessage = firstOfficialMessage([
+				officialIncidentsResult.officialDataMessage,
+				...overviewStops.map((stop) => stop.officialDataMessage),
+			]);
+			const nextDepartures = overviewStops.flatMap((stop) => stop.nextDepartures).slice(0, 8);
+			const perturbationSummary = buildPerturbationSummary({
+				severity: severityInfo.severity,
+				incidents: activeIncidents,
+				departures: nextDepartures,
+				officialDataStatus,
+				officialDataMessage,
+				crowdingRisk: buildCrowdingRisk({
+					lat: typeof lat === "number" ? lat : null,
+					lng: typeof lng === "number" ? lng : null,
+					stops: overviewStops.map((stop) => ({
+						name: stop.stop.name,
+						latitude: stop.stop.latitude ?? null,
+						longitude: stop.stop.longitude ?? null,
+						lines: stop.stop.lines || [],
+					})),
+					lines: overviewStops.flatMap((stop) => stop.stop.lines || []),
+					stopNames: overviewStops.map((stop) => stop.stop.name),
+				}),
+			});
 
 			return {
 				context: {
@@ -474,17 +545,12 @@ async function getTransportOverview({ lat, lng } = {}) {
 				},
 				...severityInfo,
 				realtimeStatus: severityInfo.realtimeStatus,
-				officialDataStatus: mergeOfficialStatuses([
-					officialIncidentsResult.officialDataStatus,
-					...overviewStops.map((stop) => stop.officialDataStatus),
-				]),
-				officialDataMessage: firstOfficialMessage([
-					officialIncidentsResult.officialDataMessage,
-					...overviewStops.map((stop) => stop.officialDataMessage),
-				]),
+				officialDataStatus,
+				officialDataMessage,
+				perturbationSummary,
 				activeIncidents,
 				stops: overviewStops.map((stop) => stop.stop),
-				nextDepartures: overviewStops.flatMap((stop) => stop.nextDepartures).slice(0, 8),
+				nextDepartures,
 				recommendedAlternatives: [],
 			};
 		}
@@ -564,20 +630,35 @@ async function recommendRoute({ depart, destination, lignesBloquees = [] }) {
 		requestDate,
 	});
 	const severityInfo = summarizeSeverity(scoring.scoredRoutes[0]?.incidents || incidents);
+	const officialDataStatus = mergeOfficialStatuses([
+		officialIncidentsResult.officialDataStatus,
+		waitingTimesResult.officialDataStatus,
+	]);
+	const officialDataMessage = firstOfficialMessage([
+		officialIncidentsResult.officialDataMessage,
+		waitingTimesResult.officialDataMessage,
+	]);
+	const nextDepartures = departures.slice(0, 6);
+	const perturbationSummary = buildPerturbationSummary({
+		severity: severityInfo.severity,
+		incidents: incidents.slice(0, 10),
+		departures: nextDepartures,
+		officialDataStatus,
+		officialDataMessage,
+		crowdingRisk: buildCrowdingRisk({
+			lines: allLines,
+			stopNames: routes.flatMap(collectTransitStops),
+		}),
+	});
 
 	return {
 		request: { depart, destination, lignesBloquees },
 		...severityInfo,
-		officialDataStatus: mergeOfficialStatuses([
-			officialIncidentsResult.officialDataStatus,
-			waitingTimesResult.officialDataStatus,
-		]),
-		officialDataMessage: firstOfficialMessage([
-			officialIncidentsResult.officialDataMessage,
-			waitingTimesResult.officialDataMessage,
-		]),
+		officialDataStatus,
+		officialDataMessage,
+		perturbationSummary,
 		activeIncidents: incidents.slice(0, 10),
-		nextDepartures: departures.slice(0, 6),
+		nextDepartures,
 		recommendedAlternatives: scoring.alternatives,
 	};
 }
