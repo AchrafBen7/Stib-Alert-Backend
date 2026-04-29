@@ -394,24 +394,11 @@ async function getTransportLine(lineId) {
 			const variants = await Ligne.find({ lineid: { $regex: `^${candidates[0]}:` } }).populate("points.id").lean();
 			if (variants.length) {
 				const primary = variants.find((variant) => variant.direction === "City") || variants[0];
-				const stopMap = new Map();
-				variants.forEach((variant) => {
-					(variant.points || []).forEach((point) => {
-						const stop = point.id;
-						if (!stop?._id) return;
-						const key = String(stop._id);
-						const existing = stopMap.get(key);
-						if (!existing || point.order < existing.order) {
-							stopMap.set(key, {
-								stop,
-								order: point.order,
-							});
-						}
-					});
-				});
-				mergedStops = [...stopMap.values()]
+				mergedStops = (primary.points || [])
+					.slice()
 					.sort((a, b) => a.order - b.order)
-					.map((entry) => entry.stop);
+					.map((point) => point.id)
+					.filter(Boolean);
 				line = {
 					...primary,
 					lineid: candidates[0],
