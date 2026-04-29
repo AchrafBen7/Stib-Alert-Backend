@@ -1,3 +1,4 @@
+const mongoose = require("mongoose");
 const Arret = require("../models/Arret");
 const Ligne = require("../models/Ligne");
 const Signalement = require("../models/Signalement");
@@ -296,7 +297,11 @@ function computeRealtimeStatus({ incidents, departures }) {
 
 async function getTransportStop(stopId) {
 	return cache.remember(stableKey("transport-stop", { stopId }), TTL.stopOverview, async () => {
-		const stop = await Arret.findById(stopId).lean();
+		const stopLookup = [{ merged_stop_id: String(stopId) }, { stop_id: String(stopId) }];
+		if (mongoose.isValidObjectId(stopId)) {
+			stopLookup.unshift({ _id: stopId });
+		}
+		const stop = await Arret.findOne({ $or: stopLookup }).lean();
 		if (!stop) {
 			const error = new Error("Arrêt introuvable.");
 			error.status = 404;
@@ -405,7 +410,7 @@ async function getTransportLine(lineId) {
 					});
 				});
 				mergedStops = [...stopMap.values()]
-					sort((a, b) => a.order - b.order)
+					.sort((a, b) => a.order - b.order)
 					.map((entry) => entry.stop);
 				line = {
 					...primary,

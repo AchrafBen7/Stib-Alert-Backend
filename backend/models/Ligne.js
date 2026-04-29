@@ -17,6 +17,7 @@ const ligneSchema = new mongoose.Schema({
 			order: { type: Number, required: true },
 		},
 	],
+	sourceDataset: { type: String },
 });
 
 module.exports = mongoose.model("Ligne", ligneSchema);
