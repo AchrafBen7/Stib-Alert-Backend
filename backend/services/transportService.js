@@ -49,6 +49,13 @@ function normalizeLine(line) {
 	return String(line || "").trim();
 }
 
+function lineCandidates(lineId) {
+	const normalized = normalizeLine(lineId);
+	if (!normalized) return [];
+	const base = normalized.split(":")[0];
+	return [...new Set([normalized, base])];
+}
+
 function toMinutes(value) {
 	if (typeof value === "number" && Number.isFinite(value)) return Math.max(Math.round(value), 0);
 	if (typeof value !== "string") return null;
@@ -373,14 +380,48 @@ async function getTransportStop(stopId) {
 
 async function getTransportLine(lineId) {
 	return cache.remember(stableKey("transport-line", { lineId }), TTL.lineOverview, async () => {
-		const line = await Ligne.findOne({ lineid: lineId }).populate("points.id").lean();
+		const candidates = lineCandidates(lineId);
+		const exactLine = await Ligne.findOne({ lineid: { $in: candidates } }).populate("points.id").lean();
+		let line = exactLine;
+		let mergedStops = null;
+
+		if (!line) {
+			const variants = await Ligne.find({ lineid: { $regex: `^${candidates[0]}:` } }).populate("points.id").lean();
+			if (variants.length) {
+				const primary = variants.find((variant) => variant.direction === "City") || variants[0];
+				const stopMap = new Map();
+				variants.forEach((variant) => {
+					(variant.points || []).forEach((point) => {
+						const stop = point.id;
+						if (!stop?._id) return;
+						const key = String(stop._id);
+						const existing = stopMap.get(key);
+						if (!existing || point.order < existing.order) {
+							stopMap.set(key, {
+								stop,
+								order: point.order,
+							});
+						}
+					});
+				});
+				mergedStops = [...stopMap.values()]
+					sort((a, b) => a.order - b.order)
+					.map((entry) => entry.stop);
+				line = {
+					...primary,
+					lineid: candidates[0],
+					points: mergedStops.map((stop, index) => ({ id: stop, order: index + 1 })),
+				};
+			}
+		}
+
 		if (!line) {
 			const error = new Error("Ligne introuvable.");
 			error.status = 404;
 			throw error;
 		}
 
-		const stops = line.points
+		const stops = mergedStops || line.points
 			.slice()
 			.sort((a, b) => a.order - b.order)
 			.map((point) => point.id)
