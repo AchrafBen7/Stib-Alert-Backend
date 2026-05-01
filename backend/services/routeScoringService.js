@@ -269,12 +269,16 @@ function buildShapeIndex(shapeFiles = []) {
 	for (const shape of shapeFiles) {
 		const line = normalizeLine(shape.line);
 		if (!line) continue;
-		const coords = (shape.polylines || []).flatMap((polyline) =>
-			(polyline || []).map((pair) => ({ lat: pair[1], lng: pair[0] }))
-		).filter((coord) => Number.isFinite(coord.lat) && Number.isFinite(coord.lng));
-		if (!coords.length) continue;
+		const polylines = (shape.polylines || [])
+			.map((polyline) =>
+				(polyline || [])
+					.map((pair) => ({ lat: pair[1], lng: pair[0] }))
+					.filter((coord) => Number.isFinite(coord.lat) && Number.isFinite(coord.lng))
+			)
+			.filter((coords) => coords.length > 1);
+		if (!polylines.length) continue;
 		const current = index.get(line) || [];
-		current.push(...coords);
+		current.push(...polylines);
 		index.set(line, current);
 	}
 	return index;
@@ -306,23 +310,38 @@ function findClosestCoordinateIndex(coords = [], target = null) {
 }
 
 function buildStepPathFromShape(line, startPoint, endPoint, shapeIndex) {
-	const coords = shapeIndex.get(normalizeLine(line)) || [];
-	if (!coords.length || !startPoint || !endPoint) {
+	const polylines = shapeIndex.get(normalizeLine(line)) || [];
+	if (!polylines.length || !startPoint || !endPoint) {
 		return dedupeCoordinates([startPoint, endPoint].filter(Boolean));
 	}
 
-	const startIndex = findClosestCoordinateIndex(coords, startPoint);
-	const endIndex = findClosestCoordinateIndex(coords, endPoint);
-	if (startIndex < 0 || endIndex < 0) {
-		return dedupeCoordinates([startPoint, endPoint].filter(Boolean));
+	let bestPath = null;
+	let bestScore = Number.POSITIVE_INFINITY;
+
+	for (const coords of polylines) {
+		const startIndex = findClosestCoordinateIndex(coords, startPoint);
+		const endIndex = findClosestCoordinateIndex(coords, endPoint);
+		if (startIndex < 0 || endIndex < 0) continue;
+
+		const startDistance = distanceMeters(coords[startIndex], startPoint);
+		const endDistance = distanceMeters(coords[endIndex], endPoint);
+		const slice = startIndex <= endIndex
+			? coords.slice(startIndex, endIndex + 1)
+			: coords.slice(endIndex, startIndex + 1).reverse();
+		const path = dedupeCoordinates([startPoint, ...slice, endPoint]);
+		if (path.length < 2) continue;
+
+		const score = startDistance + endDistance;
+		if (score < bestScore) {
+			bestScore = score;
+			bestPath = path;
+		}
 	}
 
-	const slice = startIndex <= endIndex
-		? coords.slice(startIndex, endIndex + 1)
-		: coords.slice(endIndex, startIndex + 1).reverse();
-
-	const path = dedupeCoordinates([startPoint, ...slice, endPoint]);
-	return path.length >= 2 ? path : dedupeCoordinates([startPoint, endPoint].filter(Boolean));
+	if (!bestPath) {
+		return dedupeCoordinates([startPoint, endPoint].filter(Boolean));
+	}
+	return bestPath;
 }
 
 function computeCorridorGeographicPenalty(routeCoords, incidents) {

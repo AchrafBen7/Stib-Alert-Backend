@@ -10,6 +10,10 @@ const openai = new OpenAI({
  * ✅ 1. Analyse un signalement pour détecter du spam ou des propos inappropriés.
  */
 exports.analyserSignalement = async (description) => {
+	if (!process.env.OPENAI_API_KEY) {
+		return true;
+	}
+
 	try {
 		const prompt = `Analyse ce texte et détermine s’il contient des propos inappropriés, du spam ou une fausse alerte : "${description}". Répond uniquement par "Valide" ou "Non Valide".`;
 
@@ -22,7 +26,7 @@ exports.analyserSignalement = async (description) => {
 		return response.choices[0].message.content.trim() === "Valide";
 	} catch (error) {
 		console.error("Erreur OpenAI :", error);
-		return false; // En cas d'échec, on rejette le signalement
+		return true; // En cas d'échec, on n'empêche pas un signalement réel
 	}
 };
 
