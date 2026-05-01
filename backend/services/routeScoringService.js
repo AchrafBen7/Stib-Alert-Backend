@@ -295,6 +295,66 @@ function dedupeCoordinates(coords = []) {
 	});
 }
 
+function decodeGooglePolyline(encoded = "") {
+	if (!encoded || typeof encoded !== "string") return [];
+
+	let index = 0;
+	let lat = 0;
+	let lng = 0;
+	const coordinates = [];
+
+	while (index < encoded.length) {
+		let result = 0;
+		let shift = 0;
+		let byte = null;
+
+		do {
+			byte = encoded.charCodeAt(index++) - 63;
+			result |= (byte & 0x1f) << shift;
+			shift += 5;
+		} while (byte >= 0x20 && index < encoded.length + 1);
+
+		const deltaLat = (result & 1) ? ~(result >> 1) : (result >> 1);
+		lat += deltaLat;
+
+		result = 0;
+		shift = 0;
+		do {
+			byte = encoded.charCodeAt(index++) - 63;
+			result |= (byte & 0x1f) << shift;
+			shift += 5;
+		} while (byte >= 0x20 && index < encoded.length + 1);
+
+		const deltaLng = (result & 1) ? ~(result >> 1) : (result >> 1);
+		lng += deltaLng;
+
+		coordinates.push({
+			lat: lat / 1e5,
+			lng: lng / 1e5,
+		});
+	}
+
+	return dedupeCoordinates(coordinates);
+}
+
+function buildStepPathFromGoogle(step, startPoint, endPoint) {
+	const encoded = step?.polyline?.points;
+	if (!encoded) {
+		return null;
+	}
+
+	const decoded = decodeGooglePolyline(encoded);
+	if (!decoded.length) {
+		return null;
+	}
+
+	return dedupeCoordinates([
+		startPoint,
+		...decoded,
+		endPoint,
+	].filter(Boolean));
+}
+
 function findClosestCoordinateIndex(coords = [], target = null) {
 	if (!coords.length || !target) return -1;
 	let bestIndex = -1;
@@ -598,6 +658,7 @@ function buildRouteSteps(route, shapeIndex = new Map()) {
 				const endPoint = step.end_location?.lat != null && step.end_location?.lng != null
 					? { lat: step.end_location.lat, lng: step.end_location.lng }
 					: null;
+				const googlePath = buildStepPathFromGoogle(step, startPoint, endPoint);
 			steps.push({
 					order: order++,
 					mode: "walk",
@@ -612,7 +673,7 @@ function buildRouteSteps(route, shapeIndex = new Map()) {
 					startLongitude: step.start_location?.lng ?? null,
 					targetLatitude: step.end_location?.lat ?? null,
 					targetLongitude: step.end_location?.lng ?? null,
-					path: dedupeCoordinates([startPoint, endPoint].filter(Boolean)),
+					path: googlePath || dedupeCoordinates([startPoint, endPoint].filter(Boolean)),
 				});
 				continue;
 			}
@@ -625,6 +686,7 @@ function buildRouteSteps(route, shapeIndex = new Map()) {
 				const endPoint = step.end_location?.lat != null && step.end_location?.lng != null
 					? { lat: step.end_location.lat, lng: step.end_location.lng }
 					: null;
+				const googlePath = buildStepPathFromGoogle(step, startPoint, endPoint);
 				steps.push({
 					order: order++,
 					mode: "bike",
@@ -639,7 +701,7 @@ function buildRouteSteps(route, shapeIndex = new Map()) {
 					startLongitude: step.start_location?.lng ?? null,
 					targetLatitude: step.end_location?.lat ?? null,
 					targetLongitude: step.end_location?.lng ?? null,
-					path: dedupeCoordinates([startPoint, endPoint].filter(Boolean)),
+					path: googlePath || dedupeCoordinates([startPoint, endPoint].filter(Boolean)),
 				});
 				continue;
 			}
@@ -668,6 +730,7 @@ function buildRouteSteps(route, shapeIndex = new Map()) {
 					: step.end_location?.lat != null && step.end_location?.lng != null
 						? { lat: step.end_location.lat, lng: step.end_location.lng }
 						: null;
+				const googlePath = buildStepPathFromGoogle(step, startPoint, endPoint);
 
 				steps.push({
 					order: order++,
@@ -683,7 +746,7 @@ function buildRouteSteps(route, shapeIndex = new Map()) {
 					startLongitude: details.departure_stop?.location?.lng ?? step.start_location?.lng ?? null,
 					targetLatitude: details.arrival_stop?.location?.lat ?? step.end_location?.lat ?? null,
 					targetLongitude: details.arrival_stop?.location?.lng ?? step.end_location?.lng ?? null,
-					path: buildStepPathFromShape(line, startPoint, endPoint, shapeIndex),
+					path: googlePath || buildStepPathFromShape(line, startPoint, endPoint, shapeIndex),
 				});
 			}
 		}
