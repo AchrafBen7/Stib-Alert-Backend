@@ -827,12 +827,14 @@ function scoreRoutes({ routes, incidents, departures, lignesBloquees = [], shape
 		{ type: "least_walking", label: "Moins de marche", data: leastWalking },
 		...(bikeRoute ? [{ type: "bike", label: "Alternative velo", data: bikeRoute }] : []),
 		...(walkRoute ? [{ type: "walk", label: "Alternative a pied", data: walkRoute }] : []),
-		...scored.slice(1, 3).map((item, index) => ({
+		...scored.slice(1, 6).map((item, index) => ({
 			type: `alternative_${index + 1}`,
 			label: `Alternative ${index + 1}`,
 			data: item,
 		})),
-	]).map((entry) => ({
+	])
+		.slice(0, Math.max(5, Math.min(scored.length, 8)))
+		.map((entry) => ({
 		type: entry.type,
 		label: entry.label,
 		score: Number(entry.data.score.toFixed(2)),
