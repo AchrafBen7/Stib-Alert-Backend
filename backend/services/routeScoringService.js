@@ -285,14 +285,29 @@ function buildShapeIndex(shapeFiles = []) {
 }
 
 function dedupeCoordinates(coords = []) {
-	const seen = new Set();
-	return coords.filter((coord) => {
-		if (!Number.isFinite(coord?.lat) || !Number.isFinite(coord?.lng)) return false;
-		const key = `${coord.lat.toFixed(6)}:${coord.lng.toFixed(6)}`;
-		if (seen.has(key)) return false;
-		seen.add(key);
-		return true;
-	});
+	const cleaned = [];
+	for (const coord of coords) {
+		if (!Number.isFinite(coord?.lat) || !Number.isFinite(coord?.lng)) continue;
+		const previous = cleaned[cleaned.length - 1];
+		if (
+			previous
+			&& previous.lat.toFixed(6) === coord.lat.toFixed(6)
+			&& previous.lng.toFixed(6) === coord.lng.toFixed(6)
+		) {
+			continue;
+		}
+		cleaned.push(coord);
+	}
+	return cleaned;
+}
+
+function polylineDistanceMeters(coords = []) {
+	if (coords.length < 2) return 0;
+	let total = 0;
+	for (let index = 1; index < coords.length; index += 1) {
+		total += distanceMeters(coords[index - 1], coords[index]);
+	}
+	return total;
 }
 
 function decodeGooglePolyline(encoded = "") {
@@ -402,6 +417,31 @@ function buildStepPathFromShape(line, startPoint, endPoint, shapeIndex) {
 		return dedupeCoordinates([startPoint, endPoint].filter(Boolean));
 	}
 	return bestPath;
+}
+
+function chooseTransitPath({ googlePath, shapePath, startPoint, endPoint }) {
+	const directPath = dedupeCoordinates([startPoint, endPoint].filter(Boolean));
+	const directDistance = polylineDistanceMeters(directPath);
+	const googleDistance = polylineDistanceMeters(googlePath);
+	const shapeDistance = polylineDistanceMeters(shapePath);
+
+	const shapeLooksDetailed =
+		shapePath?.length > 6
+		&& shapeDistance > directDistance * 1.08;
+	const googleLooksDetailed =
+		googlePath?.length > 4
+		&& googleDistance > directDistance * 1.04;
+
+	if (shapeLooksDetailed) {
+		return shapePath;
+	}
+	if (googleLooksDetailed) {
+		return googlePath;
+	}
+	if (shapePath?.length > googlePath?.length) {
+		return shapePath;
+	}
+	return googlePath || shapePath || directPath;
 }
 
 function computeCorridorGeographicPenalty(routeCoords, incidents) {
@@ -731,6 +771,7 @@ function buildRouteSteps(route, shapeIndex = new Map()) {
 						? { lat: step.end_location.lat, lng: step.end_location.lng }
 						: null;
 				const googlePath = buildStepPathFromGoogle(step, startPoint, endPoint);
+				const shapePath = buildStepPathFromShape(line, startPoint, endPoint, shapeIndex);
 
 				steps.push({
 					order: order++,
@@ -746,7 +787,7 @@ function buildRouteSteps(route, shapeIndex = new Map()) {
 					startLongitude: details.departure_stop?.location?.lng ?? step.start_location?.lng ?? null,
 					targetLatitude: details.arrival_stop?.location?.lat ?? step.end_location?.lat ?? null,
 					targetLongitude: details.arrival_stop?.location?.lng ?? step.end_location?.lng ?? null,
-					path: googlePath || buildStepPathFromShape(line, startPoint, endPoint, shapeIndex),
+					path: chooseTransitPath({ googlePath, shapePath, startPoint, endPoint }),
 				});
 			}
 		}
