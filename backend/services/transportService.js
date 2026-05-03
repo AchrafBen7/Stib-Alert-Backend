@@ -224,6 +224,61 @@ function firstOfficialMessage(messages = []) {
 	return messages.find(Boolean) || null;
 }
 
+function getStaleCachedValue(key) {
+	return cache.get(key, { allowStale: true })?.value || null;
+}
+
+function hasTransitAlternatives(recommendation) {
+	return Array.isArray(recommendation?.recommendedAlternatives)
+		&& recommendation.recommendedAlternatives.some((alternative) => Array.isArray(alternative.lines) && alternative.lines.length > 0);
+}
+
+function buildDegradedRouteResponse({
+	depart,
+	destination,
+	lignesBloquees,
+	officialDataStatus,
+	officialDataMessage,
+	message,
+}) {
+	return {
+		request: { depart, destination, lignesBloquees },
+		severity: SEVERITY.MINOR,
+		confidence: 0.55,
+		realtimeStatus: "fallback",
+		officialDataStatus,
+		officialDataMessage,
+		activeIncidents: [],
+		nextDepartures: [],
+		recommendedAlternatives: [],
+		fallback: {
+			reason: "directions_unavailable",
+			message,
+		},
+	};
+}
+
+function buildStaleRouteRecommendation({
+	staleRecommendation,
+	officialDataStatus,
+	officialDataMessage,
+	message,
+}) {
+	return {
+		...staleRecommendation,
+		realtimeStatus: staleRecommendation?.realtimeStatus === "stable" ? "limited" : (staleRecommendation?.realtimeStatus || "limited"),
+		officialDataStatus: mergeOfficialStatuses([
+			staleRecommendation?.officialDataStatus,
+			officialDataStatus,
+		]),
+		officialDataMessage: officialDataMessage || staleRecommendation?.officialDataMessage || null,
+		fallback: {
+			reason: "stale_route_reused",
+			message,
+		},
+	};
+}
+
 async function getCachedDirections(query) {
 	return cache.remember(
 		stableKey("google-directions", query),
@@ -615,6 +670,7 @@ async function recommendRoute({ depart, destination, lignesBloquees = [] }) {
 		destination: roundedCoordinateString(destination) || destination,
 		lignesBloquees: [...new Set((lignesBloquees || []).map(normalizeLine).filter(Boolean))].sort(),
 	});
+	const staleRecommendation = getStaleCachedValue(routeCacheKey);
 
 	return cache.remember(routeCacheKey, TTL.routeRecommend, async () => {
 		const [transitRoutes, walkingRoutes, bikingRoutes, officialIncidentsResult] = await Promise.all([
@@ -631,21 +687,23 @@ async function recommendRoute({ depart, destination, lignesBloquees = [] }) {
 		];
 
 		if (!routes.length) {
-			return {
-				request: { depart, destination, lignesBloquees },
-				severity: SEVERITY.MINOR,
-				confidence: 0.55,
-				realtimeStatus: "fallback",
+			if (hasTransitAlternatives(staleRecommendation)) {
+				return buildStaleRouteRecommendation({
+					staleRecommendation,
+					officialDataStatus: officialIncidentsResult.officialDataStatus,
+					officialDataMessage: officialIncidentsResult.officialDataMessage,
+					message: "Les calculs live sont temporairement limites. Affichage du dernier meilleur itineraire connu.",
+				});
+			}
+
+			return buildDegradedRouteResponse({
+				depart,
+				destination,
+				lignesBloquees,
 				officialDataStatus: officialIncidentsResult.officialDataStatus,
 				officialDataMessage: officialIncidentsResult.officialDataMessage,
-				activeIncidents: [],
-				nextDepartures: [],
-				recommendedAlternatives: [],
-				fallback: {
-					reason: "directions_unavailable",
-					message: "Les alternatives temps réel sont temporairement indisponibles. Vérifie les perturbations proches avant de partir.",
-				},
-			};
+				message: "Les alternatives temps reel sont temporairement indisponibles. Verifie les perturbations proches avant de partir.",
+			});
 		}
 
 		const allLines = [...new Set(routes.flatMap(extractTransitLines))];
@@ -713,7 +771,7 @@ async function recommendRoute({ depart, destination, lignesBloquees = [] }) {
 			}),
 		});
 
-		return {
+		const recommendation = {
 			request: { depart, destination, lignesBloquees },
 			...severityInfo,
 			officialDataStatus,
@@ -723,6 +781,17 @@ async function recommendRoute({ depart, destination, lignesBloquees = [] }) {
 			nextDepartures,
 			recommendedAlternatives: scoring.alternatives,
 		};
+
+		if (!hasTransitAlternatives(recommendation) && hasTransitAlternatives(staleRecommendation)) {
+			return buildStaleRouteRecommendation({
+				staleRecommendation,
+				officialDataStatus,
+				officialDataMessage: officialDataMessage || "Les enrichissements temps reel sont limites. Affichage du dernier trajet transport fiable.",
+				message: "Le calcul live manque de donnees transport. Affichage du dernier itineraire transport fiable.",
+			});
+		}
+
+		return recommendation;
 	});
 }
 
