@@ -56,6 +56,8 @@ function buildSignalementFromItem(item) {
 
 	return {
 		source: "stib_officiel",
+		authorType: "official",
+		moderationStatus: "approved",
 		externalId: String(item.id),
 		ligne: firstLine,
 		typeProbleme,

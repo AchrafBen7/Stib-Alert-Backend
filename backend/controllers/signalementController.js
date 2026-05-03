@@ -19,6 +19,11 @@ const parsePagination = (req) => {
 	return { page, limit, skip: (page - 1) * limit };
 };
 
+const visibleSignalementQuery = (query = {}) => ({
+	...query,
+	moderationStatus: "approved",
+});
+
 const serializeSignalement = (signalement) => {
 	const raw = typeof signalement.toObject === "function" ? signalement.toObject() : signalement;
 	return {
@@ -149,10 +154,16 @@ exports.ajouterSignalement = async (req, res) => {
 			else if (distance < 1) confiance = "moyenne"; // 🤔 Entre 200m et 1km → Acceptable
 		}
 
+		const isAuthenticatedAuthor = Boolean(req.user?.userId);
+		const moderationStatus = isAuthenticatedAuthor ? "approved" : "pending";
+		const authorType = isAuthenticatedAuthor ? "authenticated" : "anonymous";
+
 		// 🔹 Création du signalement avec "confiance"
 		const signalement = await Signalement.create({
 			utilisateurId: req.user?.userId,
 			arretId: arret._id,
+			authorType,
+			moderationStatus,
 			ligne,
 			typeProbleme,
 			description,
@@ -168,7 +179,9 @@ exports.ajouterSignalement = async (req, res) => {
 			.catch((pushError) => console.warn("[assistant incident push]", pushError.message));
 
 		res.status(201).json({
-			message: "Signalement ajouté avec succès.",
+			message: moderationStatus === "pending"
+				? "Signalement reçu. Il sera vérifié avant diffusion."
+				: "Signalement ajouté avec succès.",
 			signalement: {
 				...serializeSignalement(signalement),
 				dateSignalementLisible: moment(signalement.dateSignalement).format("YYYY-MM-DD HH:mm"),
@@ -190,7 +203,7 @@ exports.voirUnSignalementParArret = async (req, res) => {
 		}
 
 		// Chercher le signalement lié à cet arrêt
-		const signalement = await Signalement.findOne({ _id: signalementId, arretId });
+		const signalement = await Signalement.findOne(visibleSignalementQuery({ _id: signalementId, arretId }));
 		if (!signalement) {
 			return res.status(404).json({ message: "Signalement introuvable pour cet arrêt." });
 		}
@@ -213,14 +226,15 @@ exports.voirSignalements = async (req, res) => {
 
 		if (req.query.ligne) query.ligne = req.query.ligne;
 		if (req.query.arretId) query.arretId = req.query.arretId;
+		const publicQuery = visibleSignalementQuery(query);
 
 		const [signalements, total] = await Promise.all([
-			Signalement.find(query)
+			Signalement.find(publicQuery)
 				.sort({ dateSignalement: -1 })
 				.skip(skip)
 				.limit(limit)
 				.populate("arretId"),
-			Signalement.countDocuments(query),
+			Signalement.countDocuments(publicQuery),
 		]);
 
 		res.json({
@@ -248,13 +262,14 @@ exports.voirSignalementsParArret = async (req, res) => {
 
 		// 🔹 Récupérer les signalements pour cet arrêt
 		const { page, limit, skip } = parsePagination(req);
+		const publicQuery = visibleSignalementQuery({ arretId: req.params.id });
 		const [signalements, total] = await Promise.all([
-			Signalement.find({ arretId: req.params.id })
+			Signalement.find(publicQuery)
 				.sort({ dateSignalement: -1 })
 				.skip(skip)
 				.limit(limit)
 				.populate("arretId"),
-			Signalement.countDocuments({ arretId: req.params.id }),
+			Signalement.countDocuments(publicQuery),
 		]);
 
 		// 🔹 Générer le résumé
@@ -402,7 +417,7 @@ exports.supprimerSignalement = async (req, res) => {
 // ✅ Voir toutes les lignes ayant des signalements
 exports.voirLignesDisponibles = async (req, res) => {
 	try {
-		const lignes = await Signalement.distinct("ligne");
+		const lignes = await Signalement.distinct("ligne", visibleSignalementQuery());
 		res.json(lignes);
 	} catch (error) {
 		res.status(500).json({ message: error.message });
@@ -436,7 +451,7 @@ exports.voirSignalementsParLigneEtArret = async (req, res) => {
 	try {
 		const { ligne, arretId } = req.params;
 		const { page, limit, skip } = parsePagination(req);
-		const query = { ligne, arretId };
+		const query = visibleSignalementQuery({ ligne, arretId });
 		const [signalements, total] = await Promise.all([
 			Signalement.find(query)
 				.sort({ dateSignalement: -1 })
@@ -462,7 +477,7 @@ exports.voirSignalementsParLigneEtArret = async (req, res) => {
 exports.traduireSignalement = async (req, res) => {
 	try {
 		const { id } = req.params; // ID du signalement à traduire
-		const signalement = await Signalement.findById(id);
+		const signalement = await Signalement.findOne(visibleSignalementQuery({ _id: id }));
 
 		if (!signalement) {
 			return res.status(404).json({ message: "Signalement introuvable" });

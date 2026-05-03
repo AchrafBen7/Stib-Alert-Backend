@@ -301,6 +301,7 @@ async function getRecentSignalements({ line, stopIds = [], limit = 100 } = {}) {
 	const query = {
 		dateSignalement: { $gte: since },
 		status: { $ne: "resolved" },
+		moderationStatus: "approved",
 	};
 
 	if (line) query.ligne = line;
@@ -713,6 +714,7 @@ async function recommendRoute({ depart, destination, lignesBloquees = [] }) {
 			ligne: { $in: allLines },
 			dateSignalement: { $gte: since },
 			status: { $ne: "resolved" },
+			moderationStatus: "approved",
 		}).populate("arretId").lean();
 
 		const incidents = [

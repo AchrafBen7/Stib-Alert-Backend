@@ -46,6 +46,8 @@ describe("POST /api/signalements", () => {
         const body = res.body.signalement || res.body;
         expect(body).toHaveProperty("ligne", "71");
         expect(body).toHaveProperty("typeProbleme", "Retard");
+        expect(body).toHaveProperty("authorType", "authenticated");
+        expect(body).toHaveProperty("moderationStatus", "approved");
     });
 
     it("returns 201 when unauthenticated", async () => {
@@ -69,6 +71,8 @@ describe("POST /api/signalements", () => {
         expect(res.status).toBe(201);
         const body = res.body.signalement || res.body;
         expect(body).toHaveProperty("ligne", "71");
+        expect(body).toHaveProperty("authorType", "anonymous");
+        expect(body).toHaveProperty("moderationStatus", "pending");
     });
 
     it("returns 400 when typeProbleme is invalid", async () => {

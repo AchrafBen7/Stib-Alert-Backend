@@ -5,6 +5,16 @@ const signalementSchema = new mongoose.Schema(
 		utilisateurId: { type: mongoose.Schema.Types.ObjectId, ref: "Utilisateur", required: false },
 		arretId: { type: mongoose.Schema.Types.ObjectId, ref: "Arret", required: false },
 		source: { type: String, enum: ["community", "stib_officiel"], default: "community" },
+		authorType: {
+			type: String,
+			enum: ["authenticated", "anonymous", "official"],
+			default: "anonymous",
+		},
+		moderationStatus: {
+			type: String,
+			enum: ["approved", "pending", "rejected"],
+			default: "approved",
+		},
 		externalId: { type: String, default: null },
 		ligne: { type: String, required: true },
 		typeProbleme: {
@@ -70,6 +80,8 @@ signalementSchema.index({ arretId: 1, dateSignalement: -1 });
 signalementSchema.index({ ligne: 1, dateSignalement: -1 });
 signalementSchema.index({ ligne: 1, arretId: 1, dateSignalement: -1 });
 signalementSchema.index({ status: 1, dateSignalement: -1 });
+signalementSchema.index({ moderationStatus: 1, dateSignalement: -1 });
+signalementSchema.index({ authorType: 1, moderationStatus: 1, dateSignalement: -1 });
 signalementSchema.index(
 	{ dateSignalement: 1 },
 	{ expireAfterSeconds: Math.max(ttlDays, 1) * 24 * 60 * 60, name: "signalement_ttl" }
