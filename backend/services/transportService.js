@@ -511,6 +511,30 @@ async function getRecentSignalements({ line, stopIds = [], limit = 100 } = {}) {
 		.lean();
 }
 
+async function getStopsByRealtimeIds(stopIds = []) {
+	const ids = [...new Set(stopIds.map((value) => String(value || "").trim()).filter(Boolean))];
+	if (!ids.length) return new Map();
+
+	const cacheKey = stableKey("transport-stops-by-realtime-ids", ids.sort());
+	const stops = await cache.remember(cacheKey, TTL.stopOverview, async () => {
+		return Arret.find({
+			$or: [
+				{ stop_id: { $in: ids } },
+				{ merged_stop_id: { $in: ids } },
+				{ physicalStopIds: { $in: ids } },
+			],
+		}).lean();
+	});
+
+	const index = new Map();
+	for (const stop of stops) {
+		for (const key of [stop.stop_id, stop.merged_stop_id, ...(stop.physicalStopIds || [])]) {
+			if (key) index.set(String(key), stop);
+		}
+	}
+	return index;
+}
+
 function mapIncident(signalement) {
 	const community = buildCommunityMeta(signalement);
 	const severity = community.status === "resolved"
@@ -537,6 +561,31 @@ function mapIncident(signalement) {
 		latitude: signalement.latitude ?? null,
 		longitude: signalement.longitude ?? null,
 		community,
+	};
+}
+
+function mapOfficialIncident(item, { defaultLine = null, stopLookup = new Map() } = {}) {
+	const primaryLine = Array.isArray(item.lines) ? item.lines[0] : item.lines || defaultLine || null;
+	const matchedStop = (item.stops || [])
+		.map((stopId) => stopLookup.get(String(stopId)))
+		.find(Boolean) || null;
+
+	return {
+		id: item.id,
+		type: item.title || "Information STIB",
+		description: item.description,
+		severity: SEVERITY.MAJOR,
+		confidence: 0.85,
+		source: "official",
+		line: normalizeLine(primaryLine),
+		stop: matchedStop ? {
+			id: matchedStop._id,
+			stopId: matchedStop.stop_id || matchedStop.merged_stop_id || null,
+			name: matchedStop.nom,
+			latitude: matchedStop.latitude ?? null,
+			longitude: matchedStop.longitude ?? null,
+		} : null,
+		date: item.updatedAt || null,
 	};
 }
 
@@ -591,19 +640,13 @@ async function getTransportStop(stopId) {
 		]);
 		const waitingTimes = waitingTimesResult.data;
 		const officialIncidents = officialIncidentsResult.data;
+		const officialStopLookup = await getStopsByRealtimeIds(officialIncidents.items.flatMap((item) => item.stops || []));
 
 		const activeIncidents = [
 			...signalements.map(mapIncident),
-			...officialIncidents.items.slice(0, 5).map((item) => ({
-				id: item.id,
-				type: item.title || "Information STIB",
-				description: item.description,
-				severity: SEVERITY.MAJOR,
-				confidence: 0.85,
-				source: "official",
-				line: Array.isArray(item.lines) ? item.lines[0] : item.lines || null,
-				stop: { id: stop._id, name: stop.nom },
-				date: item.updatedAt || null,
+			...officialIncidents.items.slice(0, 5).map((item) => mapOfficialIncident(item, {
+				stopLookup: officialStopLookup,
+				defaultLine: Array.isArray(item.lines) ? item.lines[0] : item.lines || null,
 			})),
 		];
 
@@ -707,19 +750,13 @@ async function getTransportLine(lineId) {
 		const waitingTimes = waitingTimesResult.data;
 		const vehicles = vehiclesResult.data;
 		const officialIncidents = officialIncidentsResult.data;
+		const officialStopLookup = await getStopsByRealtimeIds(officialIncidents.items.flatMap((item) => item.stops || []));
 
 		const activeIncidents = [
 			...signalements.map(mapIncident),
-			...officialIncidents.items.slice(0, 8).map((item) => ({
-				id: item.id,
-				type: item.title || "Information STIB",
-				description: item.description,
-				severity: SEVERITY.MAJOR,
-				confidence: 0.85,
-				source: "official",
-				line: lineId,
-				stop: null,
-				date: item.updatedAt || null,
+			...officialIncidents.items.slice(0, 8).map((item) => mapOfficialIncident(item, {
+				stopLookup: officialStopLookup,
+				defaultLine: lineId,
 			})),
 		];
 
@@ -798,16 +835,9 @@ async function getTransportOverview({ lat, lng } = {}) {
 			]);
 			const officialIncidents = officialIncidentsResult.data;
 
-			const activeIncidents = officialIncidents.items.slice(0, 10).map((item) => ({
-				id: item.id,
-				type: item.title || "Information STIB",
-				description: item.description,
-				severity: SEVERITY.MAJOR,
-				confidence: 0.85,
-				source: "official",
-				line: Array.isArray(item.lines) ? item.lines[0] : item.lines || null,
-				stop: null,
-				date: item.updatedAt || null,
+			const officialStopLookup = await getStopsByRealtimeIds(officialIncidents.items.flatMap((item) => item.stops || []));
+			const activeIncidents = officialIncidents.items.slice(0, 10).map((item) => mapOfficialIncident(item, {
+				stopLookup: officialStopLookup,
 			}));
 
 			const severityInfo = summarizeSeverity([
@@ -914,18 +944,12 @@ async function recommendRoute({ depart, destination, lignesBloquees = [] }) {
 			moderationStatus: "approved",
 		}).populate("arretId").lean();
 
+		const officialStopLookup = await getStopsByRealtimeIds(officialIncidents.items.flatMap((item) => item.stops || []));
 		const incidents = [
 			...signalements.map(mapIncident),
-			...officialIncidents.items.slice(0, 12).map((item) => ({
-				id: item.id,
-				type: item.title || "Information STIB",
-				description: item.description,
-				severity: SEVERITY.MAJOR,
-				confidence: 0.85,
-				source: "official",
-				line: Array.isArray(item.lines) ? normalizeLine(item.lines[0]) : normalizeLine(item.lines),
-				stop: null,
-				date: item.updatedAt || null,
+			...officialIncidents.items.slice(0, 12).map((item) => mapOfficialIncident(item, {
+				stopLookup: officialStopLookup,
+				defaultLine: Array.isArray(item.lines) ? normalizeLine(item.lines[0]) : normalizeLine(item.lines),
 			})),
 		].filter((incident) => !lignesBloquees.includes(normalizeLine(incident.line)));
 
