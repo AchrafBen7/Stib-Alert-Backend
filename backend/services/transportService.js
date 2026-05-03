@@ -669,6 +669,8 @@ async function getTransportStop(stopId) {
 		if (usedScheduledFallback) {
 			nextDepartures = await getScheduledStopDepartures({
 				stopIds: stopRealtimeIds,
+				stopName: stop.nom,
+				lines: stop.lignesDesservies || [],
 				limit: 6,
 			});
 		}

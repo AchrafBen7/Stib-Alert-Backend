@@ -7,6 +7,15 @@ const SCHEDULE_PART_PATTERN = /^stib-theoretical-schedules-part-\d+\.json$/i;
 
 let scheduleIndexPromise = null;
 
+function normalizeStopName(value) {
+	return String(value || "")
+		.normalize("NFD")
+		.replace(/[\u0300-\u036f]/g, "")
+		.toLowerCase()
+		.replace(/\s+/g, " ")
+		.trim();
+}
+
 function normalizeLine(line) {
 	return String(line || "").trim().toUpperCase();
 }
@@ -113,10 +122,11 @@ async function loadScheduleIndex() {
 		const files = discoverScheduleFiles();
 		if (!files.length) {
 			console.warn("[staticTimetable] no theoretical schedule files found");
-			return { byStopId: new Map(), meta: { files: [], routes: 0 } };
+			return { byStopId: new Map(), byNameAndLine: new Map(), meta: { files: [], routes: 0 } };
 		}
 
 		const byStopId = new Map();
+		const byNameAndLine = new Map();
 		let routeCount = 0;
 
 		for (const file of files) {
@@ -129,9 +139,19 @@ async function loadScheduleIndex() {
 					for (const stop of direction.stops || []) {
 						const stopId = String(stop.stop_id || "").trim();
 						if (!stopId) continue;
+						const entries = buildDepartureEntries({ route, direction, stop });
 						const list = byStopId.get(stopId) || [];
-						list.push(...buildDepartureEntries({ route, direction, stop }));
+						list.push(...entries);
 						byStopId.set(stopId, list);
+						const stopNameKey = normalizeStopName(stop.name);
+						if (stopNameKey) {
+							for (const entry of entries) {
+								const key = `${stopNameKey}|${entry.line}`;
+								const lineList = byNameAndLine.get(key) || [];
+								lineList.push(entry);
+								byNameAndLine.set(key, lineList);
+							}
+						}
 					}
 				}
 			}
@@ -145,10 +165,15 @@ async function loadScheduleIndex() {
 			});
 			byStopId.set(stopId, entries);
 		}
+		for (const [key, entries] of byNameAndLine.entries()) {
+			entries.sort((left, right) => left.scheduleMinutes - right.scheduleMinutes);
+			byNameAndLine.set(key, entries);
+		}
 
 		console.log(`[staticTimetable] loaded ${routeCount} routes from ${files.length} schedule parts`);
 		return {
 			byStopId,
+			byNameAndLine,
 			meta: { files, routes: routeCount },
 		};
 	})();
@@ -166,16 +191,23 @@ function uniqueDepartures(items) {
 	});
 }
 
-async function getScheduledStopDepartures({ stopIds = [], line = null, limit = 6 } = {}) {
+async function getScheduledStopDepartures({ stopIds = [], stopName = null, lines = [], line = null, limit = 6 } = {}) {
 	const normalizedStopIds = [...new Set(stopIds.map((value) => String(value || "").trim()).filter(Boolean))];
-	if (!normalizedStopIds.length) return [];
+	const normalizedLines = [...new Set(lines.map(normalizeLine).filter(Boolean))];
+	if (!normalizedStopIds.length && !stopName) return [];
 
-	const { byStopId } = await loadScheduleIndex();
+	const { byStopId, byNameAndLine } = await loadScheduleIndex();
 	const { weekdayKey, minutesNow } = getBrusselsDateParts();
 	const lineFilter = line ? normalizeLine(line) : null;
 
-	const departures = normalizedStopIds
-		.flatMap((stopId) => byStopId.get(stopId) || [])
+	let entries = normalizedStopIds
+		.flatMap((stopId) => byStopId.get(stopId) || []);
+	if (!entries.length && stopName && normalizedLines.length) {
+		const stopNameKey = normalizeStopName(stopName);
+		entries = normalizedLines.flatMap((currentLine) => byNameAndLine.get(`${stopNameKey}|${currentLine}`) || []);
+	}
+
+	const departures = entries
 		.filter((entry) => entry.dayType === weekdayKey)
 		.filter((entry) => !lineFilter || entry.line === lineFilter)
 		.map((entry) => {
