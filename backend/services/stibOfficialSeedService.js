@@ -203,17 +203,30 @@ async function syncOfficialPerturbations() {
 }
 
 function startStibOfficialSeedLoop() {
-	const intervalMinutes = Number(process.env.STIB_OFFICIAL_SEED_INTERVAL_MINUTES || 0);
-	if (!Number.isFinite(intervalMinutes) || intervalMinutes <= 0) {
+	const enabledRaw = String(process.env.STIB_OFFICIAL_SEED_ENABLED || "").trim().toLowerCase();
+	const isExplicitlyDisabled = ["0", "false", "off", "no"].includes(enabledRaw);
+	if (isExplicitlyDisabled) {
+		console.log("[stib-seed] loop disabled by STIB_OFFICIAL_SEED_ENABLED");
 		return null;
 	}
+
+	const defaultIntervalMinutes = 10;
+	const intervalMinutes = Number(
+		process.env.STIB_OFFICIAL_SEED_INTERVAL_MINUTES || defaultIntervalMinutes
+	);
+	if (!Number.isFinite(intervalMinutes) || intervalMinutes <= 0) {
+		console.warn("[stib-seed] invalid interval, fallback to 10 min");
+	}
+	const safeIntervalMinutes = Number.isFinite(intervalMinutes) && intervalMinutes > 0
+		? intervalMinutes
+		: defaultIntervalMinutes;
 
 	// Run immediately on startup, then on interval
 	syncOfficialPerturbations()
 		.then((r) => console.log("[stib-seed] Initial sync:", r))
 		.catch((e) => console.error("[stib-seed] Initial sync error:", e.message));
 
-	const intervalMs = intervalMinutes * 60 * 1000;
+	const intervalMs = safeIntervalMinutes * 60 * 1000;
 	const timer = setInterval(() => {
 		syncOfficialPerturbations()
 			.then((r) => {
@@ -225,7 +238,7 @@ function startStibOfficialSeedLoop() {
 	}, intervalMs);
 
 	timer.unref?.();
-	console.log(`[stib-seed] loop enabled every ${intervalMinutes} min`);
+	console.log(`[stib-seed] loop enabled every ${safeIntervalMinutes} min`);
 	return timer;
 }
 
