@@ -629,14 +629,20 @@ async function getTransportStop(stopId) {
 			throw error;
 		}
 
+		const stopRealtimeIds = [...new Set([
+			stop.stop_id,
+			stop.merged_stop_id,
+			...(stop.physicalStopIds || []),
+		].map((value) => String(value || "").trim()).filter(Boolean))];
+
 		const [signalements, waitingTimesResult, officialIncidentsResult] = await Promise.all([
 			getRecentSignalements({ stopIds: [stop._id] }),
-			stop.stop_id ? getWaitingTimesWithStatus({ stopId: stop.stop_id }) : {
+			stopRealtimeIds.length ? getWaitingTimesWithStatus({ stopId: stopRealtimeIds }) : {
 				data: { items: [] },
 				officialDataStatus: OFFICIAL_STATUS.AVAILABLE,
 				officialDataMessage: null,
 			},
-			getTravellersInformationWithStatus({ stopId: stop.stop_id || stop.nom }),
+			getTravellersInformationWithStatus({ stopId: stopRealtimeIds.length ? stopRealtimeIds : [stop.nom] }),
 		]);
 		const waitingTimes = waitingTimesResult.data;
 		const officialIncidents = officialIncidentsResult.data;
