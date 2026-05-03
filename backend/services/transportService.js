@@ -74,6 +74,203 @@ function toMinutes(value) {
 	return match ? Math.max(Number.parseInt(match[1], 10), 0) : null;
 }
 
+function normalizeText(value) {
+	return String(value || "")
+		.normalize("NFD")
+		.replace(/[\u0300-\u036f]/g, "")
+		.toLowerCase()
+		.replace(/\s+/g, " ")
+		.trim();
+}
+
+function parseDateValue(value) {
+	if (!value) return null;
+	const parsed = new Date(value);
+	return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function addMinutes(date, minutes) {
+	if (!(date instanceof Date) || Number.isNaN(date.getTime()) || !Number.isFinite(minutes)) return null;
+	return new Date(date.getTime() + minutes * 60_000);
+}
+
+function distanceMetersBetween(a, b) {
+	if (!a || !b) return Number.POSITIVE_INFINITY;
+	if (![a.lat, a.lng, b.lat, b.lng].every((value) => Number.isFinite(value))) return Number.POSITIVE_INFINITY;
+	const earthRadius = 6371000;
+	const toRadians = (value) => (value * Math.PI) / 180;
+	const dLat = toRadians(b.lat - a.lat);
+	const dLng = toRadians(b.lng - a.lng);
+	const lat1 = toRadians(a.lat);
+	const lat2 = toRadians(b.lat);
+	const sinLat = Math.sin(dLat / 2);
+	const sinLng = Math.sin(dLng / 2);
+	const h = sinLat * sinLat + Math.cos(lat1) * Math.cos(lat2) * sinLng * sinLng;
+	return 2 * earthRadius * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
+}
+
+function buildWaitingTimeIndex(waitingItems = []) {
+	const byLine = new Map();
+
+	for (const item of waitingItems) {
+		const line = normalizeLine(item.line);
+		if (!line) continue;
+		const list = byLine.get(line) || [];
+		list.push(item);
+		byLine.set(line, list);
+	}
+
+	for (const list of byLine.values()) {
+		list.sort((left, right) => {
+			const leftMinutes = toMinutes(left.minutes);
+			const rightMinutes = toMinutes(right.minutes);
+			return (leftMinutes ?? Number.POSITIVE_INFINITY) - (rightMinutes ?? Number.POSITIVE_INFINITY);
+		});
+	}
+
+	return byLine;
+}
+
+function selectRealtimeDeparture(step, waitingIndex) {
+	const candidates = waitingIndex.get(normalizeLine(step.line)) || [];
+	if (!candidates.length) return null;
+
+	const normalizedStopName = normalizeText(step.stopName);
+	const normalizedDestination = normalizeText(step.destination);
+	const ranked = candidates
+		.map((candidate) => {
+			let score = 0;
+			if (normalizedStopName && normalizeText(candidate.stopName) === normalizedStopName) score += 6;
+			if (normalizedDestination && normalizeText(candidate.destination) === normalizedDestination) score += 4;
+			if (normalizedDestination && normalizeText(candidate.destination).includes(normalizedDestination)) score += 2;
+			const minutes = toMinutes(candidate.minutes);
+			if (minutes !== null) score += Math.max(30 - minutes, 0) * 0.01;
+			return { candidate, score, minutes };
+		})
+		.filter((entry) => entry.minutes !== null)
+		.sort((left, right) => right.score - left.score || left.minutes - right.minutes);
+
+	return ranked[0]?.candidate || null;
+}
+
+function selectRelevantAlerts(step, officialItems = []) {
+	const line = normalizeLine(step.line);
+	const stopName = normalizeText(step.stopName);
+	const arrivalStopName = normalizeText(step.arrivalStopName);
+
+	return officialItems
+		.filter((item) => {
+			const matchesLine = !line || (item.lines || []).some((value) => normalizeLine(value) === line);
+			if (!matchesLine) return false;
+			if (!stopName && !arrivalStopName) return true;
+			const stopTokens = (item.stops || []).map(normalizeText).filter(Boolean);
+			return stopTokens.some((value) => value === stopName || value === arrivalStopName);
+		})
+		.slice(0, 3)
+		.map((item) => ({
+			id: item.id,
+			title: item.title || "Information STIB",
+			description: item.description || null,
+			priority: item.priority || null,
+			lines: item.lines || [],
+			stops: item.stops || [],
+		}));
+}
+
+function selectActiveVehicle(step, vehicles = []) {
+	const line = normalizeLine(step.line);
+	if (!line) return null;
+
+	const origin = Number.isFinite(step.startLatitude) && Number.isFinite(step.startLongitude)
+		? { lat: step.startLatitude, lng: step.startLongitude }
+		: null;
+	const destination = Number.isFinite(step.targetLatitude) && Number.isFinite(step.targetLongitude)
+		? { lat: step.targetLatitude, lng: step.targetLongitude }
+		: null;
+
+	const ranked = vehicles
+		.filter((vehicle) => normalizeLine(vehicle.line) === line)
+		.map((vehicle) => {
+			const vehiclePoint = Number.isFinite(vehicle.latitude) && Number.isFinite(vehicle.longitude)
+				? { lat: vehicle.latitude, lng: vehicle.longitude }
+				: null;
+			const originDistance = distanceMetersBetween(vehiclePoint, origin);
+			const destinationDistance = distanceMetersBetween(vehiclePoint, destination);
+			const directionScore = normalizeText(vehicle.direction) && normalizeText(step.destination)
+				? (normalizeText(vehicle.direction).includes(normalizeText(step.destination)) ? 0 : 2500)
+				: 0;
+			return {
+				vehicle,
+				score: Math.min(originDistance, destinationDistance) + directionScore,
+			};
+		})
+		.sort((left, right) => left.score - right.score);
+
+	return ranked[0]?.vehicle || null;
+}
+
+function enrichAlternativeRealtime(alternative, { waitingItems = [], vehicleItems = [], officialItems = [], requestDate = new Date() }) {
+	const waitingIndex = buildWaitingTimeIndex(waitingItems);
+	const steps = (alternative.steps || []).map((step) => {
+		if (!step.line) {
+			return {
+				...step,
+				alerts: step.alerts || [],
+			};
+		}
+
+		const realtimeDeparture = selectRealtimeDeparture(step, waitingIndex);
+		const realtimeDepartureMinutes = realtimeDeparture ? toMinutes(realtimeDeparture.minutes) : null;
+		const realtimeDepartureAt = realtimeDepartureMinutes !== null ? addMinutes(requestDate, realtimeDepartureMinutes) : null;
+		const realtimeArrivalAt = realtimeDepartureAt ? addMinutes(realtimeDepartureAt, step.durationMinutes) : null;
+		const alerts = selectRelevantAlerts(step, officialItems);
+		const vehicle = selectActiveVehicle(step, vehicleItems);
+
+		return {
+			...step,
+			realtimeDepartureMinutes,
+			realtimeDepartureAt,
+			realtimeArrivalAt,
+			vehicle: vehicle ? {
+				vehicleId: vehicle.vehicleId || null,
+				line: vehicle.line || null,
+				direction: vehicle.direction || null,
+				latitude: vehicle.latitude ?? null,
+				longitude: vehicle.longitude ?? null,
+				updatedAt: vehicle.updatedAt || null,
+			} : null,
+			alerts,
+		};
+	});
+
+	const firstScheduledDeparture = steps
+		.map((step) => parseDateValue(step.scheduledDepartureAt))
+		.find(Boolean) || null;
+	const firstRealtimeDeparture = steps
+		.map((step) => parseDateValue(step.realtimeDepartureAt))
+		.find(Boolean) || null;
+	const lastScheduledArrival = [...steps]
+		.reverse()
+		.map((step) => parseDateValue(step.scheduledArrivalAt))
+		.find(Boolean) || null;
+	const lastRealtimeArrival = [...steps]
+		.reverse()
+		.map((step) => parseDateValue(step.realtimeArrivalAt))
+		.find(Boolean) || null;
+	const routeAlerts = steps.flatMap((step) => step.alerts || []);
+
+	return {
+		...alternative,
+		steps,
+		scheduledDepartureAt: firstScheduledDeparture,
+		scheduledArrivalAt: lastScheduledArrival,
+		realtimeDepartureAt: firstRealtimeDeparture,
+		realtimeArrivalAt: lastRealtimeArrival,
+		activeVehicle: steps.map((step) => step.vehicle).find(Boolean) || null,
+		officialAlerts: routeAlerts.filter((item, index, items) => items.findIndex((candidate) => candidate.id === item.id) === index).slice(0, 4),
+	};
+}
+
 function extractTransitLines(route) {
 	return route.legs.flatMap((leg) =>
 		leg.steps
@@ -732,12 +929,14 @@ async function recommendRoute({ depart, destination, lignesBloquees = [] }) {
 			})),
 		].filter((incident) => !lignesBloquees.includes(normalizeLine(incident.line)));
 
-		const [waitingTimesResult, shapeFilesResult, fragilitySnapshots] = await Promise.all([
+		const [waitingTimesResult, vehiclesResult, shapeFilesResult, fragilitySnapshots] = await Promise.all([
 			getWaitingTimesWithStatus({ line: allLines }),
+			getVehiclePositionsWithStatus({ line: allLines }),
 			getShapeFilesWithStatus({ line: allLines }),
 			getFragilitySnapshots({ lines: allLines, hourBucket: requestDate.getHours() }),
 		]);
 		const waitingTimes = waitingTimesResult.data;
+		const vehicles = vehiclesResult.data;
 		const shapeFiles = shapeFilesResult.data;
 		const departures = summarizeDepartures(waitingTimes.items);
 		const scoring = scoreRoutes({
@@ -753,11 +952,13 @@ async function recommendRoute({ depart, destination, lignesBloquees = [] }) {
 		const officialDataStatus = mergeOfficialStatuses([
 			officialIncidentsResult.officialDataStatus,
 			waitingTimesResult.officialDataStatus,
+			vehiclesResult.officialDataStatus,
 			shapeFilesResult.officialDataStatus,
 		]);
 		const officialDataMessage = firstOfficialMessage([
 			officialIncidentsResult.officialDataMessage,
 			waitingTimesResult.officialDataMessage,
+			vehiclesResult.officialDataMessage,
 			shapeFilesResult.officialDataMessage,
 		]);
 		const nextDepartures = departures.slice(0, 6);
@@ -781,7 +982,14 @@ async function recommendRoute({ depart, destination, lignesBloquees = [] }) {
 			perturbationSummary,
 			activeIncidents: incidents.slice(0, 10),
 			nextDepartures,
-			recommendedAlternatives: scoring.alternatives,
+			recommendedAlternatives: scoring.alternatives.map((alternative) =>
+				enrichAlternativeRealtime(alternative, {
+					waitingItems: waitingTimes.items,
+					vehicleItems: vehicles.items,
+					officialItems: officialIncidents.items,
+					requestDate,
+				})
+			),
 		};
 
 		if (!hasTransitAlternatives(recommendation) && hasTransitAlternatives(staleRecommendation)) {

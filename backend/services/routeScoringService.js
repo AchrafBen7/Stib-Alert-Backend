@@ -699,7 +699,7 @@ function buildRouteSteps(route, shapeIndex = new Map()) {
 					? { lat: step.end_location.lat, lng: step.end_location.lng }
 					: null;
 				const googlePath = buildStepPathFromGoogle(step, startPoint, endPoint);
-			steps.push({
+				steps.push({
 					order: order++,
 					mode: "walk",
 					instruction,
@@ -713,6 +713,13 @@ function buildRouteSteps(route, shapeIndex = new Map()) {
 					startLongitude: step.start_location?.lng ?? null,
 					targetLatitude: step.end_location?.lat ?? null,
 					targetLongitude: step.end_location?.lng ?? null,
+					scheduledDepartureAt: null,
+					scheduledArrivalAt: null,
+					realtimeDepartureMinutes: null,
+					realtimeDepartureAt: null,
+					realtimeArrivalAt: null,
+					vehicle: null,
+					alerts: [],
 					path: googlePath || dedupeCoordinates([startPoint, endPoint].filter(Boolean)),
 				});
 				continue;
@@ -741,6 +748,13 @@ function buildRouteSteps(route, shapeIndex = new Map()) {
 					startLongitude: step.start_location?.lng ?? null,
 					targetLatitude: step.end_location?.lat ?? null,
 					targetLongitude: step.end_location?.lng ?? null,
+					scheduledDepartureAt: null,
+					scheduledArrivalAt: null,
+					realtimeDepartureMinutes: null,
+					realtimeDepartureAt: null,
+					realtimeArrivalAt: null,
+					vehicle: null,
+					alerts: [],
 					path: googlePath || dedupeCoordinates([startPoint, endPoint].filter(Boolean)),
 				});
 				continue;
@@ -787,6 +801,13 @@ function buildRouteSteps(route, shapeIndex = new Map()) {
 					startLongitude: details.departure_stop?.location?.lng ?? step.start_location?.lng ?? null,
 					targetLatitude: details.arrival_stop?.location?.lat ?? step.end_location?.lat ?? null,
 					targetLongitude: details.arrival_stop?.location?.lng ?? step.end_location?.lng ?? null,
+					scheduledDepartureAt: details.departure_time?.value || null,
+					scheduledArrivalAt: details.arrival_time?.value || null,
+					realtimeDepartureMinutes: null,
+					realtimeDepartureAt: null,
+					realtimeArrivalAt: null,
+					vehicle: null,
+					alerts: [],
 					path: chooseTransitPath({ googlePath, shapePath, startPoint, endPoint }),
 				});
 			}
