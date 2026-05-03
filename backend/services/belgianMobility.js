@@ -1,3 +1,6 @@
+const fs = require("fs");
+const os = require("os");
+const path = require("path");
 const redis = require("../config/redis");
 
 const DEFAULT_BASE_URL = "https://api.belgianmobility.io";
@@ -19,6 +22,14 @@ const CACHE_TTL = {
 const localCache = new Map();
 const inFlightRequests = new Map();
 const rateLimitedUntil = new Map();
+let localTravellersSnapshotCache = null;
+
+const LOCAL_TRAVELLERS_SNAPSHOT_CANDIDATES = [
+	process.env.STIB_TRAVELLERS_INFORMATION_SNAPSHOT_PATH,
+	path.join(process.cwd(), "data", "stib-travellers-information.json"),
+	path.join(process.cwd(), "stib-travellers-information.json"),
+	path.join(os.homedir(), "Downloads", "stib-travellers-information.json"),
+].filter(Boolean);
 
 function nowMs() {
 	return Date.now();
@@ -337,6 +348,77 @@ function normalizeTravellerInformation(entry) {
 	};
 }
 
+function readLocalTravellersSnapshotFile() {
+	if (localTravellersSnapshotCache) {
+		return localTravellersSnapshotCache;
+	}
+
+	for (const candidate of LOCAL_TRAVELLERS_SNAPSHOT_CANDIDATES) {
+		try {
+			if (!fs.existsSync(candidate)) continue;
+			const parsed = JSON.parse(fs.readFileSync(candidate, "utf8"));
+			localTravellersSnapshotCache = {
+				path: candidate,
+				payload: parsed,
+			};
+			return localTravellersSnapshotCache;
+		} catch (error) {
+			console.warn(`[belgianMobility] invalid local travellers snapshot at ${candidate}: ${error.message}`);
+		}
+	}
+
+	return null;
+}
+
+function extractSnapshotLocalizedText(text) {
+	if (!text || typeof text !== "object") return null;
+
+	const groups = Object.values(text);
+	for (const group of groups) {
+		if (!Array.isArray(group)) continue;
+		for (const entry of group) {
+			const localized = pickLocalizedText(entry);
+			if (localized) return localized;
+		}
+	}
+
+	return null;
+}
+
+function loadLocalTravellersInformationSnapshot(query = {}) {
+	const snapshot = readLocalTravellersSnapshotFile();
+	if (!snapshot) return null;
+
+	const lineFilters = toArray(query.line || query.lines).map((value) => String(value).toLowerCase());
+	const stopFilters = toArray(query.stopId || query.stop || query.pointid).map((value) => String(value).toLowerCase());
+	const languageFilters = toArray(query.language || query.lang).map((value) => String(value).toLowerCase());
+
+	const items = toArray(snapshot.payload.messages)
+		.map((message, index) => ({
+			id: message.id || `snapshot-${index}`,
+			title: extractSnapshotLocalizedText(message.text) || "Information STIB",
+			description: extractSnapshotLocalizedText(message.text) || "Information STIB",
+			lines: toArray(message.lines),
+			stops: toArray(message.stopIds),
+			priority: message.priority || null,
+			language: null,
+			updatedAt: snapshot.payload.fetchedAt || null,
+			raw: message,
+		}))
+		.filter((entry) => containsOneOf(entry.lines, lineFilters))
+		.filter((entry) => containsOneOf(entry.stops, stopFilters))
+		.filter((entry) => containsOneOf(entry.language, languageFilters));
+
+	return {
+		payload: {
+			source: "local_snapshot",
+			path: snapshot.path,
+			fetchedAt: snapshot.payload.fetchedAt || null,
+		},
+		items,
+	};
+}
+
 function normalizeWaitingTime(entry) {
 	const passingTimes = parseJsonIfNeeded(entry.passingtimes);
 	const firstPassingTime = Array.isArray(passingTimes) ? passingTimes[0] : null;
@@ -493,24 +575,33 @@ async function requestDataset(pathname, query = {}) {
 
 async function getTravellersInformation(query = {}) {
 	const cacheKey = `stib:TravellersInformation`;
-	const payload = await cachedRequest(cacheKey, CACHE_TTL.TravellersInformation, () =>
-		requestDataset(
-			isMobilityTwinBaseUrl() ? "/stib/travellers-information" : "/api/datasets/stibmivb/rt/TravellersInformation",
-			query
-		)
-	);
-	const items = extractItems(payload);
-	const lineFilters = toArray(query.line || query.lines).map((value) => String(value).toLowerCase());
-	const stopFilters = toArray(query.stopId || query.stop || query.pointid).map((value) => String(value).toLowerCase());
-	const languageFilters = toArray(query.language || query.lang).map((value) => String(value).toLowerCase());
+	try {
+		const payload = await cachedRequest(cacheKey, CACHE_TTL.TravellersInformation, () =>
+			requestDataset(
+				isMobilityTwinBaseUrl() ? "/stib/travellers-information" : "/api/datasets/stibmivb/rt/TravellersInformation",
+				query
+			)
+		);
+		const items = extractItems(payload);
+		const lineFilters = toArray(query.line || query.lines).map((value) => String(value).toLowerCase());
+		const stopFilters = toArray(query.stopId || query.stop || query.pointid).map((value) => String(value).toLowerCase());
+		const languageFilters = toArray(query.language || query.lang).map((value) => String(value).toLowerCase());
 
-	const normalized = items
-		.filter((entry) => containsOneOf(entry.lines || entry.line || entry.routes, lineFilters))
-		.filter((entry) => containsOneOf(entry.points || entry.stops || entry.stop, stopFilters))
-		.filter((entry) => containsOneOf(entry.language || entry.lang, languageFilters))
-		.map(normalizeTravellerInformation);
+		const normalized = items
+			.filter((entry) => containsOneOf(entry.lines || entry.line || entry.routes, lineFilters))
+			.filter((entry) => containsOneOf(entry.points || entry.stops || entry.stop, stopFilters))
+			.filter((entry) => containsOneOf(entry.language || entry.lang, languageFilters))
+			.map(normalizeTravellerInformation);
 
-	return { payload, items: normalized };
+		return { payload, items: normalized };
+	} catch (error) {
+		const fallback = loadLocalTravellersInformationSnapshot(query);
+		if (fallback) {
+			console.warn(`[belgianMobility] TravellersInformation fallback -> local snapshot (${fallback.payload.path})`);
+			return fallback;
+		}
+		throw error;
+	}
 }
 
 async function getWaitingTimes(query = {}) {
