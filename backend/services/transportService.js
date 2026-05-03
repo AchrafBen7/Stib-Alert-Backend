@@ -20,6 +20,7 @@ const {
 } = require("./transportSeverity");
 const { buildPerturbationSummary } = require("./perturbationSummaryService");
 const { buildCrowdingRisk } = require("./eventCrowdingService");
+const { getScheduledStopDepartures } = require("./staticTimetableService");
 
 const TTL = {
 	waitingTimes: 20_000,
@@ -421,6 +422,13 @@ function firstOfficialMessage(messages = []) {
 	return messages.find(Boolean) || null;
 }
 
+function buildScheduledFallbackMessage(currentMessage) {
+	const fallbackMessage = "Temps reel STIB indisponible. Horaires theoriques affiches depuis la base statique.";
+	if (!currentMessage) return fallbackMessage;
+	if (String(currentMessage).includes("Horaires theoriques")) return currentMessage;
+	return `${currentMessage} ${fallbackMessage}`;
+}
+
 function getStaleCachedValue(key) {
 	return cache.get(key, { allowStale: true })?.value || null;
 }
@@ -656,16 +664,26 @@ async function getTransportStop(stopId) {
 			})),
 		];
 
-		const nextDepartures = summarizeDepartures(waitingTimes.items);
+		let nextDepartures = summarizeDepartures(waitingTimes.items);
+		const usedScheduledFallback = nextDepartures.length === 0;
+		if (usedScheduledFallback) {
+			nextDepartures = await getScheduledStopDepartures({
+				stopIds: stopRealtimeIds,
+				limit: 6,
+			});
+		}
 		const severityInfo = computeRealtimeStatus({ incidents: activeIncidents, departures: nextDepartures });
 		const officialDataStatus = mergeOfficialStatuses([
 			waitingTimesResult.officialDataStatus,
 			officialIncidentsResult.officialDataStatus,
 		]);
-		const officialDataMessage = firstOfficialMessage([
+		const baseOfficialDataMessage = firstOfficialMessage([
 			waitingTimesResult.officialDataMessage,
 			officialIncidentsResult.officialDataMessage,
 		]);
+		const officialDataMessage = usedScheduledFallback
+			? buildScheduledFallbackMessage(baseOfficialDataMessage)
+			: baseOfficialDataMessage;
 		const perturbationSummary = buildPerturbationSummary({
 			severity: severityInfo.severity,
 			incidents: activeIncidents,
