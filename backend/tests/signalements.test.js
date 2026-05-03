@@ -2,6 +2,7 @@ const request = require("supertest");
 const app = require("../app");
 const { connect, disconnect, clearAll } = require("./mongoSetup");
 const { registerAndLogin, createSignalement } = require("./helpers");
+const Arret = require("../models/Arret");
 
 beforeAll(connect);
 afterAll(disconnect);
@@ -47,16 +48,27 @@ describe("POST /api/signalements", () => {
         expect(body).toHaveProperty("typeProbleme", "Retard");
     });
 
-    it("returns 401 when unauthenticated", async () => {
+    it("returns 201 when unauthenticated", async () => {
+        await Arret.create({
+            stop_id: "TEST071",
+            nom: "Test Stop",
+            latitude: 50.85,
+            longitude: 4.35,
+            lignesDesservies: ["71"],
+        });
+
         const res = await request(app)
             .post("/api/signalements")
             .send({
+                nomArret: "Test Stop",
                 ligne: "71",
                 typeProbleme: "Retard",
-                description: "Test",
+                description: "Retard important sans compte",
             });
 
-        expect(res.status).toBe(401);
+        expect(res.status).toBe(201);
+        const body = res.body.signalement || res.body;
+        expect(body).toHaveProperty("ligne", "71");
     });
 
     it("returns 400 when typeProbleme is invalid", async () => {
