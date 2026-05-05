@@ -605,6 +605,7 @@ function summarizeDepartures(waitingItems = [], lineFilter = null) {
 			line: normalizeLine(item.line),
 			destination: item.destination || null,
 			minutes: toMinutes(item.minutes),
+			source: "realtime",
 		}))
 		.filter((item) => item.line && item.minutes !== null)
 		.sort((a, b) => a.minutes - b.minutes);
