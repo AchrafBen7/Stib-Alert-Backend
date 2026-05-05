@@ -293,6 +293,89 @@ exports.voirSignalements = async (req, res) => {
 	}
 };
 
+exports.voirSignalementsModeration = async (req, res) => {
+	try {
+		const { page, limit, skip } = parsePagination(req);
+		const status = ["pending", "rejected", "approved"].includes(req.query.status)
+			? req.query.status
+			: "pending";
+
+		const [signalements, total] = await Promise.all([
+			Signalement.find({ moderationStatus: status, source: "community" })
+				.sort({ dateSignalement: -1 })
+				.skip(skip)
+				.limit(limit)
+				.populate("arretId"),
+			Signalement.countDocuments({ moderationStatus: status, source: "community" }),
+		]);
+
+		res.json({
+			signalements: signalements.map(serializeSignalement),
+			pagination: {
+				page,
+				limit,
+				total,
+				totalPages: Math.max(Math.ceil(total / limit), 1),
+			},
+		});
+	} catch (error) {
+		res.status(500).json({ message: error.message });
+	}
+};
+
+exports.approuverSignalement = async (req, res) => {
+	try {
+		const signalement = await Signalement.findOne({
+			_id: req.params.id,
+			source: "community",
+			moderationStatus: "pending",
+		}).populate("arretId");
+
+		if (!signalement) {
+			return res.status(404).json({ message: "Signalement en attente introuvable." });
+		}
+
+		signalement.moderationStatus = "approved";
+		await signalement.save();
+
+		emitSignalement(signalement);
+		sendFavoriteIncidentPushes(signalement.toObject(), "new_signalement")
+			.catch((pushError) => console.warn("[assistant incident push]", pushError.message));
+
+		res.json({
+			message: "Signalement approuvé.",
+			signalement: serializeSignalement(signalement),
+		});
+	} catch (error) {
+		res.status(500).json({ message: error.message });
+	}
+};
+
+exports.rejeterSignalement = async (req, res) => {
+	try {
+		const signalement = await Signalement.findOne({
+			_id: req.params.id,
+			source: "community",
+			moderationStatus: "pending",
+		});
+
+		if (!signalement) {
+			return res.status(404).json({ message: "Signalement en attente introuvable." });
+		}
+
+		signalement.moderationStatus = "rejected";
+		signalement.status = "resolved";
+		await signalement.save();
+
+		res.json({
+			message: "Signalement rejeté.",
+			signalement: serializeSignalement(signalement),
+		});
+	} catch (error) {
+		res.status(500).json({ message: error.message });
+	}
+};
+
 // ✅ Voir les signalements d’un arrêt spécifique
 exports.voirSignalementsParArret = async (req, res) => {
 	try {

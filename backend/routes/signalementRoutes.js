@@ -3,6 +3,9 @@ const router = express.Router();
 const signalementController = require("../controllers/signalementController");
 const {
 	voirSignalements,
+	voirSignalementsModeration,
+	approuverSignalement,
+	rejeterSignalement,
 	voterSignalement,
 	voirLignesDisponibles,
 	voirArretsParLigne,
@@ -17,7 +20,7 @@ const {
 
 const protect = require("../middlewares/authMiddleware");
 const isAdmin = require("../middlewares/adminMiddleware");
-const { signalementLimiter } = require("../middlewares/rateLimiters");
+const { signalementLimiter, anonymousSignalementLimiter } = require("../middlewares/rateLimiters");
 const {
 	validateSignalement,
 	validateVote,
@@ -28,6 +31,7 @@ const {
 router.post(
 	"/",
 	protect.optional,
+	anonymousSignalementLimiter,
 	signalementLimiter,
 	upload.single("photo"),
 	validateSignalement,
@@ -36,6 +40,9 @@ router.post(
 );
 
 router.get("/", voirSignalements);
+router.get("/moderation/pending", protect, isAdmin, voirSignalementsModeration);
+router.post("/moderation/:id/approve", protect, isAdmin, validateMongoId, handleValidation, approuverSignalement);
+router.post("/moderation/:id/reject", protect, isAdmin, validateMongoId, handleValidation, rejeterSignalement);
 router.get("/lignes", voirLignesDisponibles);
 router.get("/ligne/:ligne", voirArretsParLigne);
 router.get("/ligne/:ligne/arret/:arretId", voirSignalementsParLigneEtArret);

@@ -9,6 +9,16 @@ const makeLimiter = (windowMs, max, message) =>
 		message: { message },
 	});
 
+const makeConditionalLimiter = ({ windowMs, max, message, skip }) =>
+	rateLimit({
+		windowMs,
+		max,
+		standardHeaders: true,
+		legacyHeaders: false,
+		skip,
+		message: { message },
+	});
+
 const makeAuthLimiter = (windowMs, max, message) =>
 	rateLimit({
 		windowMs,
@@ -48,6 +58,13 @@ exports.signalementLimiter = makeLimiter(
 	5,
 	"Trop de signalements. Attendez une minute."
 );
+
+exports.anonymousSignalementLimiter = makeConditionalLimiter({
+	windowMs: 15 * 60 * 1000,
+	max: 3,
+	message: "Trop de signalements anonymes. Réessayez plus tard ou connectez-vous.",
+	skip: (req) => Boolean(req.user?.userId),
+});
 
 exports.chatbotLimiter = makeLimiter(
 	60 * 1000,
