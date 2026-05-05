@@ -500,7 +500,7 @@ exports.ajouterOuRetirerFavori = async (req, res) => {
 		const utilisateur = await Utilisateur.findById(id);
 		if (!utilisateur) return res.status(404).json({ message: "Utilisateur introuvable." });
 
-		const index = utilisateur.favoris.indexOf(arretId);
+		const index = utilisateur.favoris.findIndex((favori) => String(favori) === String(arretId));
 
 		if (index > -1) {
 			// L'arrêt est déjà en favoris, on le retire

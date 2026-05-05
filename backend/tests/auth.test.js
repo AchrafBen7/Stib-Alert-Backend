@@ -2,6 +2,7 @@ const request = require("supertest");
 const app = require("../app");
 const redis = require("../config/redis");
 const { connect, disconnect, clearAll } = require("./mongoSetup");
+const Arret = require("../models/Arret");
 
 beforeAll(connect);
 afterAll(disconnect);
@@ -177,3 +178,47 @@ describe("POST /api/utilisateurs/deconnexion", () => {
         expect(me.status).toBe(401);
     });
 });
+
+describe("PATCH /api/utilisateurs/:id/favoris/:arretId", () => {
+    it("adds then removes the same favorite stop", async () => {
+        const { token, userId } = await registerAndLoginForTest("favoris@test.com");
+        const arret = await Arret.create({
+            stop_id: "FAV001",
+            nom: "Favori Test",
+            latitude: 50.85,
+            longitude: 4.35,
+            lignesDesservies: ["71"],
+        });
+
+        const add = await request(app)
+            .patch(`/api/utilisateurs/${userId}/favoris/${arret._id}`)
+            .set("Authorization", `Bearer ${token}`);
+
+        expect(add.status).toBe(200);
+        expect(add.body.favoris.map(String)).toContain(String(arret._id));
+        expect(add.body.favorisDetails).toHaveLength(1);
+
+        const remove = await request(app)
+            .patch(`/api/utilisateurs/${userId}/favoris/${arret._id}`)
+            .set("Authorization", `Bearer ${token}`);
+
+        expect(remove.status).toBe(200);
+        expect(remove.body.favoris.map(String)).not.toContain(String(arret._id));
+        expect(remove.body.favorisDetails).toHaveLength(0);
+    });
+});
+
+async function registerAndLoginForTest(email, password = "Password123!") {
+    const reg = await request(app)
+        .post("/api/utilisateurs/inscription")
+        .send({ nom: "Test User", email, motDePasse: password });
+    const code = await redis.get(`activation:${email}`);
+    const act = await request(app)
+        .post("/api/utilisateurs/activation")
+        .send({ activationToken: reg.body.activationToken, activationCode: code });
+
+    return {
+        token: act.body.token,
+        userId: act.body.utilisateur._id,
+    };
+}
