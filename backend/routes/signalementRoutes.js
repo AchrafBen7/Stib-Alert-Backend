@@ -27,6 +27,7 @@ const {
 
 router.post(
 	"/",
+	protect.optional,
 	signalementLimiter,
 	upload.single("photo"),
 	validateSignalement,

@@ -53,4 +53,44 @@ const protect = async (req, res, next) => {
 	}
 };
 
+const optional = async (req, _res, next) => {
+	try {
+		let token;
+		if (req.headers.authorization && req.headers.authorization.startsWith("Bearer ")) {
+			token = req.headers.authorization.split(" ")[1];
+		}
+		if (!token) return next();
+
+		if (redis) {
+			const cacheUser = await redis.get(`auth:${token}`);
+			if (cacheUser) {
+				req.user = JSON.parse(cacheUser);
+				return next();
+			}
+		}
+
+		const decoded = jwt.verify(token, process.env.JWT_SECRET);
+		const utilisateur = await Utilisateur.findById(decoded.userId)
+			.select("_id role email nom")
+			.lean();
+		if (!utilisateur) return next();
+
+		req.user = {
+			userId: String(utilisateur._id),
+			role: utilisateur.role,
+			email: utilisateur.email,
+			nom: utilisateur.nom,
+		};
+
+		if (redis) {
+			await redis.setex(`auth:${token}`, 604800, JSON.stringify(req.user));
+		}
+	} catch (_) {
+		// Public endpoints should remain public; invalid optional tokens are ignored.
+	}
+	next();
+};
+
+protect.optional = optional;
+
 module.exports = protect;

@@ -4,6 +4,7 @@ const Utilisateur = require("../models/Utilisateur");
 const { analyserSignalement, genererResumeSignalements, traduireSignalement } = require("../config/openai");
 const { emitSignalement } = require("../config/websocket");
 const { getWaitingTimes } = require("../services/belgianMobility");
+const { getScheduledStopDepartures } = require("../services/staticTimetableService");
 const { COMMUNITY_ACTION, buildCommunityMeta, upsertCommunityAction } = require("../services/signalementCommunityService");
 const { sendFavoriteIncidentPushes } = require("../services/assistantIncidentPushService");
 const moment = require("moment");
@@ -433,14 +434,34 @@ exports.voirArretsParLigne = async (req, res) => {
 		const arrets = await Arret.find({ lignesDesservies: ligne }).lean();
 		const waitingTimesByStop = await groupWaitingTimesByStop(ligne, arrets);
 
-		const enriched = arrets.map((arret) => {
+		const enriched = await Promise.all(arrets.map(async (arret) => {
 			const nextPassages = waitingTimesByStop.get(String(arret.stop_id)) || [];
+			let effectivePassages = nextPassages;
+			let nextPassageSource = nextPassages.length ? "realtime" : null;
+
+			if (!effectivePassages.length) {
+				const scheduled = await getScheduledStopDepartures({
+					stopIds: [
+						arret.stop_id,
+						arret.merged_stop_id,
+						...(arret.physicalStopIds || []),
+					],
+					stopName: arret.nom,
+					lines: [ligne],
+					line: ligne,
+					limit: 3,
+				});
+				effectivePassages = scheduled.map((item) => item.minutes);
+				nextPassageSource = effectivePassages.length ? "scheduled" : null;
+			}
+
 			return {
 				...arret,
-				nextPassageMinutes: nextPassages[0] ?? null,
-				nextPassages: nextPassages.slice(0, 3),
+				nextPassageMinutes: effectivePassages[0] ?? null,
+				nextPassages: effectivePassages.slice(0, 3),
+				nextPassageSource,
 			};
-		});
+		}));
 
 		res.json(enriched);
 	} catch (error) {

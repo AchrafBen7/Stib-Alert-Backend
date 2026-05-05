@@ -1,4 +1,5 @@
 const fs = require("fs");
+const crypto = require("crypto");
 const os = require("os");
 const path = require("path");
 const redis = require("../config/redis");
@@ -348,6 +349,18 @@ function normalizeTravellerInformation(entry) {
 	};
 }
 
+function stableSnapshotMessageId(message, index) {
+	if (message.id) return String(message.id);
+	const signature = JSON.stringify({
+		lines: message.lines || [],
+		stopIds: message.stopIds || message.points || [],
+		text: message.text || message.content || "",
+		priority: message.priority || null,
+		index,
+	});
+	return `snapshot-${crypto.createHash("sha1").update(signature).digest("hex").slice(0, 16)}`;
+}
+
 function readLocalTravellersSnapshotFile() {
 	if (localTravellersSnapshotCache) {
 		return localTravellersSnapshotCache;
@@ -395,7 +408,7 @@ function loadLocalTravellersInformationSnapshot(query = {}) {
 
 	const items = toArray(snapshot.payload.messages)
 		.map((message, index) => ({
-			id: message.id || `snapshot-${index}`,
+			id: stableSnapshotMessageId(message, index),
 			title: extractSnapshotLocalizedText(message.text) || "Information STIB",
 			description: extractSnapshotLocalizedText(message.text) || "Information STIB",
 			lines: toArray(message.lines),

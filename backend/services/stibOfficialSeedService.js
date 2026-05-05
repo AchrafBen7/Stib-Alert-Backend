@@ -1,4 +1,6 @@
+const crypto = require("crypto");
 const Signalement = require("../models/Signalement");
+const Arret = require("../models/Arret");
 const { getTravellersInformation } = require("./belgianMobility");
 const { sendAlertsForNewPerturbations } = require("./perturbationAlertService");
 
@@ -44,7 +46,32 @@ const LINE_COORDINATES = {
 	"81": { latitude: 50.8756, longitude: 4.3645 },
 };
 
-function buildSignalementFromItem(item) {
+function stableOfficialId(item) {
+	if (item.id) return String(item.id);
+	const signature = JSON.stringify({
+		lines: item.lines || [],
+		stops: item.stops || [],
+		title: item.title || "",
+		description: item.description || "",
+		priority: item.priority || null,
+	});
+	return `stib-${crypto.createHash("sha1").update(signature).digest("hex").slice(0, 16)}`;
+}
+
+async function resolveOfficialStop(item) {
+	const stopIds = Array.isArray(item.stops) ? item.stops.map((value) => String(value)) : [];
+	if (!stopIds.length) return null;
+
+	return Arret.findOne({
+		$or: [
+			{ stop_id: { $in: stopIds } },
+			{ merged_stop_id: { $in: stopIds } },
+			{ physicalStopIds: { $in: stopIds } },
+		],
+	}).lean();
+}
+
+async function buildSignalementFromItem(item) {
 	const firstLine = Array.isArray(item.lines) && item.lines.length > 0
 		? String(item.lines[0]).toUpperCase()
 		: "STIB";
@@ -52,13 +79,16 @@ function buildSignalementFromItem(item) {
 	const description = item.description || item.title || "Perturbation officielle STIB.";
 	const typeProbleme = mapToProblemType(item.title || item.description || "");
 
-	const coords = LINE_COORDINATES[firstLine] || BRUSSELS_CENTER;
+	const matchedStop = await resolveOfficialStop(item);
+	const coords = matchedStop
+		? { latitude: matchedStop.latitude, longitude: matchedStop.longitude }
+		: (LINE_COORDINATES[firstLine] || BRUSSELS_CENTER);
 
 	return {
 		source: "stib_officiel",
 		authorType: "official",
 		moderationStatus: "approved",
-		externalId: String(item.id),
+		externalId: stableOfficialId(item),
 		ligne: firstLine,
 		typeProbleme,
 		description: String(description).slice(0, 500),
@@ -68,7 +98,7 @@ function buildSignalementFromItem(item) {
 		resumeIA: item.title ? String(item.title).slice(0, 200) : null,
 		confiance: "haute",
 		status: "active",
-		arretId: undefined,
+		arretId: matchedStop?._id,
 		utilisateurId: undefined,
 	};
 }
@@ -139,7 +169,6 @@ async function syncOfficialPerturbations() {
 	}
 
 	const items = (result?.items || []).filter((item) => {
-		if (!item.id) return false;
 		// Keep French items only; if no language specified, keep it
 		const lang = (item.language || item.raw?.language || "").toLowerCase();
 		return !lang || lang === "fr" || lang === "french" || lang === "fra";
@@ -154,9 +183,9 @@ async function syncOfficialPerturbations() {
 	let synced = 0;
 
 	for (const item of items) {
-		const externalId = String(item.id);
+		const externalId = stableOfficialId(item);
 		seenExternalIds.push(externalId);
-		const data = buildSignalementFromItem(item);
+		const data = await buildSignalementFromItem(item);
 		try {
 			const result = await Signalement.updateOne(
 				{ externalId, source: "stib_officiel" },
