@@ -611,6 +611,37 @@ function summarizeDepartures(waitingItems = [], lineFilter = null) {
 	return departures.slice(0, 6);
 }
 
+async function getScheduledRouteDepartures(alternatives = [], limit = 6) {
+	const candidates = [];
+	const seen = new Set();
+
+	for (const alternative of alternatives) {
+		for (const step of alternative.steps || []) {
+			if (!step.line || !step.stopName) continue;
+			const key = `${normalizeLine(step.line)}|${String(step.stopName).toLowerCase()}`;
+			if (seen.has(key)) continue;
+			seen.add(key);
+			candidates.push({ line: step.line, stopName: step.stopName });
+			if (candidates.length >= 8) break;
+		}
+		if (candidates.length >= 8) break;
+	}
+
+	const scheduledGroups = await Promise.all(candidates.map((candidate) =>
+		getScheduledStopDepartures({
+			stopName: candidate.stopName,
+			lines: [candidate.line],
+			line: candidate.line,
+			limit: 2,
+		})
+	));
+
+	return scheduledGroups
+		.flat()
+		.sort((left, right) => left.minutes - right.minutes)
+		.slice(0, limit);
+}
+
 function computeRealtimeStatus({ incidents, departures }) {
 	if (!departures.length && incidents.some((incident) => incident.severity === SEVERITY.CRITICAL)) {
 		return formatSeverity(SEVERITY.CRITICAL, 0.9);
@@ -979,39 +1010,50 @@ async function recommendRoute({ depart, destination, lignesBloquees = [] }) {
 			})),
 		].filter((incident) => !lignesBloquees.includes(normalizeLine(incident.line)));
 
-		const [waitingTimesResult, vehiclesResult, shapeFilesResult, fragilitySnapshots] = await Promise.all([
+		const [waitingTimesResult, fragilitySnapshots] = await Promise.all([
 			getWaitingTimesWithStatus({ line: allLines }),
-			getVehiclePositionsWithStatus({ line: allLines }),
-			getShapeFilesWithStatus({ line: allLines }),
 			getFragilitySnapshots({ lines: allLines, hourBucket: requestDate.getHours() }),
 		]);
 		const waitingTimes = waitingTimesResult.data;
-		const vehicles = vehiclesResult.data;
-		const shapeFiles = shapeFilesResult.data;
 		const departures = summarizeDepartures(waitingTimes.items);
 		const scoring = scoreRoutes({
 			routes,
 			incidents,
 			departures,
 			lignesBloquees,
-			shapeFiles: shapeFiles.items,
+			shapeFiles: [],
 			fragilitySnapshots,
 			requestDate,
 		});
+		const topAlternativeLines = [...new Set(
+			scoring.alternatives
+				.flatMap((alternative) => alternative.data?.lines || [])
+				.map(normalizeLine)
+				.filter(Boolean)
+		)];
+		const vehiclesResult = topAlternativeLines.length
+			? await getVehiclePositionsWithStatus({ line: topAlternativeLines })
+			: {
+				data: { payload: null, items: [] },
+				officialDataStatus: OFFICIAL_STATUS.AVAILABLE,
+				officialDataMessage: null,
+			};
+		const vehicles = vehiclesResult.data;
 		const severityInfo = summarizeSeverity(scoring.scoredRoutes[0]?.incidents || incidents);
 		const officialDataStatus = mergeOfficialStatuses([
 			officialIncidentsResult.officialDataStatus,
 			waitingTimesResult.officialDataStatus,
 			vehiclesResult.officialDataStatus,
-			shapeFilesResult.officialDataStatus,
 		]);
 		const officialDataMessage = firstOfficialMessage([
 			officialIncidentsResult.officialDataMessage,
 			waitingTimesResult.officialDataMessage,
 			vehiclesResult.officialDataMessage,
-			shapeFilesResult.officialDataMessage,
 		]);
-		const nextDepartures = departures.slice(0, 6);
+		let nextDepartures = departures.slice(0, 6);
+		if (!nextDepartures.length) {
+			nextDepartures = await getScheduledRouteDepartures(scoring.alternatives, 6);
+		}
 		const perturbationSummary = buildPerturbationSummary({
 			severity: severityInfo.severity,
 			incidents: incidents.slice(0, 10),
