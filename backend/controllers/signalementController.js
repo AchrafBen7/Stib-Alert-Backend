@@ -173,10 +173,12 @@ exports.ajouterSignalement = async (req, res) => {
 			confiance,
 		});
 
-		// 🚀 Émettre le signalement en temps réel via WebSockets
-		emitSignalement(signalement);
-		sendFavoriteIncidentPushes({ ...signalement.toObject(), arretId: arret }, "new_signalement")
-			.catch((pushError) => console.warn("[assistant incident push]", pushError.message));
+		if (moderationStatus === "approved") {
+			// Only approved reports should be visible in realtime surfaces and push notifications.
+			emitSignalement(signalement);
+			sendFavoriteIncidentPushes({ ...signalement.toObject(), arretId: arret }, "new_signalement")
+				.catch((pushError) => console.warn("[assistant incident push]", pushError.message));
+		}
 
 		res.status(201).json({
 			message: moderationStatus === "pending"
