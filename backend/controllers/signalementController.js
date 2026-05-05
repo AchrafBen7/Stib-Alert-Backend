@@ -7,6 +7,7 @@ const { getWaitingTimes } = require("../services/belgianMobility");
 const { getScheduledStopDepartures } = require("../services/staticTimetableService");
 const { COMMUNITY_ACTION, buildCommunityMeta, upsertCommunityAction } = require("../services/signalementCommunityService");
 const { sendFavoriteIncidentPushes } = require("../services/assistantIncidentPushService");
+const { syncOfficialPerturbations } = require("../services/stibOfficialSeedService");
 const moment = require("moment");
 const path = require("path");
 const cloudinary = require("../config/cloudinary");
@@ -30,9 +31,42 @@ const serializeSignalement = (signalement) => {
 	return {
 		...raw,
 		source: raw.source || "community",
+		authorType: raw.authorType || "anonymous",
+		moderationStatus: raw.moderationStatus || "approved",
 		community: buildCommunityMeta(raw),
 	};
 };
+
+let lastOfficialHydrationAt = 0;
+let officialHydrationPromise = null;
+
+async function ensureOfficialSignalementsForPublicList() {
+	const cooldownMs = 2 * 60 * 1000;
+	if (Date.now() - lastOfficialHydrationAt < cooldownMs) return;
+
+	const hasActiveOfficial = await Signalement.exists(visibleSignalementQuery({
+		source: "stib_officiel",
+		status: "active",
+	}));
+	if (hasActiveOfficial) {
+		lastOfficialHydrationAt = Date.now();
+		return;
+	}
+
+	if (!officialHydrationPromise) {
+		officialHydrationPromise = syncOfficialPerturbations()
+			.catch((error) => {
+				console.warn("[signalements] official on-demand sync failed:", error.message);
+				return null;
+			})
+			.finally(() => {
+				lastOfficialHydrationAt = Date.now();
+				officialHydrationPromise = null;
+			});
+	}
+
+	await officialHydrationPromise;
+}
 
 const storage = new CloudinaryStorage({
 	cloudinary: cloudinary,
@@ -229,6 +263,11 @@ exports.voirSignalements = async (req, res) => {
 
 		if (req.query.ligne) query.ligne = req.query.ligne;
 		if (req.query.arretId) query.arretId = req.query.arretId;
+
+		if (page === 1) {
+			await ensureOfficialSignalementsForPublicList();
+		}
+
 		const publicQuery = visibleSignalementQuery(query);
 
 		const [signalements, total] = await Promise.all([

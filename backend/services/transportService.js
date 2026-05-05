@@ -817,18 +817,43 @@ async function getTransportLine(lineId) {
 			})),
 		];
 
-		const nextDepartures = summarizeDepartures(waitingTimes.items, lineId);
+		let nextDepartures = summarizeDepartures(waitingTimes.items, lineId);
+		const usedScheduledFallback = nextDepartures.length === 0;
+		if (usedScheduledFallback) {
+			const scheduledGroups = await Promise.all(
+				stops.slice(0, 8).map((stop) =>
+					getScheduledStopDepartures({
+						stopIds: [
+							stop.stop_id,
+							stop.merged_stop_id,
+							...(stop.physicalStopIds || []),
+						],
+						stopName: stop.nom,
+						lines: [lineId],
+						line: lineId,
+						limit: 2,
+					})
+				)
+			);
+			nextDepartures = scheduledGroups
+				.flat()
+				.sort((left, right) => left.minutes - right.minutes)
+				.slice(0, 6);
+		}
 		const severityInfo = computeRealtimeStatus({ incidents: activeIncidents, departures: nextDepartures });
 		const officialDataStatus = mergeOfficialStatuses([
 			waitingTimesResult.officialDataStatus,
 			vehiclesResult.officialDataStatus,
 			officialIncidentsResult.officialDataStatus,
 		]);
-		const officialDataMessage = firstOfficialMessage([
+		const baseOfficialDataMessage = firstOfficialMessage([
 			waitingTimesResult.officialDataMessage,
 			vehiclesResult.officialDataMessage,
 			officialIncidentsResult.officialDataMessage,
 		]);
+		const officialDataMessage = usedScheduledFallback
+			? buildScheduledFallbackMessage(baseOfficialDataMessage)
+			: baseOfficialDataMessage;
 		const perturbationSummary = buildPerturbationSummary({
 			severity: severityInfo.severity,
 			incidents: activeIncidents,
