@@ -21,6 +21,34 @@ if (process.env.NODE_ENV !== "test") {
 }
 app.use(globalLimiter);
 
+const appleTeamId = process.env.APPLE_TEAM_ID || "SLUL8PUP37";
+const appleBundleId = process.env.APPLE_BUNDLE_ID || "com.ehb.StibAlert";
+const appleAppSiteAssociation = {
+	applinks: {
+		apps: [],
+		details: [{
+			appIDs: [`${appleTeamId}.${appleBundleId}`],
+			components: [
+				{ "/": "/signalement/*" },
+				{ "/": "/signalements" },
+				{ "/": "/reports" },
+				{ "/": "/privacy" },
+			],
+		}],
+	},
+};
+
+function sendAppleAppSiteAssociation(_req, res) {
+	res
+		.type("application/json")
+		.set("Cache-Control", "public, max-age=3600")
+		.status(200)
+		.send(JSON.stringify(appleAppSiteAssociation));
+}
+
+app.get("/apple-app-site-association", sendAppleAppSiteAssociation);
+app.get("/.well-known/apple-app-site-association", sendAppleAppSiteAssociation);
+
 app.use("/api/signalements", require("./routes/signalementRoutes"));
 app.use("/api/utilisateurs", require("./routes/utilisateurRoutes"));
 app.use("/api/lignes", require("./routes/ligneRoutes"));
