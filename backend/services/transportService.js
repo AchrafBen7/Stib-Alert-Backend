@@ -21,6 +21,7 @@ const {
 const { buildPerturbationSummary } = require("./perturbationSummaryService");
 const { buildCrowdingRisk } = require("./eventCrowdingService");
 const { getScheduledStopDepartures } = require("./staticTimetableService");
+const { getStaticShapeFilesForLines } = require("./staticShapeService");
 
 const TTL = {
 	waitingTimes: 20_000,
@@ -1041,12 +1042,13 @@ async function recommendRoute({ depart, destination, lignesBloquees = [] }) {
 		]);
 		const waitingTimes = waitingTimesResult.data;
 		const departures = summarizeDepartures(waitingTimes.items);
+		const staticShapeFiles = getStaticShapeFilesForLines(allLines);
 		const scoring = scoreRoutes({
 			routes,
 			incidents,
 			departures,
 			lignesBloquees,
-			shapeFiles: [],
+			shapeFiles: staticShapeFiles,
 			fragilitySnapshots,
 			requestDate,
 		});

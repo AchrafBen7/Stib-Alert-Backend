@@ -22,7 +22,10 @@ const ACTIVE_MODE_LIMITS = {
 };
 
 function normalizeLine(line) {
-	return String(line || "").trim();
+	const raw = String(line || "").trim();
+	const digits = raw.match(/\d+/)?.[0];
+	if (!digits) return raw;
+	return String(Number.parseInt(digits, 10));
 }
 
 function routeWalkDuration(route) {
@@ -272,7 +275,7 @@ function buildShapeIndex(shapeFiles = []) {
 		const polylines = (shape.polylines || [])
 			.map((polyline) =>
 				(polyline || [])
-					.map((pair) => ({ lat: pair[1], lng: pair[0] }))
+					.map(normalizeShapeCoordinate)
 					.filter((coord) => Number.isFinite(coord.lat) && Number.isFinite(coord.lng))
 			)
 			.filter((coords) => coords.length > 1);
@@ -282,6 +285,16 @@ function buildShapeIndex(shapeFiles = []) {
 		index.set(line, current);
 	}
 	return index;
+}
+
+function normalizeShapeCoordinate(pair) {
+	if (Array.isArray(pair)) {
+		return { lat: Number(pair[1]), lng: Number(pair[0]) };
+	}
+	return {
+		lat: Number(pair?.lat ?? pair?.latitude),
+		lng: Number(pair?.lng ?? pair?.longitude),
+	};
 }
 
 function dedupeCoordinates(coords = []) {
