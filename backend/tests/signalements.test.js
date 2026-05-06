@@ -75,6 +75,36 @@ describe("POST /api/signalements", () => {
         expect(body).toHaveProperty("moderationStatus", "pending");
     });
 
+    it("rejects duplicate anonymous reports for the same stop and line", async () => {
+        await Arret.create({
+            stop_id: "TEST071",
+            nom: "Test Stop",
+            latitude: 50.85,
+            longitude: 4.35,
+            lignesDesservies: ["71"],
+        });
+
+        const payload = {
+            nomArret: "Test Stop",
+            ligne: "71",
+            typeProbleme: "Retard",
+            description: "Retard important sans compte",
+        };
+
+        const first = await request(app)
+            .post("/api/signalements")
+            .set("x-stib-device-id", "test-device")
+            .send(payload);
+        const duplicate = await request(app)
+            .post("/api/signalements")
+            .set("x-stib-device-id", "test-device")
+            .send(payload);
+
+        expect(first.status).toBe(201);
+        expect(duplicate.status).toBe(409);
+        expect(duplicate.body).toHaveProperty("moderationStatus", "pending");
+    });
+
     it("returns 400 when typeProbleme is invalid", async () => {
         const { token } = await registerAndLogin("badtype@test.com");
 

@@ -15,6 +15,11 @@ const signalementSchema = new mongoose.Schema(
 			enum: ["approved", "pending", "rejected"],
 			default: "approved",
 		},
+		moderatedAt: { type: Date, default: null },
+		moderatedBy: { type: mongoose.Schema.Types.ObjectId, ref: "Utilisateur", default: null },
+		moderationReason: { type: String, trim: true, maxlength: 280, default: null },
+		reporterIpHash: { type: String, default: null },
+		reporterDeviceHash: { type: String, default: null },
 		externalId: { type: String, default: null },
 		ligne: { type: String, required: true },
 		typeProbleme: {
@@ -82,6 +87,8 @@ signalementSchema.index({ ligne: 1, arretId: 1, dateSignalement: -1 });
 signalementSchema.index({ status: 1, dateSignalement: -1 });
 signalementSchema.index({ moderationStatus: 1, dateSignalement: -1 });
 signalementSchema.index({ authorType: 1, moderationStatus: 1, dateSignalement: -1 });
+signalementSchema.index({ reporterIpHash: 1, dateSignalement: -1 });
+signalementSchema.index({ reporterDeviceHash: 1, dateSignalement: -1 });
 signalementSchema.index(
 	{ dateSignalement: 1 },
 	{ expireAfterSeconds: Math.max(ttlDays, 1) * 24 * 60 * 60, name: "signalement_ttl" }

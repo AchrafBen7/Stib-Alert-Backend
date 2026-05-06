@@ -10,6 +10,7 @@ const { sendFavoriteIncidentPushes } = require("../services/assistantIncidentPus
 const { syncOfficialPerturbations } = require("../services/stibOfficialSeedService");
 const moment = require("moment");
 const path = require("path");
+const crypto = require("crypto");
 const cloudinary = require("../config/cloudinary");
 const { CloudinaryStorage } = require("multer-storage-cloudinary");
 const multer = require("multer");
@@ -36,6 +37,44 @@ const serializeSignalement = (signalement) => {
 		community: buildCommunityMeta(raw),
 	};
 };
+
+function clientIp(req) {
+	return String(req.ip || req.headers["x-forwarded-for"]?.split(",")[0]?.trim() || "unknown");
+}
+
+function clientDeviceId(req) {
+	return String(req.headers["x-stib-device-id"] || req.headers["x-device-id"] || "").trim();
+}
+
+function privacyHash(value) {
+	const normalized = String(value || "").trim();
+	if (!normalized) return null;
+	const salt = process.env.SIGNALEMENT_PRIVACY_SALT || process.env.JWT_SECRET || "stib-alert";
+	return crypto
+		.createHmac("sha256", salt)
+		.update(normalized)
+		.digest("hex");
+}
+
+async function findRecentAnonymousDuplicate({ arretId, ligne, typeProbleme, reporterIpHash, reporterDeviceHash }) {
+	if (!reporterIpHash && !reporterDeviceHash) return null;
+
+	const since = new Date(Date.now() - 10 * 60 * 1000);
+	const identityQuery = [];
+	if (reporterIpHash) identityQuery.push({ reporterIpHash });
+	if (reporterDeviceHash) identityQuery.push({ reporterDeviceHash });
+
+	return Signalement.findOne({
+		arretId,
+		ligne,
+		typeProbleme,
+		authorType: "anonymous",
+		dateSignalement: { $gte: since },
+		status: { $ne: "resolved" },
+		moderationStatus: { $in: ["pending", "approved"] },
+		$or: identityQuery,
+	}).lean();
+}
 
 let lastOfficialHydrationAt = 0;
 let officialHydrationPromise = null;
@@ -192,6 +231,25 @@ exports.ajouterSignalement = async (req, res) => {
 		const isAuthenticatedAuthor = Boolean(req.user?.userId);
 		const moderationStatus = isAuthenticatedAuthor ? "approved" : "pending";
 		const authorType = isAuthenticatedAuthor ? "authenticated" : "anonymous";
+		const reporterIpHash = privacyHash(clientIp(req));
+		const reporterDeviceHash = privacyHash(clientDeviceId(req));
+
+		if (!isAuthenticatedAuthor) {
+			const duplicate = await findRecentAnonymousDuplicate({
+				arretId: arret._id,
+				ligne,
+				typeProbleme,
+				reporterIpHash,
+				reporterDeviceHash,
+			});
+
+			if (duplicate) {
+				return res.status(409).json({
+					message: "Signalement déjà reçu récemment pour cette ligne et cet arrêt. Il est en attente de vérification.",
+					moderationStatus: duplicate.moderationStatus,
+				});
+			}
+		}
 
 		// 🔹 Création du signalement avec "confiance"
 		const signalement = await Signalement.create({
@@ -199,6 +257,8 @@ exports.ajouterSignalement = async (req, res) => {
 			arretId: arret._id,
 			authorType,
 			moderationStatus,
+			reporterIpHash,
+			reporterDeviceHash,
 			ligne,
 			typeProbleme,
 			description,
@@ -331,6 +391,27 @@ exports.voirSignalementsModeration = async (req, res) => {
 	}
 };
 
+exports.voirResumeModeration = async (_req, res) => {
+	try {
+		const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
+		const [pending, approved24h, rejected24h, anonymousPending] = await Promise.all([
+			Signalement.countDocuments({ source: "community", moderationStatus: "pending" }),
+			Signalement.countDocuments({ source: "community", moderationStatus: "approved", moderatedAt: { $gte: since24h } }),
+			Signalement.countDocuments({ source: "community", moderationStatus: "rejected", moderatedAt: { $gte: since24h } }),
+			Signalement.countDocuments({ source: "community", authorType: "anonymous", moderationStatus: "pending" }),
+		]);
+
+		res.json({
+			pending,
+			anonymousPending,
+			approved24h,
+			rejected24h,
+		});
+	} catch (error) {
+		res.status(500).json({ message: error.message });
+	}
+};
+
 exports.approuverSignalement = async (req, res) => {
 	try {
 		const signalement = await Signalement.findOne({
@@ -344,6 +425,9 @@ exports.approuverSignalement = async (req, res) => {
 		}
 
 		signalement.moderationStatus = "approved";
+		signalement.moderatedAt = new Date();
+		signalement.moderatedBy = req.user?.userId;
+		signalement.moderationReason = null;
 		await signalement.save();
 
 		emitSignalement(signalement);
@@ -361,6 +445,7 @@ exports.approuverSignalement = async (req, res) => {
 
 exports.rejeterSignalement = async (req, res) => {
 	try {
+		const reason = String(req.body?.reason || "").trim().slice(0, 280) || "Rejeté après modération.";
 		const signalement = await Signalement.findOne({
 			_id: req.params.id,
 			source: "community",
@@ -373,6 +458,9 @@ exports.rejeterSignalement = async (req, res) => {
 
 		signalement.moderationStatus = "rejected";
 		signalement.status = "resolved";
+		signalement.moderatedAt = new Date();
+		signalement.moderatedBy = req.user?.userId;
+		signalement.moderationReason = reason;
 		await signalement.save();
 
 		res.json({

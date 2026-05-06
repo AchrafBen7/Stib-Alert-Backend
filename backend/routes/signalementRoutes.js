@@ -4,6 +4,7 @@ const signalementController = require("../controllers/signalementController");
 const {
 	voirSignalements,
 	voirSignalementsModeration,
+	voirResumeModeration,
 	approuverSignalement,
 	rejeterSignalement,
 	voterSignalement,
@@ -41,6 +42,7 @@ router.post(
 
 router.get("/", voirSignalements);
 router.get("/moderation/pending", protect, isAdmin, voirSignalementsModeration);
+router.get("/moderation/summary", protect, isAdmin, voirResumeModeration);
 router.post("/moderation/:id/approve", protect, isAdmin, validateMongoId, handleValidation, approuverSignalement);
 router.post("/moderation/:id/reject", protect, isAdmin, validateMongoId, handleValidation, rejeterSignalement);
 router.get("/lignes", voirLignesDisponibles);
