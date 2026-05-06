@@ -573,6 +573,82 @@ function mapIncident(signalement) {
 	};
 }
 
+function signalementStopPayload(signalement) {
+	if (!signalement?.arretId || typeof signalement.arretId !== "object") return null;
+	return {
+		id: signalement.arretId._id,
+		name: signalement.arretId.nom,
+		latitude: signalement.arretId.latitude ?? null,
+		longitude: signalement.arretId.longitude ?? null,
+	};
+}
+
+function signalementStopKey(signalement) {
+	if (!signalement?.arretId) return "unknown-stop";
+	if (typeof signalement.arretId === "object") {
+		return String(signalement.arretId._id || signalement.arretId.stop_id || signalement.arretId.merged_stop_id || "unknown-stop");
+	}
+	return String(signalement.arretId);
+}
+
+function buildCommunityReportClusters(signalements = [], { threshold = 3 } = {}) {
+	const groups = new Map();
+
+	for (const signalement of signalements) {
+		const line = normalizeLine(signalement.ligne);
+		if (!line) continue;
+
+		const stopKey = signalementStopKey(signalement);
+		const key = `${line}:${stopKey}`;
+		const group = groups.get(key) || {
+			line,
+			stopKey,
+			stop: signalementStopPayload(signalement),
+			items: [],
+		};
+
+		if (!group.stop) group.stop = signalementStopPayload(signalement);
+		group.items.push(signalement);
+		groups.set(key, group);
+	}
+
+	return [...groups.values()]
+		.filter((group) => group.items.length >= threshold)
+		.map((group) => {
+			const sortedItems = group.items
+				.slice()
+				.sort((left, right) => new Date(right.dateSignalement || 0) - new Date(left.dateSignalement || 0));
+			const count = sortedItems.length;
+			const latestDate = sortedItems[0]?.dateSignalement || new Date();
+			const severity = count >= 5 ? SEVERITY.MAJOR : SEVERITY.MINOR;
+			const confidence = Math.min(0.95, 0.55 + count * 0.08);
+			const stopName = group.stop?.name;
+
+			return {
+				id: `community-cluster:${group.line}:${group.stopKey}:${new Date(latestDate).getTime()}`,
+				type: "Signalements nombreux",
+				description: stopName
+					? `Grand nombre de signalements pour la ligne ${group.line} à ${stopName} (${count} signalements récents).`
+					: `Grand nombre de signalements pour la ligne ${group.line} (${count} signalements récents).`,
+				severity,
+				confidence,
+				source: "community",
+				line: group.line,
+				stop: group.stop,
+				date: latestDate,
+				latitude: group.stop?.latitude ?? null,
+				longitude: group.stop?.longitude ?? null,
+				community: {
+					status: "confirmed",
+					confirmations: count,
+					confidence,
+					clustered: true,
+					threshold,
+				},
+			};
+		});
+}
+
 function mapOfficialIncident(item, { defaultLine = null, stopLookup = new Map() } = {}) {
 	const primaryLine = Array.isArray(item.lines) ? item.lines[0] : item.lines || defaultLine || null;
 	const matchedStop = (item.stops || [])
@@ -688,8 +764,10 @@ async function getTransportStop(stopId) {
 		const waitingTimes = waitingTimesResult.data;
 		const officialIncidents = officialIncidentsResult.data;
 		const officialStopLookup = await getStopsByRealtimeIds(officialIncidents.items.flatMap((item) => item.stops || []));
+		const communityClusters = buildCommunityReportClusters(signalements);
 
 		const activeIncidents = [
+			...communityClusters,
 			...signalements.map(mapIncident),
 			...officialIncidents.items.slice(0, 5).map((item) => mapOfficialIncident(item, {
 				stopLookup: officialStopLookup,
@@ -810,8 +888,10 @@ async function getTransportLine(lineId) {
 		const vehicles = vehiclesResult.data;
 		const officialIncidents = officialIncidentsResult.data;
 		const officialStopLookup = await getStopsByRealtimeIds(officialIncidents.items.flatMap((item) => item.stops || []));
+		const communityClusters = buildCommunityReportClusters(signalements);
 
 		const activeIncidents = [
+			...communityClusters,
 			...signalements.map(mapIncident),
 			...officialIncidents.items.slice(0, 8).map((item) => mapOfficialIncident(item, {
 				stopLookup: officialStopLookup,
@@ -1029,7 +1109,9 @@ async function recommendRoute({ depart, destination, lignesBloquees = [] }) {
 		}).populate("arretId").lean();
 
 		const officialStopLookup = await getStopsByRealtimeIds(officialIncidents.items.flatMap((item) => item.stops || []));
+		const communityClusters = buildCommunityReportClusters(signalements);
 		const incidents = [
+			...communityClusters,
 			...signalements.map(mapIncident),
 			...officialIncidents.items.slice(0, 12).map((item) => mapOfficialIncident(item, {
 				stopLookup: officialStopLookup,
