@@ -202,9 +202,13 @@ async function getScheduledStopDepartures({ stopIds = [], stopName = null, lines
 
 	let entries = normalizedStopIds
 		.flatMap((stopId) => byStopId.get(stopId) || []);
-	if (!entries.length && stopName && normalizedLines.length) {
+
+	// Some app stops use merged ids that differ from GTFS physical stop ids.
+	// Keep stop-id matches, but also enrich by stop name + line to cover these variants.
+	if (stopName && normalizedLines.length) {
 		const stopNameKey = normalizeStopName(stopName);
-		entries = normalizedLines.flatMap((currentLine) => byNameAndLine.get(`${stopNameKey}|${currentLine}`) || []);
+		const nameMatches = normalizedLines.flatMap((currentLine) => byNameAndLine.get(`${stopNameKey}|${currentLine}`) || []);
+		entries = [...entries, ...nameMatches];
 	}
 
 	const departures = entries
