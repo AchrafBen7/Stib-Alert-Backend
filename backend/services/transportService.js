@@ -622,6 +622,7 @@ function buildCommunityReportClusters(signalements = [], { threshold = 3 } = {})
 			const latestDate = sortedItems[0]?.dateSignalement || new Date();
 			const severity = count >= 5 ? SEVERITY.MAJOR : SEVERITY.MINOR;
 			const confidence = Math.min(0.95, 0.55 + count * 0.08);
+			const freshnessMinutes = Math.max(0, Math.round((Date.now() - new Date(latestDate).getTime()) / 60_000));
 			const stopName = group.stop?.name;
 
 			return {
@@ -642,6 +643,7 @@ function buildCommunityReportClusters(signalements = [], { threshold = 3 } = {})
 					status: "confirmed",
 					confirmations: count,
 					confidence,
+					freshnessMinutes,
 					clustered: true,
 					threshold,
 				},
