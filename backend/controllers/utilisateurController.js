@@ -493,6 +493,24 @@ exports.enregistrerTokenFCM = async (req, res) => {
 		res.status(500).json({ message: error.message });
 	}
 };
+exports.supprimerCompte = async (req, res) => {
+	try {
+		const userId = req.params.id;
+
+		const token = req.headers.authorization?.split(" ")[1];
+		if (token && redis) {
+			await redis.del(`auth:${token}`);
+		}
+
+		await Signalement.deleteMany({ utilisateur: userId });
+		await Utilisateur.findByIdAndDelete(userId);
+
+		res.json({ message: "Compte supprimé avec succès." });
+	} catch (error) {
+		res.status(500).json({ message: error.message });
+	}
+};
+
 exports.ajouterOuRetirerFavori = async (req, res) => {
 	try {
 		const { id, arretId } = req.params;

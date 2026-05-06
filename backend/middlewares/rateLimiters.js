@@ -1,11 +1,14 @@
 const rateLimit = require("express-rate-limit");
 
+const isTest = () => process.env.NODE_ENV === "test";
+
 const makeLimiter = (windowMs, max, message) =>
 	rateLimit({
 		windowMs,
 		max,
 		standardHeaders: true,
 		legacyHeaders: false,
+		skip: isTest,
 		message: { message },
 	});
 
@@ -15,7 +18,7 @@ const makeConditionalLimiter = ({ windowMs, max, message, skip }) =>
 		max,
 		standardHeaders: true,
 		legacyHeaders: false,
-		skip,
+		skip: (req) => isTest() || (skip ? skip(req) : false),
 		message: { message },
 	});
 
@@ -26,6 +29,7 @@ const makeAuthLimiter = (windowMs, max, message) =>
 		standardHeaders: true,
 		legacyHeaders: false,
 		skipSuccessfulRequests: true,
+		skip: isTest,
 		message: { message },
 	});
 

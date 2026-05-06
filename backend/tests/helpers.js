@@ -1,10 +1,10 @@
 const request = require("supertest");
 const app = require("../app");
 const redis = require("../config/redis");
+const Arret = require("../models/Arret");
 
 // Creates a user, activates it, and returns { token, refreshToken, userId }
 async function registerAndLogin(email = "test@example.com", password = "Password123!") {
-    // Step 1: Register
     const reg = await request(app)
         .post("/api/utilisateurs/inscription")
         .send({ nom: "Test User", email, motDePasse: password });
@@ -12,11 +12,9 @@ async function registerAndLogin(email = "test@example.com", password = "Password
     if (reg.status !== 201) throw new Error(`Inscription failed: ${JSON.stringify(reg.body)}`);
     const { activationToken } = reg.body;
 
-    // Step 2: Retrieve OTP code from mock Redis
     const code = await redis.get(`activation:${email}`);
     if (!code) throw new Error("Activation code not found in Redis mock");
 
-    // Step 3: Activate
     const act = await request(app)
         .post("/api/utilisateurs/activation")
         .send({ activationToken, activationCode: code });
@@ -31,9 +29,22 @@ async function registerAndLogin(email = "test@example.com", password = "Password
     };
 }
 
+// Ensures a test stop exists and returns its nom
+async function ensureTestArret({ stopId = "TEST071", nom = "Test Stop 71", ligne = "71" } = {}) {
+    await Arret.findOneAndUpdate(
+        { stop_id: stopId },
+        { stop_id: stopId, nom, latitude: 50.85, longitude: 4.35, lignesDesservies: [ligne] },
+        { upsert: true, new: true }
+    );
+    return nom;
+}
+
 // Creates a signalement via the API and returns the created document
 async function createSignalement(token, overrides = {}) {
+    const nomArret = await ensureTestArret();
+
     const payload = {
+        nomArret,
         ligne: "71",
         typeProbleme: "Retard",
         description: "Test signalement description",
@@ -51,4 +62,4 @@ async function createSignalement(token, overrides = {}) {
     return res.body.signalement || res.body;
 }
 
-module.exports = { registerAndLogin, createSignalement };
+module.exports = { registerAndLogin, createSignalement, ensureTestArret };

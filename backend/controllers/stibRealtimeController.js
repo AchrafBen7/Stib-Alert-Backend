@@ -5,6 +5,7 @@ const {
 	getWaitingTimes,
 	getVehiclePositions,
 } = require("../services/belgianMobility");
+const { enrichVehiclePositions } = require("../services/vehicleMapService");
 
 function includeRaw(req) {
 	return String(req.query.includeRaw || "false").toLowerCase() === "true";
@@ -51,6 +52,18 @@ exports.voirVehiclePositions = async (req, res) => {
 	try {
 		const result = await getVehiclePositions(req.query);
 		res.json(formatResponse(req, "VehiclePositions", result));
+	} catch (error) {
+		handleError(res, error);
+	}
+};
+
+exports.voirVehiclePositionsMap = async (req, res) => {
+	try {
+		const { lat, lng, rayon, lines } = req.query;
+		const { payload } = await getVehiclePositions({});
+		const rawResults = payload?.results || [];
+		const vehicles = await enrichVehiclePositions(rawResults, { lat, lng, rayon, lines });
+		res.json({ count: vehicles.length, items: vehicles });
 	} catch (error) {
 		handleError(res, error);
 	}

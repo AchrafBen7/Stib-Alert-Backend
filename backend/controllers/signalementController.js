@@ -289,6 +289,55 @@ exports.ajouterSignalement = async (req, res) => {
 	}
 };
 
+exports.signalerViaSiri = async (req, res) => {
+	try {
+		if (!req.user?.userId) {
+			return res.status(401).json({ message: "Connexion requise pour signaler via Siri." });
+		}
+
+		const { nomArret, typeProbleme, description } = req.body;
+
+		const typesValides = ["Retard", "Accident", "Panne", "Propreté", "Agression", "Incivilité", "Autre"];
+		if (!nomArret || !typeProbleme || !typesValides.includes(typeProbleme)) {
+			return res.status(400).json({ message: "Arrêt et type de problème requis." });
+		}
+
+		const arret = await Arret.findOne({ nom: { $regex: new RegExp(`^${nomArret.trim()}$`, "i") } });
+		if (!arret) return res.status(404).json({ message: `L'arrêt "${nomArret}" n'existe pas.` });
+
+		const ligne = arret.lignesDesservies?.[0];
+		if (!ligne) return res.status(400).json({ message: `Aucune ligne connue pour l'arrêt "${nomArret}".` });
+
+		const texteDescription = description?.trim() || "Signalé via Siri";
+		const estValide = await analyserSignalement(texteDescription);
+		if (!estValide) return res.status(400).json({ message: "Ce signalement ne respecte pas les règles." });
+
+		const signalement = await Signalement.create({
+			utilisateurId: req.user.userId,
+			arretId: arret._id,
+			authorType: "authenticated",
+			moderationStatus: "approved",
+			ligne,
+			typeProbleme,
+			description: texteDescription,
+			confiance: "moyenne",
+		});
+
+		emitSignalement(signalement);
+		sendFavoriteIncidentPushes({ ...signalement.toObject(), arretId: arret }, "new_signalement")
+			.catch((e) => console.warn("[siri push]", e.message));
+
+		res.status(201).json({
+			message: `Signalement "${typeProbleme}" créé pour l'arrêt ${arret.nom} (ligne ${ligne}).`,
+			ligne,
+			nomArret: arret.nom,
+			signalement: serializeSignalement(signalement),
+		});
+	} catch (error) {
+		res.status(500).json({ message: error.message });
+	}
+};
+
 exports.voirUnSignalementParArret = async (req, res) => {
 	try {
 		const { arretId, signalementId } = req.params;

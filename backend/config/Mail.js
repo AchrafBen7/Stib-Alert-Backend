@@ -4,6 +4,8 @@ const RESEND_ENDPOINT = "https://api.resend.com/emails";
 const RESEND_TIMEOUT_MS = 8000;
 
 async function sendMail(to, subject, html, text = null) {
+	if (process.env.NODE_ENV === "test") return;
+
 	const apiKey = process.env.RESEND_API_KEY;
 	const from = process.env.RESEND_FROM_EMAIL;
 

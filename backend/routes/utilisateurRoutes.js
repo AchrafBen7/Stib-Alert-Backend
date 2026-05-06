@@ -54,6 +54,8 @@ router.patch(
 	utilisateurController.ajouterOuRetirerFavori
 );
 
+router.delete("/:id", protect, validateMongoId, handleValidation, requireSelf(), utilisateurController.supprimerCompte);
+
 router.post("/enregistrer-token", protect, validatePushToken, handleValidation, enregistrerTokenFCM);
 
 module.exports = router;

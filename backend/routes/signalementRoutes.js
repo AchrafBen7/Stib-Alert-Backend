@@ -55,6 +55,8 @@ router.get(
 	signalementController.voirUnSignalementParArret
 );
 
+router.post("/siri", protect, signalementController.signalerViaSiri);
+
 router.post("/:id/vote", protect, validateVote, handleValidation, voterSignalement);
 router.post("/:id/confirm", protect, validateMongoId, handleValidation, confirmerSignalement);
 router.post("/:id/still-blocked", protect, validateMongoId, handleValidation, marquerToujoursBloque);
