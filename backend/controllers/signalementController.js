@@ -263,6 +263,14 @@ exports.voirSignalements = async (req, res) => {
 
 		if (req.query.ligne) query.ligne = req.query.ligne;
 		if (req.query.arretId) query.arretId = req.query.arretId;
+		if (req.query.source) {
+			const source = String(req.query.source).trim().toLowerCase();
+			if (["official", "stib", "stib_officiel"].includes(source)) {
+				query.source = "stib_officiel";
+			} else if (source === "community") {
+				query.source = "community";
+			}
+		}
 
 		if (page === 1) {
 			await ensureOfficialSignalementsForPublicList();

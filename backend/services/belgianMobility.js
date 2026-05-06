@@ -27,6 +27,7 @@ let localTravellersSnapshotCache = null;
 
 const LOCAL_TRAVELLERS_SNAPSHOT_CANDIDATES = [
 	process.env.STIB_TRAVELLERS_INFORMATION_SNAPSHOT_PATH,
+	path.join(__dirname, "..", "data", "stib-travellers-information.json"),
 	path.join(process.cwd(), "data", "stib-travellers-information.json"),
 	path.join(process.cwd(), "stib-travellers-information.json"),
 	path.join(os.homedir(), "Downloads", "stib-travellers-information.json"),
