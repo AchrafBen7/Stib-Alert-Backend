@@ -530,6 +530,20 @@ exports.voterSignalement = async (req, res) => {
 
 		if (!signalement) return res.status(404).json({ message: "Signalement introuvable" });
 
+		const userId = req.user?.userId;
+		if (userId) {
+			const alreadyVoted = await Utilisateur.exists({
+				_id: userId,
+				votes: signalement._id,
+			});
+			if (alreadyVoted) {
+				return res.status(409).json({
+					message: "Vous avez déjà voté pour ce signalement.",
+					signalement: serializeSignalement(signalement),
+				});
+			}
+		}
+
 		if (vote === "up") {
 			signalement.votesPositifs += 1;
 		} else if (vote === "down") {
@@ -539,8 +553,8 @@ exports.voterSignalement = async (req, res) => {
 		await signalement.save();
 
 		// Ajouter l'ID du signalement aux votes de l'utilisateur connecté
-		if (req.user?.userId) {
-			await Utilisateur.findByIdAndUpdate(req.user.userId, {
+		if (userId) {
+			await Utilisateur.findByIdAndUpdate(userId, {
 				$addToSet: { votes: signalement._id },
 			});
 		}
@@ -550,7 +564,10 @@ exports.voterSignalement = async (req, res) => {
 			await Signalement.findByIdAndUpdate(signalement._id, { confiance: "basse" });
 		}
 
-		res.json({ message: "Vote enregistré !" });
+		res.json({
+			message: "Vote enregistré !",
+			signalement: serializeSignalement(signalement),
+		});
 	} catch (error) {
 		res.status(500).json({ message: error.message });
 	}

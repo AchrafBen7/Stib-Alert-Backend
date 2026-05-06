@@ -130,9 +130,17 @@ describe("POST /api/signalements/:id/vote", () => {
         const res = await request(app)
             .post(`/api/signalements/${sigId}/vote`)
             .set("Authorization", `Bearer ${token}`)
-            .send({ vote: "positif" });
+            .send({ vote: "up" });
 
         expect(res.status).toBe(200);
+        expect(res.body.signalement.votesPositifs).toBe(1);
+
+        const duplicate = await request(app)
+            .post(`/api/signalements/${sigId}/vote`)
+            .set("Authorization", `Bearer ${token}`)
+            .send({ vote: "up" });
+
+        expect(duplicate.status).toBe(409);
     });
 });
 
