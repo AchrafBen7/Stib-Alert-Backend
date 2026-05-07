@@ -719,18 +719,8 @@ function mergeStopLines(...lineGroups) {
 	return sortLineIds(merged.values());
 }
 
-async function enrichDeparturesWithDelay(realtimeDepartures, stopIds, stopName, lines) {
-	if (!realtimeDepartures.length) return realtimeDepartures;
-
-	const scheduled = await getScheduledStopDepartures({
-		stopIds,
-		stopName,
-		lines,
-		limit: 12,
-	});
-
-	if (!scheduled.length) return realtimeDepartures;
-
+function applyDelayFromSchedule(realtimeDepartures, scheduled) {
+	if (!realtimeDepartures.length || !scheduled.length) return realtimeDepartures;
 	const now = Date.now();
 	return realtimeDepartures.map((dep) => {
 		const sameLine = scheduled.filter((s) => normalizeLine(s.line) === dep.line);
@@ -751,6 +741,44 @@ async function enrichDeparturesWithDelay(realtimeDepartures, stopIds, stopName, 
 		};
 	});
 }
+
+// For each (line, destination) group, ensure we surface up to perGroup upcoming
+// passes. STIB realtime often only returns one passage per direction; pad with
+// the next theoretical entry so the UI can show the user "puis Y min" reliably.
+function padDeparturesWithSchedule(realtimeDepartures, scheduled, perGroup = 2) {
+	if (!realtimeDepartures.length) return realtimeDepartures;
+
+	const groups = new Map();
+	const order = [];
+	for (const dep of realtimeDepartures) {
+		const key = `${normalizeLine(dep.line)}|${(dep.destination || "").toLowerCase()}`;
+		if (!groups.has(key)) {
+			groups.set(key, []);
+			order.push(key);
+		}
+		groups.get(key).push(dep);
+	}
+
+	for (const sc of scheduled) {
+		const key = `${normalizeLine(sc.line)}|${(sc.destination || "").toLowerCase()}`;
+		const arr = groups.get(key);
+		if (!arr) continue;
+		if (arr.length >= perGroup) continue;
+		const lastMinutes = arr[arr.length - 1]?.minutes ?? -Infinity;
+		// avoid duplicating the same (or near-identical) realtime passage
+		if (sc.minutes > lastMinutes + 1) {
+			arr.push(sc);
+		}
+	}
+
+	const result = [];
+	for (const key of order) {
+		const items = groups.get(key) || [];
+		result.push(...items.slice(0, perGroup));
+	}
+	return result.sort((left, right) => left.minutes - right.minutes);
+}
+
 
 async function getScheduledRouteDepartures(alternatives = [], limit = 6) {
 	const candidates = [];
@@ -850,21 +878,21 @@ async function getTransportStop(stopId) {
 
 		let nextDepartures = summarizeDepartures(waitingTimes.items);
 		const usedScheduledFallback = nextDepartures.length === 0;
+		// Always fetch theoretical departures: when realtime is empty we use them
+		// as a full fallback; when realtime has data we use them to compute delay
+		// and to pad each (line, direction) group up to two upcoming passes.
+		const scheduledDepartures = await getScheduledStopDepartures({
+			stopIds: stopRealtimeIds,
+			stopName: stop.nom,
+			lines: stop.lignesDesservies || [],
+			limit: 30,
+		});
 		if (usedScheduledFallback) {
-			nextDepartures = await getScheduledStopDepartures({
-				stopIds: stopRealtimeIds,
-				stopName: stop.nom,
-				lines: stop.lignesDesservies || [],
-				limit: 6,
-			});
+			nextDepartures = scheduledDepartures.slice(0, 6);
 			nextDepartures = filterDeparturesForStopLines(nextDepartures, stop.lignesDesservies || []);
 		} else {
-			nextDepartures = await enrichDeparturesWithDelay(
-				nextDepartures,
-				stopRealtimeIds,
-				stop.nom,
-				stop.lignesDesservies || [],
-			);
+			nextDepartures = applyDelayFromSchedule(nextDepartures, scheduledDepartures);
+			nextDepartures = padDeparturesWithSchedule(nextDepartures, scheduledDepartures, 2);
 		}
 		const servedLines = mergeStopLines(
 			stop.lignesDesservies || [],
