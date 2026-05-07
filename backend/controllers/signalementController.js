@@ -722,21 +722,42 @@ exports.voirArretsParLigne = async (req, res) => {
 			const nextPassages = waitingTimesByStop.get(String(arret.stop_id)) || [];
 			let effectivePassages = nextPassages;
 			let nextPassageSource = nextPassages.length ? "realtime" : null;
+			let delayMinutes = null;
+			let scheduledDepartureAt = null;
+			let realtimeDepartureAt = null;
+
+			const stopLookup = {
+				stopIds: [
+					arret.stop_id,
+					arret.merged_stop_id,
+					...(arret.physicalStopIds || []),
+				].filter(Boolean),
+				stopName: arret.nom,
+				lines: [ligne],
+				line: ligne,
+			};
 
 			if (!effectivePassages.length) {
-				const scheduled = await getScheduledStopDepartures({
-					stopIds: [
-						arret.stop_id,
-						arret.merged_stop_id,
-						...(arret.physicalStopIds || []),
-					],
-					stopName: arret.nom,
-					lines: [ligne],
-					line: ligne,
-					limit: 3,
-				});
+				const scheduled = await getScheduledStopDepartures({ ...stopLookup, limit: 3 });
 				effectivePassages = scheduled.map((item) => item.minutes);
 				nextPassageSource = effectivePassages.length ? "scheduled" : null;
+			} else {
+				const realtimeMinutes = effectivePassages[0];
+				const scheduled = await getScheduledStopDepartures({ ...stopLookup, limit: 6 });
+
+				if (scheduled.length) {
+					const match = scheduled.reduce((best, item) => {
+						if (!best) return item;
+						return Math.abs(item.minutes - realtimeMinutes) < Math.abs(best.minutes - realtimeMinutes) ? item : best;
+					}, null);
+
+					if (match && Math.abs(match.minutes - realtimeMinutes) <= 20) {
+						delayMinutes = realtimeMinutes - match.minutes;
+						const now = Date.now();
+						realtimeDepartureAt = new Date(now + realtimeMinutes * 60_000).toISOString();
+						scheduledDepartureAt = new Date(now + match.minutes * 60_000).toISOString();
+					}
+				}
 			}
 
 			return {
@@ -744,6 +765,9 @@ exports.voirArretsParLigne = async (req, res) => {
 				nextPassageMinutes: effectivePassages[0] ?? null,
 				nextPassages: effectivePassages.slice(0, 3),
 				nextPassageSource,
+				delayMinutes,
+				scheduledDepartureAt,
+				realtimeDepartureAt,
 			};
 		}));
 

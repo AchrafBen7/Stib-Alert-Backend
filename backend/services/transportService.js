@@ -691,6 +691,39 @@ function summarizeDepartures(waitingItems = [], lineFilter = null) {
 	return departures.slice(0, 6);
 }
 
+async function enrichDeparturesWithDelay(realtimeDepartures, stopIds, stopName, lines) {
+	if (!realtimeDepartures.length) return realtimeDepartures;
+
+	const scheduled = await getScheduledStopDepartures({
+		stopIds,
+		stopName,
+		lines,
+		limit: 12,
+	});
+
+	if (!scheduled.length) return realtimeDepartures;
+
+	const now = Date.now();
+	return realtimeDepartures.map((dep) => {
+		const sameLine = scheduled.filter((s) => normalizeLine(s.line) === dep.line);
+		if (!sameLine.length) return dep;
+
+		const match = sameLine.reduce((best, item) => {
+			if (!best) return item;
+			return Math.abs(item.minutes - dep.minutes) < Math.abs(best.minutes - dep.minutes) ? item : best;
+		}, null);
+
+		if (!match || Math.abs(match.minutes - dep.minutes) > 20) return dep;
+
+		return {
+			...dep,
+			delayMinutes: dep.minutes - match.minutes,
+			scheduledDepartureAt: new Date(now + match.minutes * 60_000).toISOString(),
+			realtimeDepartureAt: new Date(now + dep.minutes * 60_000).toISOString(),
+		};
+	});
+}
+
 async function getScheduledRouteDepartures(alternatives = [], limit = 6) {
 	const candidates = [];
 	const seen = new Set();
@@ -786,6 +819,13 @@ async function getTransportStop(stopId) {
 				lines: stop.lignesDesservies || [],
 				limit: 6,
 			});
+		} else {
+			nextDepartures = await enrichDeparturesWithDelay(
+				nextDepartures,
+				stopRealtimeIds,
+				stop.nom,
+				stop.lignesDesservies || [],
+			);
 		}
 		const severityInfo = computeRealtimeStatus({ incidents: activeIncidents, departures: nextDepartures });
 		const officialDataStatus = mergeOfficialStatuses([
