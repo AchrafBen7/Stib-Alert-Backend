@@ -658,7 +658,7 @@ function mapOfficialIncident(item, { defaultLine = null, stopLookup = new Map() 
 		.find(Boolean) || null;
 
 	return {
-		id: item.id,
+		id: item.id != null ? String(item.id) : `official-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
 		type: item.title || "Information STIB",
 		description: item.description,
 		severity: SEVERITY.MAJOR,

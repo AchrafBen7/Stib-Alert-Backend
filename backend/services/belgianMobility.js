@@ -337,8 +337,9 @@ function normalizeTravellerInformation(entry) {
 		}).filter(Boolean)
 		: (parsedStops || []);
 
+	const rawId = entry.id ?? entry._id ?? entry.messageid ?? entry.messageId ?? null;
 	return {
-		id: entry.id || entry._id || entry.messageid || entry.messageId || null,
+		id: rawId !== null && rawId !== undefined ? String(rawId) : null,
 		title: entry.title || entry.titre || entry.header || entry.cause || localizedText || null,
 		description: entry.description || entry.message || entry.text || localizedText || entry.content || null,
 		lines: normalizedLines,
