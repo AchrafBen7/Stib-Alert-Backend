@@ -814,8 +814,12 @@ function buildRouteSteps(route, shapeIndex = new Map()) {
 					startLongitude: details.departure_stop?.location?.lng ?? step.start_location?.lng ?? null,
 					targetLatitude: details.arrival_stop?.location?.lat ?? step.end_location?.lat ?? null,
 					targetLongitude: details.arrival_stop?.location?.lng ?? step.end_location?.lng ?? null,
-					scheduledDepartureAt: details.departure_time?.value || null,
-					scheduledArrivalAt: details.arrival_time?.value || null,
+					scheduledDepartureAt: details.departure_time?.value
+						? new Date(details.departure_time.value * 1000).toISOString()
+						: null,
+					scheduledArrivalAt: details.arrival_time?.value
+						? new Date(details.arrival_time.value * 1000).toISOString()
+						: null,
 					realtimeDepartureMinutes: null,
 					realtimeDepartureAt: null,
 					realtimeArrivalAt: null,
