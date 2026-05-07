@@ -297,7 +297,21 @@ exports.signalerViaSiri = async (req, res) => {
 
 		const { nomArret, typeProbleme, description } = req.body;
 
-		const typesValides = ["Retard", "Accident", "Panne", "Propreté", "Agression", "Incivilité", "Autre"];
+		const typesValides = [
+			"Retard",
+			"Accident",
+			"Panne",
+			"Propreté",
+			"Agression",
+			"Incivilité",
+			"Travaux",
+			"Déviation",
+			"Interruption",
+			"Arrêt non desservi",
+			"Perturbation",
+			"Information STIB",
+			"Autre",
+		];
 		if (!nomArret || !typeProbleme || !typesValides.includes(typeProbleme)) {
 			return res.status(400).json({ message: "Arrêt et type de problème requis." });
 		}

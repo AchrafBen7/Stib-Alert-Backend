@@ -7,25 +7,37 @@ const { sendAlertsForNewPerturbations } = require("./perturbationAlertService");
 let quotaBlockedUntil = 0;
 let lastQuotaLogAt = 0;
 
-const PROBLEM_TYPE_MAP = {
-	delay: "Retard",
-	retard: "Retard",
-	accident: "Accident",
-	breakdown: "Panne",
-	panne: "Panne",
-	incident: "Panne",
-	works: "Autre",
-	travaux: "Autre",
-	diversion: "Autre",
-	deviation: "Autre",
-};
-
 function mapToProblemType(text = "") {
-	const lower = text.toLowerCase();
-	for (const [key, value] of Object.entries(PROBLEM_TYPE_MAP)) {
-		if (lower.includes(key)) return value;
+	const lower = String(text)
+		.normalize("NFD")
+		.replace(/[\u0300-\u036f]/g, "")
+		.toLowerCase();
+
+	if (/(interrompu|interruption|supprime|suppression|interrupted|onderbroken)/.test(lower)) {
+		return "Interruption";
 	}
-	return "Retard";
+	if (/(non desservi|arret non servi|not served|halte niet bediend)/.test(lower)) {
+		return "Arrêt non desservi";
+	}
+	if (/(travaux|works|werken|chantier)/.test(lower)) {
+		return "Travaux";
+	}
+	if (/(devi|deviation|diversion|omgeleid|detour)/.test(lower)) {
+		return "Déviation";
+	}
+	if (/(retard|delay|vertraging|attente)/.test(lower)) {
+		return "Retard";
+	}
+	if (/(accident|collision|chute)/.test(lower)) {
+		return "Accident";
+	}
+	if (/(panne|breakdown|incident|bloque|immobilise)/.test(lower)) {
+		return "Panne";
+	}
+	if (/(police|ordre de police|manifestation|event|evenement|evenement)/.test(lower)) {
+		return "Perturbation";
+	}
+	return "Information STIB";
 }
 
 // Brussels city center as fallback for line-level perturbations
