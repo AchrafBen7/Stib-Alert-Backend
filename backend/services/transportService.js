@@ -58,7 +58,8 @@ function roundedCoordinateString(value) {
 }
 
 function normalizeLine(line) {
-	return String(line || "").trim();
+	const normalized = String(line || "").trim().toUpperCase();
+	return /^T\d+$/.test(normalized) ? normalized.slice(1) : normalized;
 }
 
 function lineCandidates(lineId) {
@@ -691,6 +692,12 @@ function summarizeDepartures(waitingItems = [], lineFilter = null) {
 	return departures.slice(0, 6);
 }
 
+function filterDeparturesForStopLines(departures = [], lines = []) {
+	const allowedLines = new Set((lines || []).map(normalizeLine).filter(Boolean));
+	if (!allowedLines.size) return departures;
+	return departures.filter((departure) => allowedLines.has(normalizeLine(departure.line)));
+}
+
 async function enrichDeparturesWithDelay(realtimeDepartures, stopIds, stopName, lines) {
 	if (!realtimeDepartures.length) return realtimeDepartures;
 
@@ -810,7 +817,10 @@ async function getTransportStop(stopId) {
 			})),
 		];
 
-		let nextDepartures = summarizeDepartures(waitingTimes.items);
+		let nextDepartures = filterDeparturesForStopLines(
+			summarizeDepartures(waitingTimes.items),
+			stop.lignesDesservies || [],
+		);
 		const usedScheduledFallback = nextDepartures.length === 0;
 		if (usedScheduledFallback) {
 			nextDepartures = await getScheduledStopDepartures({
@@ -819,6 +829,7 @@ async function getTransportStop(stopId) {
 				lines: stop.lignesDesservies || [],
 				limit: 6,
 			});
+			nextDepartures = filterDeparturesForStopLines(nextDepartures, stop.lignesDesservies || []);
 		} else {
 			nextDepartures = await enrichDeparturesWithDelay(
 				nextDepartures,
@@ -826,6 +837,7 @@ async function getTransportStop(stopId) {
 				stop.nom,
 				stop.lignesDesservies || [],
 			);
+			nextDepartures = filterDeparturesForStopLines(nextDepartures, stop.lignesDesservies || []);
 		}
 		const severityInfo = computeRealtimeStatus({ incidents: activeIncidents, departures: nextDepartures });
 		const officialDataStatus = mergeOfficialStatuses([

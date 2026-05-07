@@ -17,7 +17,8 @@ function normalizeStopName(value) {
 }
 
 function normalizeLine(line) {
-	return String(line || "").trim().toUpperCase();
+	const normalized = String(line || "").trim().toUpperCase();
+	return /^T\d+$/.test(normalized) ? normalized.slice(1) : normalized;
 }
 
 function parseClockMinutes(value) {
@@ -199,6 +200,7 @@ async function getScheduledStopDepartures({ stopIds = [], stopName = null, lines
 	const { byStopId, byNameAndLine } = await loadScheduleIndex();
 	const { weekdayKey, minutesNow } = getBrusselsDateParts();
 	const lineFilter = line ? normalizeLine(line) : null;
+	const allowedLines = lineFilter ? new Set([lineFilter]) : new Set(normalizedLines);
 
 	let entries = normalizedStopIds
 		.flatMap((stopId) => byStopId.get(stopId) || []);
@@ -213,6 +215,7 @@ async function getScheduledStopDepartures({ stopIds = [], stopName = null, lines
 
 	const departures = entries
 		.filter((entry) => entry.dayType === weekdayKey)
+		.filter((entry) => !allowedLines.size || allowedLines.has(entry.line))
 		.filter((entry) => !lineFilter || entry.line === lineFilter)
 		.map((entry) => {
 			const minutes = computeUpcomingMinutes(entry.scheduleMinutes, minutesNow);
