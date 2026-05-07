@@ -807,11 +807,21 @@ async function getTransportStop(stopId) {
 			throw error;
 		}
 
-		const stopRealtimeIds = [...new Set([
-			stop.stop_id,
-			stop.merged_stop_id,
-			...(stop.physicalStopIds || []),
-		].map((value) => String(value || "").trim()).filter(Boolean))];
+		// The Arret document can be a MERGED record (one physical hub grouping many
+		// platforms with different line subsets). Querying realtime for all
+		// physicalStopIds at once would mix in departures from neighbouring platforms
+		// and surface lines that don't actually serve the exact stop the user tapped.
+		// Resolve to the single stop the caller addressed: if the input is already a
+		// STIB stop_id, use it as-is; only fall back to canonical/merged when the
+		// caller passed the MongoDB ObjectId.
+		const inputStopId = String(stopId).trim();
+		const isObjectIdLookup = mongoose.isValidObjectId(stopId);
+		const resolvedRealtimeId = isObjectIdLookup
+			? (stop.stop_id || stop.merged_stop_id || null)
+			: inputStopId;
+		const stopRealtimeIds = resolvedRealtimeId
+			? [String(resolvedRealtimeId).trim()].filter(Boolean)
+			: [];
 
 		const [signalements, waitingTimesResult, officialIncidentsResult] = await Promise.all([
 			getRecentSignalements({ stopIds: [stop._id] }),
