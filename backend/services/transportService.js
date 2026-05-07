@@ -807,37 +807,21 @@ async function getTransportStop(stopId) {
 			throw error;
 		}
 
-		// physicalStopIds inside a single Arret can include far-apart platforms that
-		// were merged too aggressively (HEEMBEEK case), so we never expand through
-		// them. Instead, look for sibling Arret documents that share the same name
-		// AND sit within ~80m — that's the standard layout for hubs like DOCKS
-		// BRUXSEL, where each platform is its own Arret. This widens the realtime
-		// query just enough to surface every line that actually stops at the user's
-		// tapped location, without leaking lines from unrelated stops elsewhere.
+		// The Arret document can be a MERGED record (one physical hub grouping many
+		// platforms with different line subsets). Querying realtime for all
+		// physicalStopIds at once would mix in departures from neighbouring platforms
+		// and surface lines that don't actually serve the exact stop the user tapped.
+		// Resolve to the single stop the caller addressed: if the input is already a
+		// STIB stop_id, use it as-is; only fall back to canonical/merged when the
+		// caller passed the MongoDB ObjectId.
 		const inputStopId = String(stopId).trim();
 		const isObjectIdLookup = mongoose.isValidObjectId(stopId);
-
-		const realtimeIds = new Set();
-		if (!isObjectIdLookup && inputStopId) realtimeIds.add(inputStopId);
-		if (stop.stop_id) realtimeIds.add(String(stop.stop_id).trim());
-		if (stop.merged_stop_id) realtimeIds.add(String(stop.merged_stop_id).trim());
-
-		if (stop.nom && Number.isFinite(stop.latitude) && Number.isFinite(stop.longitude)) {
-			const latDelta = 0.0007; // ~78m N/S
-			const lngDelta = 0.001;  // ~70m E/W at Brussels latitude
-			const siblings = await Arret.find({
-				_id: { $ne: stop._id },
-				nom: stop.nom,
-				latitude: { $gte: stop.latitude - latDelta, $lte: stop.latitude + latDelta },
-				longitude: { $gte: stop.longitude - lngDelta, $lte: stop.longitude + lngDelta },
-			}).select("stop_id merged_stop_id").lean();
-			for (const sibling of siblings) {
-				if (sibling.stop_id) realtimeIds.add(String(sibling.stop_id).trim());
-				if (sibling.merged_stop_id) realtimeIds.add(String(sibling.merged_stop_id).trim());
-			}
-		}
-
-		const stopRealtimeIds = [...realtimeIds].filter(Boolean);
+		const resolvedRealtimeId = isObjectIdLookup
+			? (stop.stop_id || stop.merged_stop_id || null)
+			: inputStopId;
+		const stopRealtimeIds = resolvedRealtimeId
+			? [String(resolvedRealtimeId).trim()].filter(Boolean)
+			: [];
 
 		const [signalements, waitingTimesResult, officialIncidentsResult] = await Promise.all([
 			getRecentSignalements({ stopIds: [stop._id] }),
