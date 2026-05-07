@@ -689,7 +689,9 @@ function summarizeDepartures(waitingItems = [], lineFilter = null) {
 		.filter((item) => item.line && item.minutes !== null)
 		.sort((a, b) => a.minutes - b.minutes);
 
-	return departures.slice(0, 6);
+	// Return enough departures to cover ~2 per line per direction at busy hubs.
+	// Clients group by (line, destination) so over-fetching here is harmless.
+	return departures.slice(0, 40);
 }
 
 function filterDeparturesForStopLines(departures = [], lines = []) {
