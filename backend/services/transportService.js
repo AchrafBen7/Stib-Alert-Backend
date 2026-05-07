@@ -698,6 +698,25 @@ function filterDeparturesForStopLines(departures = [], lines = []) {
 	return departures.filter((departure) => allowedLines.has(normalizeLine(departure.line)));
 }
 
+function sortLineIds(lines = []) {
+	return [...lines].sort((left, right) => {
+		const leftNumber = Number.parseInt(left, 10);
+		const rightNumber = Number.parseInt(right, 10);
+		if (Number.isFinite(leftNumber) && Number.isFinite(rightNumber)) return leftNumber - rightNumber;
+		return String(left).localeCompare(String(right), "fr", { numeric: true, sensitivity: "base" });
+	});
+}
+
+function mergeStopLines(...lineGroups) {
+	const merged = new Map();
+	lineGroups.flat().forEach((line) => {
+		const normalized = normalizeLine(line);
+		if (!normalized || merged.has(normalized)) return;
+		merged.set(normalized, normalized);
+	});
+	return sortLineIds(merged.values());
+}
+
 async function enrichDeparturesWithDelay(realtimeDepartures, stopIds, stopName, lines) {
 	if (!realtimeDepartures.length) return realtimeDepartures;
 
@@ -817,10 +836,7 @@ async function getTransportStop(stopId) {
 			})),
 		];
 
-		let nextDepartures = filterDeparturesForStopLines(
-			summarizeDepartures(waitingTimes.items),
-			stop.lignesDesservies || [],
-		);
+		let nextDepartures = summarizeDepartures(waitingTimes.items);
 		const usedScheduledFallback = nextDepartures.length === 0;
 		if (usedScheduledFallback) {
 			nextDepartures = await getScheduledStopDepartures({
@@ -837,8 +853,12 @@ async function getTransportStop(stopId) {
 				stop.nom,
 				stop.lignesDesservies || [],
 			);
-			nextDepartures = filterDeparturesForStopLines(nextDepartures, stop.lignesDesservies || []);
 		}
+		const servedLines = mergeStopLines(
+			stop.lignesDesservies || [],
+			nextDepartures.map((departure) => departure.line),
+			activeIncidents.map((incident) => incident.line),
+		);
 		const severityInfo = computeRealtimeStatus({ incidents: activeIncidents, departures: nextDepartures });
 		const officialDataStatus = mergeOfficialStatuses([
 			waitingTimesResult.officialDataStatus,
@@ -862,9 +882,9 @@ async function getTransportStop(stopId) {
 					name: stop.nom,
 					latitude: stop.latitude ?? null,
 					longitude: stop.longitude ?? null,
-					lines: stop.lignesDesservies || [],
+					lines: servedLines,
 				},
-				lines: stop.lignesDesservies || [],
+				lines: servedLines,
 				stopNames: [stop.nom],
 			}),
 		});
@@ -876,7 +896,7 @@ async function getTransportStop(stopId) {
 				name: stop.nom,
 				latitude: stop.latitude,
 				longitude: stop.longitude,
-				lines: stop.lignesDesservies || [],
+				lines: servedLines,
 			},
 			...severityInfo,
 			officialDataStatus,
