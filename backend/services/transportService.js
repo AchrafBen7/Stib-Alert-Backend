@@ -857,7 +857,6 @@ async function getTransportStop(stopId) {
 		const servedLines = mergeStopLines(
 			stop.lignesDesservies || [],
 			nextDepartures.map((departure) => departure.line),
-			activeIncidents.map((incident) => incident.line),
 		);
 		const severityInfo = computeRealtimeStatus({ incidents: activeIncidents, departures: nextDepartures });
 		const officialDataStatus = mergeOfficialStatuses([
