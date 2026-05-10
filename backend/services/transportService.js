@@ -1325,4 +1325,7 @@ module.exports = {
 	getTransportOverview,
 	getTransportStop,
 	recommendRoute,
+	_test: {
+		buildCommunityReportClusters,
+	},
 };
