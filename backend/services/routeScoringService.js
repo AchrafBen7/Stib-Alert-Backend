@@ -950,7 +950,17 @@ function buildExplanation(scoredRoute, label) {
 function dedupeByRoute(items) {
 	const seen = new Set();
 	return items.filter((item) => {
-		const key = item.data?.lines?.join("|") + "|" + item.data?.totalDurationSeconds + "|" + item.data?.walkingDurationSeconds;
+		const key = [
+			item.data?.primaryMode,
+			item.data?.lines?.join(">") || "active",
+			item.data?.transfers,
+			item.data?.totalDurationSeconds,
+			item.data?.walkingDurationSeconds,
+			item.data?.steps
+				?.filter((step) => step.line)
+				.map((step) => `${step.line}:${step.stopName || ""}:${step.arrivalStopName || ""}`)
+				.join(">") || "",
+		].join("|");
 		if (seen.has(key)) return false;
 		seen.add(key);
 		return true;
@@ -994,7 +1004,7 @@ function scoreRoutes({ routes, incidents, departures, lignesBloquees = [], shape
 			data: item,
 		})),
 	])
-		.slice(0, Math.max(5, Math.min(scored.length, 8)))
+		.slice(0, 5)
 		.map((entry) => ({
 		type: entry.type,
 		label: entry.label,

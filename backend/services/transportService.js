@@ -261,6 +261,13 @@ function enrichAlternativeRealtime(alternative, { waitingItems = [], vehicleItem
 		.map((step) => parseDateValue(step.realtimeArrivalAt))
 		.find(Boolean) || null;
 	const routeAlerts = steps.flatMap((step) => step.alerts || []);
+	const departureAt = firstRealtimeDeparture || firstScheduledDeparture || null;
+	const arrivalAt = lastRealtimeArrival || lastScheduledArrival || null;
+	const timingSource = firstRealtimeDeparture
+		? "realtime"
+		: firstScheduledDeparture || lastScheduledArrival
+			? "scheduled"
+			: "unknown";
 
 	return {
 		...alternative,
@@ -269,6 +276,9 @@ function enrichAlternativeRealtime(alternative, { waitingItems = [], vehicleItem
 		scheduledArrivalAt: lastScheduledArrival,
 		realtimeDepartureAt: firstRealtimeDeparture,
 		realtimeArrivalAt: lastRealtimeArrival,
+		departureAt,
+		arrivalAt,
+		timingSource,
 		activeVehicle: steps.map((step) => step.vehicle).find(Boolean) || null,
 		officialAlerts: routeAlerts.filter((item, index, items) => items.findIndex((candidate) => candidate.id === item.id) === index).slice(0, 4),
 	};
@@ -483,6 +493,16 @@ function buildStaleRouteRecommendation({
 			reason: "stale_route_reused",
 			message,
 		},
+	};
+}
+
+function buildRouteFallbackMeta(officialDataStatus, officialDataMessage) {
+	if (officialDataStatus === OFFICIAL_STATUS.AVAILABLE) return null;
+	return {
+		reason: officialDataStatus === OFFICIAL_STATUS.LIMITED
+			? "official_data_limited"
+			: "official_data_unavailable",
+		message: officialDataMessage || "Les donnees live STIB sont limitees. Les itineraires restent calcules avec horaires prevus et cache disponible.",
 	};
 }
 
@@ -1294,6 +1314,7 @@ async function recommendRoute({ depart, destination, lignesBloquees = [] }) {
 			...severityInfo,
 			officialDataStatus,
 			officialDataMessage,
+			fallback: buildRouteFallbackMeta(officialDataStatus, officialDataMessage),
 			perturbationSummary,
 			activeIncidents: incidents.slice(0, 10),
 			nextDepartures,
