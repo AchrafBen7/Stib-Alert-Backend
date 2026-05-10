@@ -641,7 +641,13 @@ async function applyCommunityAction(req, res, action, successMessage) {
 		const signalement = await Signalement.findById(req.params.id);
 		if (!signalement) return res.status(404).json({ message: "Signalement introuvable" });
 
-		const summary = upsertCommunityAction(signalement, req.user?.userId, action);
+		const actorHash = req.user?.userId
+			? null
+			: privacyHash(`${clientDeviceId(req) || clientIp(req)}:${req.headers["user-agent"] || ""}`);
+		const summary = upsertCommunityAction(signalement, {
+			userId: req.user?.userId,
+			actorHash,
+		}, action);
 		await signalement.save();
 
 		emitSignalement(signalement.toObject());

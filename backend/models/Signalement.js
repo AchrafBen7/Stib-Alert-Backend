@@ -77,6 +77,7 @@ const signalementSchema = new mongoose.Schema(
 		},
 		communityEvents: [{
 			userId: { type: mongoose.Schema.Types.ObjectId, ref: "Utilisateur", required: false },
+			actorHash: { type: String, default: null },
 			action: {
 				type: String,
 				enum: ["confirm", "still_blocked", "resolved"],

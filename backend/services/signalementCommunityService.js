@@ -60,7 +60,9 @@ function deriveCommunityStatus(signalement, now = new Date()) {
 	const activeScore = counts.confirm + counts.still_blocked * 1.2 + (signalement.votesPositifs || 0) * 0.12;
 	const resolvedScore = counts.resolved * 1.25 + (signalement.votesNegatifs || 0) * 0.1;
 
-	const status = resolvedScore > activeScore + 0.75 ? "resolved" : "active";
+	const status = counts.resolved >= 3 && counts.resolved >= counts.still_blocked
+		? "resolved"
+		: resolvedScore > activeScore + 0.75 ? "resolved" : "active";
 	const freshnessMinutes = (() => {
 		const sourceDate = toDate(signalement.dateSignalement);
 		if (!sourceDate) return 180;
@@ -112,16 +114,20 @@ function buildCommunityMeta(signalement, now = new Date()) {
 	};
 }
 
-function upsertCommunityAction(signalement, userId, action, now = new Date()) {
+function upsertCommunityAction(signalement, actor, action, now = new Date()) {
 	const events = Array.isArray(signalement.communityEvents) ? [...signalement.communityEvents] : [];
-	const normalizedUserId = userId ? String(userId) : null;
+	const normalizedUserId = actor?.userId ? String(actor.userId) : null;
+	const normalizedActorHash = actor?.actorHash ? String(actor.actorHash) : null;
 
-	const filtered = normalizedUserId
-		? events.filter((event) => String(event.userId || "") !== normalizedUserId)
-		: events;
+	const filtered = events.filter((event) => {
+		if (normalizedUserId) return String(event.userId || "") !== normalizedUserId;
+		if (normalizedActorHash) return String(event.actorHash || "") !== normalizedActorHash;
+		return true;
+	});
 
 	filtered.push({
 		userId: normalizedUserId || undefined,
+		actorHash: normalizedActorHash || undefined,
 		action,
 		createdAt: now,
 	});

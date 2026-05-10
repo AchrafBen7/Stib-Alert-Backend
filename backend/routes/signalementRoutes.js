@@ -58,9 +58,9 @@ router.get(
 router.post("/siri", protect, signalementController.signalerViaSiri);
 
 router.post("/:id/vote", protect, validateVote, handleValidation, voterSignalement);
-router.post("/:id/confirm", protect, validateMongoId, handleValidation, confirmerSignalement);
-router.post("/:id/still-blocked", protect, validateMongoId, handleValidation, marquerToujoursBloque);
-router.post("/:id/resolved", protect, validateMongoId, handleValidation, marquerResolu);
+router.post("/:id/confirm", protect.optional, validateMongoId, handleValidation, confirmerSignalement);
+router.post("/:id/still-blocked", protect.optional, validateMongoId, handleValidation, marquerToujoursBloque);
+router.post("/:id/resolved", protect.optional, validateMongoId, handleValidation, marquerResolu);
 router.post("/:id/signalement-faux", validateMongoId, handleValidation, signalerFauxSignalement);
 router.get("/:id/traduire", validateMongoId, handleValidation, signalementController.traduireSignalement);
 
