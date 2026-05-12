@@ -34,6 +34,7 @@ const {
 
 const rgpdController = require("../controllers/rgpdController");
 router.get("/me/export", protect, rgpdController.exportMyData);
+router.get("/me/contributions", protect, rgpdController.myContributions);
 router.delete("/me", protect, rgpdController.deleteMyAccount);
 router.get("/privacy/policy", rgpdController.privacyPolicy);
 

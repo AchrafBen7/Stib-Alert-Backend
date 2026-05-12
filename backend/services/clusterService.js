@@ -16,7 +16,19 @@ const CLUSTER = {
 	CLUSTER_LIFETIME_MS: 4 * 60 * 60 * 1000,
 	RESOLVED_ARCHIVE_DELAY_MS: 30 * 60 * 1000,
 	STILL_BLOCKED_EXTEND_MS: 2 * 60 * 60 * 1000,
-	RESOLVE_THRESHOLD: 3,
+
+	// Resolution is ASYMMETRIC vs publication.
+	// 1 vote from a high-trust user is enough — they were on the spot
+	// and saw it's resolved. The default user threshold is 2 (instead of
+	// the previous 3) to avoid punishing the user who first sees recovery.
+	RESOLVE_THRESHOLD_DEFAULT: 2,
+	RESOLVE_THRESHOLD_TRUSTED: 1,
+	RESOLVE_TRUST_THRESHOLD: 75,
+
+	// Natural decay: a cluster with no still_blocked vote for X minutes
+	// quietly degrades and eventually auto-resolves.
+	NATURAL_DECAY_MS: 30 * 60 * 1000,
+
 	STILL_BLOCKED_THRESHOLD: 3,
 };
 
@@ -183,9 +195,15 @@ async function assignSignalementToCluster(signalement) {
 
 	await recomputeClusterFromReports(cluster);
 
+	const reportsNeeded = Math.max(0, CLUSTER.MIN_REPORTS_TO_PUBLISH - cluster.reportCount);
+	const isFirstReporter = cluster.reportCount === 1 && isNew;
+
 	return {
 		cluster,
 		isNew,
+		isFirstReporter,
+		reportsNeededToPublish: reportsNeeded,
+		userVisible: true,
 		published: cluster.status === "active",
 		clusterIndex: cluster.clusterIndex,
 	};
@@ -223,6 +241,21 @@ async function confirmStillBlocked({ clusterIndex, userId, actorHash }) {
 	};
 }
 
+async function resolutionThresholdForVoter({ userId } = {}) {
+	if (!userId) return CLUSTER.RESOLVE_THRESHOLD_DEFAULT;
+	try {
+		const Utilisateur = require("../models/Utilisateur");
+		const user = await Utilisateur.findById(userId).select("role createdAt").lean();
+		if (!user) return CLUSTER.RESOLVE_THRESHOLD_DEFAULT;
+
+		const accountAgeDays = (Date.now() - new Date(user.createdAt).getTime()) / 86_400_000;
+		const isTrusted = user.role === "Admin" || accountAgeDays > 30;
+		return isTrusted ? CLUSTER.RESOLVE_THRESHOLD_TRUSTED : CLUSTER.RESOLVE_THRESHOLD_DEFAULT;
+	} catch (e) {
+		return CLUSTER.RESOLVE_THRESHOLD_DEFAULT;
+	}
+}
+
 async function confirmResolved({ clusterIndex, userId, actorHash }) {
 	const cluster = await Cluster.findOne({ clusterIndex });
 	if (!cluster || cluster.status === "archived") {
@@ -241,7 +274,9 @@ async function confirmResolved({ clusterIndex, userId, actorHash }) {
 
 	cluster.resolveConfirmationCount = (cluster.resolveConfirmationCount || 0) + 1;
 
-	if (cluster.resolveConfirmationCount >= CLUSTER.RESOLVE_THRESHOLD) {
+	const threshold = await resolutionThresholdForVoter({ userId });
+
+	if (cluster.resolveConfirmationCount >= threshold) {
 		cluster.resolved = true;
 		cluster.resolvedAt = new Date();
 		cluster.status = "resolved";
@@ -265,9 +300,10 @@ async function confirmResolved({ clusterIndex, userId, actorHash }) {
 		cluster,
 		confirmationCount: cluster.resolveConfirmationCount,
 		resolved: cluster.resolved,
+		threshold,
 		message: cluster.resolved
 			? "Alerte marquée comme résolue. Merci !"
-			: `Confirmation enregistrée (${cluster.resolveConfirmationCount}/${CLUSTER.RESOLVE_THRESHOLD}).`,
+			: `Confirmation enregistrée (${cluster.resolveConfirmationCount}/${threshold}).`,
 	};
 }
 
@@ -365,7 +401,29 @@ async function runClusteringSweep({ batchSize = 200 } = {}) {
 		archivedCount++;
 	}
 
-	return { assigned, archivedCount, totalProcessed: reports.length };
+	// Natural decay: a cluster with no new still_blocked activity for
+	// NATURAL_DECAY_MS minutes auto-resolves. Users don't need to vote
+	// — silence = problem gone.
+	const decayCutoff = new Date(now.getTime() - CLUSTER.NATURAL_DECAY_MS);
+	const decayCandidates = await Cluster.find({
+		status: "active",
+		lastReportedAt: { $lt: decayCutoff },
+		stillBlockedConfirmationCount: 0,
+		resolved: false,
+	});
+
+	let decayedCount = 0;
+	for (const cluster of decayCandidates) {
+		cluster.resolved = true;
+		cluster.resolvedAt = now;
+		cluster.status = "resolved";
+		cluster.archivedAt = new Date(now.getTime() + CLUSTER.RESOLVED_ARCHIVE_DELAY_MS);
+		await cluster.save();
+		safeEmit("auto_resolved", cluster);
+		decayedCount++;
+	}
+
+	return { assigned, archivedCount, decayedCount, totalProcessed: reports.length };
 }
 
 module.exports = {

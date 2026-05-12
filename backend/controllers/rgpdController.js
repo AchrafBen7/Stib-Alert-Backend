@@ -158,6 +158,32 @@ exports.deleteMyAccount = async (req, res) => {
 	}
 };
 
+exports.myContributions = async (req, res) => {
+	try {
+		const userId = req.user?.userId;
+		if (!userId) {
+			return res.status(401).json({ message: "Authentification requise." });
+		}
+		const { getUserContributionsSummary } = require("../services/mercisService");
+		const summary = await getUserContributionsSummary(userId);
+
+		const Contribution = require("../models/Contribution");
+		const recent = await Contribution.find({ utilisateurId: userId })
+			.sort({ createdAt: -1 })
+			.limit(20)
+			.select("ligne typeProbleme role helpedPublishCluster peopleHelped createdAt clusterIndex")
+			.lean();
+
+		return res.status(200).json({
+			summary,
+			recent,
+		});
+	} catch (error) {
+		console.error("[rgpd.myContributions]", error);
+		return res.status(500).json({ message: "Erreur stats contributions.", error: error.message });
+	}
+};
+
 exports.privacyPolicy = (req, res) => {
 	res.status(200).json({
 		dataController: "StibAlert (Achraf Benali)",

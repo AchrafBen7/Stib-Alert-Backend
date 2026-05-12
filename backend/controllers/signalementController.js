@@ -13,6 +13,7 @@ const { calculateTrust } = require("../services/trustScorerService");
 const { checkLimit, recordReport, incrementSpamFlag } = require("../services/communityRateLimiterService");
 const { assignSignalementToCluster } = require("../services/clusterService");
 const { enqueueFlag } = require("../services/moderationService");
+const { recordContribution } = require("../services/mercisService");
 const moment = require("moment");
 const path = require("path");
 const crypto = require("crypto");
@@ -227,6 +228,7 @@ exports.ajouterSignalement = async (req, res) => {
 			ipHash: reporterIpHash,
 			stopId: String(arret._id),
 			lineId: ligne,
+			userId: req.user?.userId || null,
 		});
 
 		if (!rateLimit.allowed) {
@@ -365,17 +367,42 @@ exports.ajouterSignalement = async (req, res) => {
 				console.warn("[ajouterSignalement] clustering failed:", err.message);
 			}
 
+			if (req.user?.userId && clusterInfo?.cluster) {
+				try {
+					await recordContribution({
+						utilisateurId: req.user.userId,
+						signalement,
+						cluster: clusterInfo.cluster,
+						role: clusterInfo.isFirstReporter ? "first_reporter" : "confirmer",
+					});
+				} catch (mercisErr) {
+					console.warn("[ajouterSignalement] mercis record failed:", mercisErr.message);
+				}
+			}
+
 			emitSignalement(signalement);
 			sendFavoriteIncidentPushes({ ...signalement.toObject(), arretId: arret }, "new_signalement")
 				.catch((pushError) => console.warn("[assistant incident push]", pushError.message));
 		}
 
+		let userMessage;
+		if (initialModerationStatus === "pending") {
+			userMessage = "Signalement reçu. Il sera vérifié avant diffusion.";
+		} else if (clusterInfo?.published) {
+			userMessage = `Merci ! ${clusterInfo.cluster.reportCount} personnes ont signalé ce problème. L'alerte est maintenant visible.`;
+		} else if (clusterInfo?.isFirstReporter) {
+			userMessage = "Merci ! Tu es le premier à signaler. Si d'autres confirment, ton alerte sera publiée pour tous.";
+		} else if (clusterInfo?.cluster) {
+			const needed = clusterInfo.reportsNeededToPublish || 0;
+			userMessage = needed > 0
+				? `Merci ! ${clusterInfo.cluster.reportCount} personnes ont signalé. ${needed} confirmation${needed > 1 ? "s" : ""} encore pour publier l'alerte.`
+				: "Signalement ajouté.";
+		} else {
+			userMessage = "Signalement ajouté.";
+		}
+
 		res.status(201).json({
-			message: initialModerationStatus === "pending"
-				? "Signalement reçu. Il sera vérifié avant diffusion."
-				: clusterInfo?.published
-					? `Signalement ajouté. ${clusterInfo.cluster.reportCount} rapports similaires détectés.`
-					: "Signalement ajouté avec succès.",
+			message: userMessage,
 			signalement: {
 				...serializeSignalement(signalement),
 				dateSignalementLisible: moment(signalement.dateSignalement).format("YYYY-MM-DD HH:mm"),
@@ -385,6 +412,9 @@ exports.ajouterSignalement = async (req, res) => {
 				reportCount: clusterInfo.cluster.reportCount,
 				published: clusterInfo.published,
 				confidence: clusterInfo.cluster.confidence,
+				isFirstReporter: clusterInfo.isFirstReporter || false,
+				reportsNeededToPublish: clusterInfo.reportsNeededToPublish || 0,
+				status: clusterInfo.cluster.status,
 			} : null,
 			trust: trustResult.score,
 		});
