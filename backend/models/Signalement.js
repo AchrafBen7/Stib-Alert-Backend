@@ -72,9 +72,29 @@ const signalementSchema = new mongoose.Schema(
 		},
 		status: {
 			type: String,
-			enum: ["active", "resolved"],
+			enum: ["active", "grouped", "resolved", "spam", "archived"],
 			default: "active",
 		},
+
+		// 🔹 Trust score (0-100)
+		trust: { type: Number, default: 50, min: 0, max: 100 },
+
+		// 🔹 Cluster assignment
+		clusterIndex: { type: Number, default: null, index: true },
+
+		// 🔹 Spam detection
+		spamScore: { type: Number, default: 0, min: 0, max: 100 },
+		flagged: { type: Boolean, default: false, index: true },
+		flagReason: { type: String, default: null },
+		flaggedAt: { type: Date, default: null },
+
+		// 🔹 Expiration (2h default)
+		expiresAt: {
+			type: Date,
+			default: () => new Date(Date.now() + 2 * 60 * 60 * 1000),
+			index: true,
+		},
+		resolvedAt: { type: Date, default: null },
 		communityEvents: [{
 			userId: { type: mongoose.Schema.Types.ObjectId, ref: "Utilisateur", required: false },
 			actorHash: { type: String, default: null },

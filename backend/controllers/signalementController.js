@@ -8,6 +8,11 @@ const { getScheduledStopDepartures } = require("../services/staticTimetableServi
 const { COMMUNITY_ACTION, buildCommunityMeta, upsertCommunityAction } = require("../services/signalementCommunityService");
 const { sendFavoriteIncidentPushes } = require("../services/assistantIncidentPushService");
 const { syncOfficialPerturbations } = require("../services/stibOfficialSeedService");
+const { scoreSpam } = require("../services/spamDetectorService");
+const { calculateTrust } = require("../services/trustScorerService");
+const { checkLimit, recordReport, incrementSpamFlag } = require("../services/communityRateLimiterService");
+const { assignSignalementToCluster } = require("../services/clusterService");
+const { enqueueFlag } = require("../services/moderationService");
 const moment = require("moment");
 const path = require("path");
 const crypto = require("crypto");
@@ -208,31 +213,49 @@ exports.ajouterSignalement = async (req, res) => {
 		const longitudeParsed = parseFloat(longitude);
 
 		let arret = await Arret.findOne({ nom: nomArret });
-
 		if (!arret) return res.status(404).json({ message: `L'arrêt "${nomArret}" n'existe pas.` });
 
 		if (!arret.lignesDesservies.includes(ligne)) {
 			return res.status(400).json({ message: `L'arrêt "${nomArret}" ne dessert pas la ligne "${ligne}".` });
 		}
 
-		// 🔹 Vérification OpenAI pour éviter le spam
-		const estValide = await analyserSignalement(description);
-		if (!estValide) return res.status(400).json({ message: "Ce signalement ne respecte pas les règles." });
+		const reporterIpHash = privacyHash(clientIp(req));
+		const reporterDeviceHash = privacyHash(clientDeviceId(req));
 
-		// 🔍 Vérification de la distance GPS (si fournie)
-		let confiance = "basse"; // ⚠️ Valeur par défaut si aucune position
+		const rateLimit = await checkLimit({
+			deviceHash: reporterDeviceHash,
+			ipHash: reporterIpHash,
+			stopId: String(arret._id),
+			lineId: ligne,
+		});
+
+		if (!rateLimit.allowed) {
+			return res.status(429).json({
+				message: rateLimit.message,
+				reason: rateLimit.reason,
+				retryAfter: rateLimit.retryAfterSeconds || 60,
+			});
+		}
+
+		let estValide = true;
+		try {
+			estValide = await analyserSignalement(description);
+		} catch (err) {
+			console.warn("[ajouterSignalement] OpenAI validation skipped:", err.message);
+		}
+		if (!estValide) {
+			return res.status(400).json({ message: "Ce signalement ne respecte pas les règles." });
+		}
+
+		let confiance = "basse";
 		if (latitude && longitude) {
 			const distance = distanceEntrePoints(latitudeParsed, longitudeParsed, arret.latitude, arret.longitude);
-
-			if (distance < 0.2) confiance = "haute"; // ✅ Moins de 200m → Fiable
-			else if (distance < 1) confiance = "moyenne"; // 🤔 Entre 200m et 1km → Acceptable
+			if (distance < 0.2) confiance = "haute";
+			else if (distance < 1) confiance = "moyenne";
 		}
 
 		const isAuthenticatedAuthor = Boolean(req.user?.userId);
-		const moderationStatus = isAuthenticatedAuthor ? "approved" : "pending";
 		const authorType = isAuthenticatedAuthor ? "authenticated" : "anonymous";
-		const reporterIpHash = privacyHash(clientIp(req));
-		const reporterDeviceHash = privacyHash(clientDeviceId(req));
 
 		if (!isAuthenticatedAuthor) {
 			const duplicate = await findRecentAnonymousDuplicate({
@@ -245,18 +268,64 @@ exports.ajouterSignalement = async (req, res) => {
 
 			if (duplicate) {
 				return res.status(409).json({
-					message: "Signalement déjà reçu récemment pour cette ligne et cet arrêt. Il est en attente de vérification.",
+					message: "Signalement déjà reçu récemment.",
 					moderationStatus: duplicate.moderationStatus,
 				});
 			}
 		}
 
-		// 🔹 Création du signalement avec "confiance"
+		const userDoc = isAuthenticatedAuthor && req.user?.userId
+			? await Utilisateur.findById(req.user.userId).select("createdAt emailVerified isVerified").lean()
+			: null;
+
+		const trustResult = await calculateTrust({
+			utilisateurId: req.user?.userId,
+			user: userDoc,
+			authorType,
+			reporterDeviceHash,
+		});
+
+		const spamResult = await scoreSpam({
+			description,
+			stopId: String(arret._id),
+			ligne,
+			latitude: isNaN(latitudeParsed) ? null : latitudeParsed,
+			longitude: isNaN(longitudeParsed) ? null : longitudeParsed,
+			expectedLatitude: arret.latitude,
+			expectedLongitude: arret.longitude,
+			reporterDeviceHash,
+			authorType,
+		});
+
+		if (spamResult.recommendation === "ban") {
+			if (reporterDeviceHash) {
+				await incrementSpamFlag(reporterDeviceHash, { reason: "auto_ban_score" });
+			}
+			return res.status(429).json({
+				message: "Signalement bloqué pour comportement suspect.",
+				reason: "spam_auto_reject",
+			});
+		}
+
+		if (spamResult.recommendation === "reject") {
+			if (reporterDeviceHash) {
+				await incrementSpamFlag(reporterDeviceHash, { reason: "auto_reject_score" });
+			}
+			return res.status(400).json({
+				message: "Signalement rejeté (contenu suspect).",
+				reason: "spam_suspected",
+			});
+		}
+
+		const initialModerationStatus = spamResult.recommendation === "flag"
+			? "pending"
+			: (isAuthenticatedAuthor ? "approved" : "approved");
+
 		const signalement = await Signalement.create({
 			utilisateurId: req.user?.userId,
 			arretId: arret._id,
 			authorType,
-			moderationStatus,
+			moderationStatus: initialModerationStatus,
 			reporterIpHash,
 			reporterDeviceHash,
 			ligne,
@@ -266,25 +335,61 @@ exports.ajouterSignalement = async (req, res) => {
 			latitude: isNaN(latitudeParsed) ? undefined : latitudeParsed,
 			longitude: isNaN(longitudeParsed) ? undefined : longitudeParsed,
 			confiance,
+			trust: trustResult.score,
+			spamScore: spamResult.score,
+			status: "active",
+			expiresAt: new Date(Date.now() + 2 * 60 * 60 * 1000),
 		});
 
-		if (moderationStatus === "approved") {
-			// Only approved reports should be visible in realtime surfaces and push notifications.
+		await recordReport({
+			deviceHash: reporterDeviceHash,
+			stopId: String(arret._id),
+			lineId: ligne,
+		});
+
+		if (spamResult.recommendation === "flag") {
+			await enqueueFlag({
+				signalement,
+				flagReason: "spam",
+				flaggedBy: "system",
+				spamScore: spamResult.score,
+				spamReasons: spamResult.reasons,
+			});
+		}
+
+		let clusterInfo = null;
+		if (initialModerationStatus === "approved") {
+			try {
+				clusterInfo = await assignSignalementToCluster(signalement);
+			} catch (err) {
+				console.warn("[ajouterSignalement] clustering failed:", err.message);
+			}
+
 			emitSignalement(signalement);
 			sendFavoriteIncidentPushes({ ...signalement.toObject(), arretId: arret }, "new_signalement")
 				.catch((pushError) => console.warn("[assistant incident push]", pushError.message));
 		}
 
 		res.status(201).json({
-			message: moderationStatus === "pending"
+			message: initialModerationStatus === "pending"
 				? "Signalement reçu. Il sera vérifié avant diffusion."
-				: "Signalement ajouté avec succès.",
+				: clusterInfo?.published
+					? `Signalement ajouté. ${clusterInfo.cluster.reportCount} rapports similaires détectés.`
+					: "Signalement ajouté avec succès.",
 			signalement: {
 				...serializeSignalement(signalement),
 				dateSignalementLisible: moment(signalement.dateSignalement).format("YYYY-MM-DD HH:mm"),
 			},
+			cluster: clusterInfo?.cluster ? {
+				clusterIndex: clusterInfo.cluster.clusterIndex,
+				reportCount: clusterInfo.cluster.reportCount,
+				published: clusterInfo.published,
+				confidence: clusterInfo.cluster.confidence,
+			} : null,
+			trust: trustResult.score,
 		});
 	} catch (error) {
+		console.error("[ajouterSignalement]", error);
 		res.status(500).json({ message: error.message });
 	}
 };
