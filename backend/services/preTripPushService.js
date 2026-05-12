@@ -59,6 +59,17 @@ function isWeekendWithoutOverride(now = new Date()) {
 	return dayOfWeek === 0 || dayOfWeek === 6;
 }
 
+function isInQuietHours(user, now = new Date()) {
+	if (user.quietHoursEnabled === false) return false;
+	const start = Number.isInteger(user.quietHoursStartHour) ? user.quietHoursStartHour : 22;
+	const end = Number.isInteger(user.quietHoursEndHour) ? user.quietHoursEndHour : 7;
+	const hour = now.getHours();
+	if (start === end) return false;
+	if (start < end) return hour >= start && hour < end;
+	// Wraps midnight: e.g. 22-7
+	return hour >= start || hour < end;
+}
+
 function shortBriefFromDecision(decision) {
 	if (!decision) return null;
 	if (decision.verdict === "ALL_CLEAR") {
@@ -155,6 +166,10 @@ async function evaluateAndSendPreTripPushes(now = new Date()) {
 		for (const user of users) {
 			evaluated += 1;
 			if (isWeekend) {
+				skipped += 1;
+				continue;
+			}
+			if (isInQuietHours(user, now)) {
 				skipped += 1;
 				continue;
 			}

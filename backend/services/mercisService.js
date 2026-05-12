@@ -32,7 +32,7 @@ async function detectAndSendThanks() {
 		const contributions = await Contribution.find({
 			clusterIndex: cluster.clusterIndex,
 			thanksSent: false,
-		}).populate("utilisateurId", "_id email nom oneSignalPlayerId notifications");
+		}).populate("utilisateurId", "_id email nom oneSignalPlayerId notifications mercisPushEnabled quietHoursEnabled quietHoursStartHour quietHoursEndHour");
 
 		if (contributions.length === 0) continue;
 
@@ -50,6 +50,7 @@ async function detectAndSendThanks() {
 			sent++;
 
 			if (user.notifications === false) continue;
+			if (user.mercisPushEnabled === false) continue;
 			if (!user.oneSignalPlayerId) continue;
 
 			try {

@@ -367,7 +367,19 @@ exports.voirProfil = async (req, res) => {
 // ✅ Modifier le profil d'un utilisateur (champs whitelistés)
 exports.modifierProfil = async (req, res) => {
 	try {
-		const allowed = ["nom", "photoProfil", "langue", "notifications", "weeklyDigestEnabled"];
+		const allowed = [
+			"nom",
+			"photoProfil",
+			"langue",
+			"notifications",
+			"weeklyDigestEnabled",
+			"preTripPushEnabled",
+			"communityClusterPushEnabled",
+			"mercisPushEnabled",
+			"quietHoursEnabled",
+			"quietHoursStartHour",
+			"quietHoursEndHour",
+		];
 		const update = {};
 		for (const key of allowed) {
 			if (req.body[key] !== undefined) update[key] = req.body[key];

@@ -1,8 +1,87 @@
 const crypto = require("crypto");
 const Signalement = require("../models/Signalement");
 const Arret = require("../models/Arret");
+const Cluster = require("../models/Cluster");
 const { getTravellersInformation } = require("./belgianMobility");
 const { sendAlertsForNewPerturbations } = require("./perturbationAlertService");
+
+const OFFICIAL_CLUSTER_LIFETIME_MS = 6 * 60 * 60 * 1000; // Officials stay published for 6h
+
+async function seedOrUpdateOfficialCluster({ signalement, item }) {
+	if (!signalement?.ligne || !signalement?.arretId || !signalement?.typeProbleme) {
+		return null;
+	}
+
+	const now = new Date();
+	const expiresAt = item?.endTime ? new Date(item.endTime) : new Date(now.getTime() + OFFICIAL_CLUSTER_LIFETIME_MS);
+
+	let cluster = await Cluster.findOne({
+		ligne: signalement.ligne,
+		arretId: signalement.arretId,
+		typeProbleme: signalement.typeProbleme,
+		isOfficial: true,
+		status: { $in: ["active", "unpublished"] },
+	});
+
+	if (!cluster) {
+		const clusterIndex = await Cluster.nextIndex();
+		cluster = new Cluster({
+			clusterIndex,
+			ligne: signalement.ligne,
+			arretId: signalement.arretId,
+			typeProbleme: signalement.typeProbleme,
+			signalementIds: [signalement._id],
+			reportCount: 1,
+			aggregateTrust: 100, // Official source = max trust.
+			confidence: "high",
+			firstReportedAt: now,
+			lastReportedAt: now,
+			expiresAt,
+			status: "active",
+			isOfficial: true,
+			officialSignalementId: signalement._id,
+			latitude: signalement.latitude,
+			longitude: signalement.longitude,
+		});
+	} else {
+		// Refresh
+		if (!cluster.signalementIds.some((id) => String(id) === String(signalement._id))) {
+			cluster.signalementIds.push(signalement._id);
+		}
+		cluster.lastReportedAt = now;
+		cluster.expiresAt = expiresAt;
+		cluster.status = "active";
+		cluster.aggregateTrust = 100;
+		cluster.confidence = "high";
+		cluster.latitude = signalement.latitude || cluster.latitude;
+		cluster.longitude = signalement.longitude || cluster.longitude;
+	}
+
+	await cluster.save();
+	return cluster;
+}
+
+async function archiveOfficialClustersFor(externalIds) {
+	if (!Array.isArray(externalIds) || externalIds.length === 0) return 0;
+	const matchingSignalements = await Signalement.find({
+		source: "stib_officiel",
+		externalId: { $in: externalIds },
+	}).select("_id").lean();
+	const ids = matchingSignalements.map((s) => s._id);
+	if (ids.length === 0) return 0;
+
+	const result = await Cluster.updateMany(
+		{
+			isOfficial: true,
+			status: "active",
+			signalementIds: { $in: ids },
+		},
+		{
+			$set: { status: "archived", archivedAt: new Date() },
+		}
+	);
+	return result.modifiedCount || 0;
+}
 
 let quotaBlockedUntil = 0;
 let lastQuotaLogAt = 0;
@@ -216,6 +295,20 @@ async function syncOfficialPerturbations() {
 			if (result.upsertedId) {
 				newSignalements.push({ ...data, externalId });
 			}
+
+			// Seed/refresh the official Cluster so cold-start users immediately
+			// see disruptions on the map and in /api/decision, even without any
+			// community signalements yet.
+			try {
+				const signalement = await Signalement.findOne({ externalId, source: "stib_officiel" })
+					.select("_id ligne arretId typeProbleme latitude longitude")
+					.lean();
+				if (signalement) {
+					await seedOrUpdateOfficialCluster({ signalement, item });
+				}
+			} catch (clusterErr) {
+				console.warn(`[stib-seed] Cluster seeding failed for ${externalId}: ${clusterErr.message}`);
+			}
 		} catch (error) {
 			console.warn(`[stib-seed] Upsert failed for ${externalId}: ${error.message}`);
 		}
@@ -231,6 +324,17 @@ async function syncOfficialPerturbations() {
 		{ $set: { status: "resolved" } }
 	);
 
+	// Archive the corresponding official clusters — STIB says the disruption is over.
+	const removedFromFeed = await Signalement.find({
+		source: "stib_officiel",
+		status: "resolved",
+		externalId: { $nin: seenExternalIds },
+	}).select("externalId").lean();
+	const removedIds = removedFromFeed.map((s) => s.externalId).filter(Boolean);
+	const archivedClusters = removedIds.length > 0
+		? await archiveOfficialClustersFor(removedIds)
+		: 0;
+
 	// Fire immediate push alerts for newly detected perturbations
 	if (newSignalements.length > 0) {
 		sendAlertsForNewPerturbations(newSignalements)
@@ -240,7 +344,7 @@ async function syncOfficialPerturbations() {
 			.catch((e) => console.warn("[stib-seed] Alert dispatch error:", e.message));
 	}
 
-	return { synced, resolved, newPerturbations: newSignalements.length };
+	return { synced, resolved, newPerturbations: newSignalements.length, archivedClusters };
 }
 
 function startStibOfficialSeedLoop() {

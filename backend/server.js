@@ -1,4 +1,6 @@
 require("dotenv").config();
+const errorReporting = require("./config/errorReporting");
+errorReporting.init();
 const connectDB = require("./config/db");
 const redis = require("./config/redis");
 const { initWebSocket } = require("./config/websocket");
