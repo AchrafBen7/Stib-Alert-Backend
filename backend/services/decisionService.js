@@ -240,6 +240,154 @@ async function buildAlternativeRecommendation({ disruptedArret, disruptedLine, u
 	};
 }
 
+// ──────────────────────────────────────────────────────────────────
+// TRIP-SPECIFIC DECISION
+// User says "I'm here, going to X". App returns:
+//  - The best route given current disruption state
+//  - A warning if user's primary/fastest route uses a disrupted line
+//  - A clear ranking: best (avoids disruption) vs default
+// This is the ad-hoc case: no routine needed.
+// ──────────────────────────────────────────────────────────────────
+
+async function getActiveClustersGlobal() {
+	const now = new Date();
+	return Cluster.find({
+		status: "active",
+		expiresAt: { $gt: now },
+	})
+		.select("clusterIndex ligne arretId typeProbleme reportCount confidence lastReportedAt latitude longitude")
+		.lean();
+}
+
+function routeUsesDisruptedLine(route, disruptedLines) {
+	if (!route) return [];
+	const hits = [];
+	const steps = Array.isArray(route.steps) ? route.steps : [];
+	for (const step of steps) {
+		const line = step.line || step.transitLine || step.shortName;
+		if (line && disruptedLines.has(String(line).toUpperCase())) {
+			hits.push({ line: String(line), stepSummary: step.summary || step.instructions || null });
+		}
+	}
+	// Also check top-level summary if line embedded as e.g. "Tram 56 vers ..."
+	if (typeof route.summary === "string") {
+		for (const line of disruptedLines) {
+			const re = new RegExp(`\\b${line}\\b`);
+			if (re.test(route.summary.toUpperCase()) && !hits.some((h) => h.line.toUpperCase() === line)) {
+				hits.push({ line, stepSummary: route.summary });
+			}
+		}
+	}
+	return hits;
+}
+
+async function computeTripDecision({ userId, originCoord, destCoord, destinationLabel = null }) {
+	if (!originCoord || !destCoord) {
+		return {
+			verdict: "ALL_CLEAR",
+			headline: "Indique ta destination pour un verdict",
+			subhead: null,
+			generatedAt: new Date().toISOString(),
+			tripMode: true,
+		};
+	}
+
+	const allClusters = await getActiveClustersGlobal();
+	const disruptedLines = new Set(allClusters.map((c) => String(c.ligne || "").toUpperCase()).filter(Boolean));
+
+	let directions = [];
+	try {
+		directions = await fetchItinerairesGoogle(
+			`${originCoord.lat},${originCoord.lng}`,
+			`${destCoord.lat},${destCoord.lng}`
+		);
+	} catch (e) {
+		console.warn("[decision.trip] Google fetch failed:", e.message);
+	}
+
+	if (!Array.isArray(directions) || directions.length === 0) {
+		return {
+			verdict: "WATCH",
+			headline: "Pas d'itinéraire trouvé",
+			subhead: "Impossible de calculer un trajet pour cette destination.",
+			tripMode: true,
+			generatedAt: new Date().toISOString(),
+		};
+	}
+
+	const scored = directions.map((route, index) => {
+		const hits = routeUsesDisruptedLine(route, disruptedLines);
+		const durationMinutes = Number(route.duration_minutes || route.durationMinutes || 0);
+		return {
+			route,
+			index,
+			durationMinutes,
+			disruptedLineHits: hits,
+			isPerturbed: hits.length > 0,
+		};
+	});
+
+	// Rank: prefer routes without perturbations; among each group, shortest duration.
+	scored.sort((a, b) => {
+		if (a.isPerturbed !== b.isPerturbed) return a.isPerturbed ? 1 : -1;
+		return a.durationMinutes - b.durationMinutes;
+	});
+
+	const best = scored[0];
+	const defaultRoute = scored.find((s) => s.index === 0) || best;
+	const wasOriginalPerturbed = defaultRoute.isPerturbed;
+	const bestIsCleanAlt = best.isPerturbed === false && wasOriginalPerturbed;
+
+	const summarizeRoute = (s) => ({
+		durationMinutes: s.durationMinutes,
+		summary: s.route.summary || null,
+		lines: Array.isArray(s.route.lines) ? s.route.lines : null,
+		walkingMinutes: s.route.walkingMinutes || null,
+		transferCount: s.route.transferCount ?? null,
+		disruptedLines: s.disruptedLineHits.map((h) => h.line),
+	});
+
+	let verdict;
+	let headline;
+	let subhead;
+
+	if (bestIsCleanAlt) {
+		verdict = "AVOID";
+		const disruptedLine = defaultRoute.disruptedLineHits[0]?.line || "?";
+		headline = `Évite la ligne ${disruptedLine} pour ce trajet`;
+		subhead = `On a trouvé une alternative qui contourne la perturbation${destinationLabel ? ` vers ${destinationLabel}` : ""}.`;
+	} else if (best.isPerturbed) {
+		verdict = "CAUTION";
+		const lines = best.disruptedLineHits.map((h) => h.line).join(", ");
+		headline = `Trajet possible mais perturbé`;
+		subhead = `Toutes les routes utilisent ${lines}. Prends ton temps ou cherche un autre moyen.`;
+	} else {
+		verdict = "ALL_CLEAR";
+		headline = destinationLabel
+			? `Trajet vers ${destinationLabel} : voie libre`
+			: "Trajet sans perturbation";
+		subhead = `Aucune des routes proposées n'est touchée.`;
+	}
+
+	return {
+		verdict,
+		headline,
+		subhead,
+		tripMode: true,
+		generatedAt: new Date().toISOString(),
+		origin: originCoord,
+		destination: destCoord,
+		destinationLabel,
+		bestRoute: summarizeRoute(best),
+		defaultRoute: defaultRoute !== best ? summarizeRoute(defaultRoute) : null,
+		alternatives: scored
+			.slice(0, 3)
+			.filter((s) => s !== best)
+			.map(summarizeRoute),
+		disruptedLinesInArea: Array.from(disruptedLines),
+	};
+}
+
 async function computeDecision({ userId, userCoord = null, line = null }) {
 	const user = userId ? await Utilisateur.findById(userId).select("favoriteLines routine").lean() : null;
 
@@ -337,6 +485,7 @@ async function computeDecision({ userId, userCoord = null, line = null }) {
 
 module.exports = {
 	computeDecision,
+	computeTripDecision,
 	findActiveClustersForUser,
 	pickPrimaryCluster,
 	severityFromCluster,

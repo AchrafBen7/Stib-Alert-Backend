@@ -1,4 +1,4 @@
-const { computeDecision } = require("../services/decisionService");
+const { computeDecision, computeTripDecision } = require("../services/decisionService");
 
 function parseCoord(value) {
 	if (value == null) return null;
@@ -14,6 +14,23 @@ exports.getDecision = async (req, res) => {
 		const line = req.query.ligne || req.query.line || null;
 
 		const userCoord = lat != null && lng != null ? { lat, lng } : null;
+
+		const destLat = parseCoord(req.query.destLat || req.query.destinationLat);
+		const destLng = parseCoord(req.query.destLng || req.query.destinationLng);
+		const destLabel = req.query.destLabel || req.query.destination || null;
+
+		const destCoord = destLat != null && destLng != null ? { lat: destLat, lng: destLng } : null;
+
+		if (destCoord && userCoord) {
+			const decision = await computeTripDecision({
+				userId,
+				originCoord: userCoord,
+				destCoord,
+				destinationLabel: destLabel,
+			});
+			res.setHeader("Cache-Control", "private, max-age=15");
+			return res.status(200).json(decision);
+		}
 
 		const decision = await computeDecision({
 			userId,
