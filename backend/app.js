@@ -55,6 +55,7 @@ app.get("/.well-known/apple-app-site-association", sendAppleAppSiteAssociation);
 
 app.use("/api/signalements", require("./routes/signalementRoutes"));
 app.use("/api/clusters", require("./routes/clusterRoutes"));
+app.use("/api/decision", require("./routes/decisionRoutes"));
 app.use("/admin/moderation", require("./routes/moderationRoutes"));
 app.use("/api/utilisateurs", require("./routes/utilisateurRoutes"));
 app.use("/api/lignes", require("./routes/ligneRoutes"));

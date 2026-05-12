@@ -755,6 +755,29 @@ async function applyCommunityAction(req, res, action, successMessage) {
 		}, action);
 		await signalement.save();
 
+		// Propagate to Cluster system if signalement is part of a cluster.
+		// This unifies legacy /signalements/:id votes with new /clusters/:idx votes.
+		if (signalement.clusterIndex != null) {
+			try {
+				const { confirmStillBlocked, confirmResolved } = require("../services/clusterService");
+				if (action === COMMUNITY_ACTION.RESOLVED) {
+					await confirmResolved({
+						clusterIndex: signalement.clusterIndex,
+						userId: req.user?.userId,
+						actorHash,
+					});
+				} else if (action === COMMUNITY_ACTION.STILL_BLOCKED || action === COMMUNITY_ACTION.CONFIRM) {
+					await confirmStillBlocked({
+						clusterIndex: signalement.clusterIndex,
+						userId: req.user?.userId,
+						actorHash,
+					});
+				}
+			} catch (clusterErr) {
+				console.warn("[signalements] cluster vote propagation failed:", clusterErr.message);
+			}
+		}
+
 		emitSignalement(signalement.toObject());
 		const populatedSignalement = await Signalement.findById(signalement._id).populate("arretId");
 		const eventType = action === COMMUNITY_ACTION.RESOLVED ? "resolved" : "still_blocked";
