@@ -19,6 +19,7 @@ if (redis) {
 const { startStibOfficialSeedLoop } = require("./services/stibOfficialSeedService");
 const { startCommunityJobs } = require("./services/communityJobsService");
 const { startMercisLoop } = require("./services/mercisService");
+const { startPreTripPushLoop } = require("./services/preTripPushService");
 
 app.get("/privacy", (req, res) => {
 	res.setHeader("Content-Type", "text/html; charset=utf-8");
@@ -99,6 +100,7 @@ async function startServer() {
 	startStibOfficialSeedLoop();
 	startCommunityJobs();
 	startMercisLoop();
+	startPreTripPushLoop();
 
 	server.listen(PORT, "0.0.0.0", () => {
 		console.log(`🚀 Serveur en ligne sur le port ${PORT}`);

@@ -21,6 +21,8 @@ const utilisateurSchema = new mongoose.Schema(
 		langue: { type: String, enum: ["FR", "NL", "EN"], default: "FR" },
 		notifications: { type: Boolean, default: true },
 		weeklyDigestEnabled: { type: Boolean, default: true },
+		preTripPushEnabled: { type: Boolean, default: true },
+		lastPreTripPushAt: { type: Date, default: null },
 		role: { type: String, enum: ["Utilisateur", "Admin"], default: "Utilisateur" },
 		votes: [{ type: mongoose.Schema.Types.ObjectId, ref: "Signalement" }],
 		refreshToken: { type: String, default: null },

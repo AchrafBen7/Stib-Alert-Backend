@@ -1,7 +1,7 @@
 const Cluster = require("../models/Cluster");
 const Arret = require("../models/Arret");
 const Utilisateur = require("../models/Utilisateur");
-const { fetchItinerairesGoogle } = require("./googleDirections");
+const { fetchItinerairesGoogle, fetchItinerairesGoogleWalk, fetchItinerairesGoogleBike } = require("./googleDirections");
 
 const EARTH_RADIUS_M = 6_371_000;
 const NEARBY_STOP_RADIUS_M = 250;
@@ -182,6 +182,109 @@ async function findNearbyAlternativeStops(arret, excludeLine, { limit = 5, radiu
 	return enriched;
 }
 
+async function buildReasons({ bestStop, otherLines, disruptedLine, walkMinutes, routeInfo, routine }) {
+	const reasons = [];
+
+	// Reason 1: history-based — count community clusters on alternative lines vs disrupted line
+	try {
+		const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+		const altLineQuery = otherLines.length > 0
+			? Cluster.countDocuments({ ligne: { $in: otherLines }, createdAt: { $gte: since }, status: { $in: ["active", "resolved", "archived"] } })
+			: Promise.resolve(null);
+		const disruptedQuery = Cluster.countDocuments({ ligne: disruptedLine, createdAt: { $gte: since }, status: { $in: ["active", "resolved", "archived"] } });
+		const [altCount, disruptedCount] = await Promise.all([altLineQuery, disruptedQuery]);
+		if (altCount != null && disruptedCount != null) {
+			if (altCount === 0 && disruptedCount > 0) {
+				reasons.push({
+					icon: "checkmark.shield.fill",
+					label: `Aucun signalement sur ${otherLines.join(", ")} cette semaine`,
+				});
+			} else if (altCount < disruptedCount) {
+				reasons.push({
+					icon: "checkmark.shield.fill",
+					label: `${altCount} signalement${altCount > 1 ? "s" : ""} cette semaine sur l'alternative (vs ${disruptedCount} sur ${disruptedLine})`,
+				});
+			}
+		}
+	} catch (e) {
+		// non-blocking
+	}
+
+	// Reason 2: walking distance
+	reasons.push({
+		icon: "figure.walk",
+		label: `Marche courte: ${walkMinutes} min jusqu'à ${bestStop.nom}`,
+	});
+
+	// Reason 3: direct destination (no transfer)
+	if (routeInfo?.etaMinutes != null) {
+		reasons.push({
+			icon: "clock.fill",
+			label: routine?.workLabel
+				? `ETA jusqu'à ${routine.workLabel}: ${routeInfo.etaMinutes} min`
+				: `ETA: ${routeInfo.etaMinutes} min`,
+		});
+	}
+
+	// Reason 4: lines available
+	if (otherLines.length > 0) {
+		reasons.push({
+			icon: "tram.fill",
+			label: `Desservi par ${otherLines.length} ligne${otherLines.length > 1 ? "s" : ""}: ${otherLines.join(", ")}`,
+		});
+	}
+
+	return reasons;
+}
+
+async function buildMultimodalAlternatives({ originCoord, destinationCoord }) {
+	if (!originCoord || !destinationCoord) return [];
+	const origin = `${originCoord.latitude || originCoord.lat},${originCoord.longitude || originCoord.lng}`;
+	const dest = `${destinationCoord.latitude || destinationCoord.lat},${destinationCoord.longitude || destinationCoord.lng}`;
+
+	const results = [];
+
+	try {
+		const walkRoutes = await fetchItinerairesGoogleWalk(origin, dest);
+		if (Array.isArray(walkRoutes) && walkRoutes.length > 0) {
+			const w = walkRoutes[0];
+			const mins = Number(w.duration_minutes || w.durationMinutes || 0);
+			if (mins > 0 && mins < 45) {
+				results.push({
+					mode: "walk",
+					icon: "figure.walk",
+					label: `À pied directement`,
+					durationMinutes: Math.round(mins),
+					summary: w.summary || null,
+				});
+			}
+		}
+	} catch (e) {
+		// silent
+	}
+
+	try {
+		const bikeRoutes = await fetchItinerairesGoogleBike(origin, dest);
+		if (Array.isArray(bikeRoutes) && bikeRoutes.length > 0) {
+			const b = bikeRoutes[0];
+			const mins = Number(b.duration_minutes || b.durationMinutes || 0);
+			if (mins > 0 && mins < 40) {
+				results.push({
+					mode: "bike",
+					icon: "bicycle",
+					label: `Vélo / Villo`,
+					durationMinutes: Math.round(mins),
+					summary: b.summary || null,
+				});
+			}
+		}
+	} catch (e) {
+		// silent
+	}
+
+	return results;
+}
+
 async function buildAlternativeRecommendation({ disruptedArret, disruptedLine, userCoord, routine }) {
 	if (!disruptedArret) return null;
 
@@ -223,10 +326,35 @@ async function buildAlternativeRecommendation({ disruptedArret, disruptedLine, u
 	const action = `Marche jusqu'à ${bestStop.nom} (${Math.round(bestStop.distanceMeters)}m, ${walkMinutes} min)`;
 	const reasoning = `${bestStop.nom} est desservi par les lignes ${otherLines.join(", ") || "?"} qui ne sont pas perturbées.`;
 
+	const reasons = await buildReasons({
+		bestStop,
+		otherLines,
+		disruptedLine,
+		walkMinutes,
+		routeInfo,
+		routine,
+	});
+
+	let multimodalAlternatives = [];
+	if (routine?.workStopId) {
+		try {
+			const workStop = await Arret.findById(routine.workStopId).select("latitude longitude").lean();
+			if (workStop?.latitude && workStop?.longitude && userCoord) {
+				multimodalAlternatives = await buildMultimodalAlternatives({
+					originCoord: userCoord,
+					destinationCoord: { latitude: workStop.latitude, longitude: workStop.longitude },
+				});
+			}
+		} catch (e) {
+			// silent
+		}
+	}
+
 	return {
 		type: "walk_and_transit",
 		action,
 		reasoning,
+		reasons,
 		walkToStop: {
 			name: bestStop.nom,
 			stopId: bestStop.stop_id,
@@ -237,6 +365,7 @@ async function buildAlternativeRecommendation({ disruptedArret, disruptedLine, u
 		},
 		alternativeLines: otherLines,
 		viaRoute: routeInfo,
+		multimodalAlternatives,
 	};
 }
 
