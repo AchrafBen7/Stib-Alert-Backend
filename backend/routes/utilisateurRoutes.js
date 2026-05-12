@@ -32,6 +32,11 @@ const {
 	handleValidation,
 } = require("../middlewares/validators");
 
+const rgpdController = require("../controllers/rgpdController");
+router.get("/me/export", protect, rgpdController.exportMyData);
+router.delete("/me", protect, rgpdController.deleteMyAccount);
+router.get("/privacy/policy", rgpdController.privacyPolicy);
+
 router.post("/inscription", signupLimiter, validateSignup, handleValidation, inscription);
 router.post("/activation", activationLimiter, validateActivation, handleValidation, activerCompte);
 router.post("/renvoyer-code", activationLimiter, utilisateurController.renvoyerCode);

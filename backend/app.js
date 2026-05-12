@@ -4,6 +4,7 @@ const helmet = require("helmet");
 const mongoSanitize = require("express-mongo-sanitize");
 const cookieParser = require("cookie-parser");
 const { globalLimiter } = require("./middlewares/rateLimiters");
+const logger = require("./services/logger");
 
 const app = express();
 
@@ -20,6 +21,9 @@ if (process.env.NODE_ENV !== "test") {
     app.use(morgan("dev"));
 }
 app.use(globalLimiter);
+if (process.env.NODE_ENV !== "test") {
+    app.use(logger.requestMiddleware());
+}
 
 const appleTeamId = process.env.APPLE_TEAM_ID || "SLUL8PUP37";
 const appleBundleId = process.env.APPLE_BUNDLE_ID || "com.ehb.StibAlert";
@@ -66,6 +70,13 @@ app.use((err, req, res, _next) => {
     if (err.type === "entity.too.large") {
         return res.status(413).json({ message: "Payload trop volumineux." });
     }
+    const reqLogger = req.logger || logger;
+    reqLogger.error("unhandled_error", {
+        message: err.message,
+        code: err.code,
+        status: err.status,
+        stack: process.env.NODE_ENV === "production" ? undefined : err.stack,
+    });
     res.status(err.status || 500).json({
         message: err.publicMessage || "Erreur serveur.",
     });
