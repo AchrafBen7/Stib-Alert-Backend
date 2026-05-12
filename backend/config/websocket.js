@@ -113,4 +113,37 @@ const emitSignalement = (signalement) => {
 	}
 };
 
-module.exports = { initWebSocket, emitSignalement };
+// 🔥 Émission des changements de cluster
+const emitClusterEvent = (eventType, cluster) => {
+	if (!io || !cluster) return;
+	const payload = {
+		event: eventType,
+		clusterIndex: cluster.clusterIndex,
+		ligne: cluster.ligne,
+		arretId: cluster.arretId,
+		typeProbleme: cluster.typeProbleme,
+		reportCount: cluster.reportCount,
+		confidence: cluster.confidence,
+		status: cluster.status,
+		resolved: cluster.resolved,
+		stillBlockedConfirmationCount: cluster.stillBlockedConfirmationCount || 0,
+		resolveConfirmationCount: cluster.resolveConfirmationCount || 0,
+		expiresAt: cluster.expiresAt,
+		latitude: cluster.latitude,
+		longitude: cluster.longitude,
+		emittedAt: new Date().toISOString(),
+	};
+
+	io.emit("clusterEvent", payload);
+
+	const { arretId } = cluster;
+	if (arretId && utilisateursAbonnes[String(arretId)]) {
+		utilisateursAbonnes[String(arretId)].forEach((socketId) => {
+			io.to(socketId).emit("clusterEventArret", payload);
+		});
+	}
+
+	console.log(`📡 Cluster ${eventType}: ${cluster.clusterIndex} (ligne ${cluster.ligne}, ${cluster.reportCount} rapports)`);
+};
+
+module.exports = { initWebSocket, emitSignalement, emitClusterEvent };

@@ -84,7 +84,7 @@ describe("community warning production flow", () => {
 				nomArret: "Moderation Stop 71",
 				ligne: "71",
 				typeProbleme: "Retard",
-				description: "Retard anonyme à modérer",
+				description: "Voir http://example.com",
 			});
 
 		expect(anonymous.status).toBe(201);
@@ -97,6 +97,8 @@ describe("community warning production flow", () => {
 
 		const { token, userId } = await registerAndLogin("admin@test.com");
 		await Utilisateur.findByIdAndUpdate(userId, { role: "Admin" });
+		const Redis = require("ioredis");
+		Redis._reset?.();
 
 		const pending = await request(app)
 			.get("/api/signalements/moderation/pending")

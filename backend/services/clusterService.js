@@ -2,6 +2,13 @@ const Signalement = require("../models/Signalement");
 const Cluster = require("../models/Cluster");
 const { calculateAggregateTrust } = require("./trustScorerService");
 
+let emitClusterEvent = null;
+try {
+	emitClusterEvent = require("../config/websocket").emitClusterEvent;
+} catch (e) {
+	emitClusterEvent = () => {};
+}
+
 const CLUSTER = {
 	MIN_REPORTS_TO_PUBLISH: 3,
 	MIN_TRUST_TO_PUBLISH: 50,
@@ -73,6 +80,16 @@ async function findOrCreateCluster({ ligne, arretId, typeProbleme }) {
 	return { cluster, isNew: true };
 }
 
+function safeEmit(eventType, cluster) {
+	try {
+		if (typeof emitClusterEvent === "function") {
+			emitClusterEvent(eventType, cluster);
+		}
+	} catch (err) {
+		console.warn("[clusterService] emit failed:", err.message);
+	}
+}
+
 async function recomputeClusterFromReports(cluster) {
 	const reports = await Signalement.find({
 		_id: { $in: cluster.signalementIds },
@@ -128,7 +145,17 @@ async function recomputeClusterFromReports(cluster) {
 	const fromLastReport = new Date(lastReport.getTime() + CLUSTER.REPORT_EXPIRY_MS);
 	cluster.expiresAt = fromLastReport > maxLifetime ? maxLifetime : fromLastReport;
 
+	const wasActive = cluster.isModified("status") ? cluster.get("status", null, { getters: false }) : null;
 	await cluster.save();
+
+	if (cluster.status === "active" && wasActive !== "active") {
+		safeEmit("published", cluster);
+	} else if (cluster.status === "archived") {
+		safeEmit("archived", cluster);
+	} else if (cluster.status === "active") {
+		safeEmit("updated", cluster);
+	}
+
 	return cluster;
 }
 
@@ -187,6 +214,8 @@ async function confirmStillBlocked({ clusterIndex, userId, actorHash }) {
 	cluster.lastReportedAt = new Date();
 	await cluster.save();
 
+	safeEmit("still_blocked", cluster);
+
 	return {
 		cluster,
 		message: "Confirmation enregistrée. L'alerte reste active.",
@@ -225,6 +254,12 @@ async function confirmResolved({ clusterIndex, userId, actorHash }) {
 	}
 
 	await cluster.save();
+
+	if (cluster.resolved) {
+		safeEmit("resolved", cluster);
+	} else {
+		safeEmit("resolve_vote", cluster);
+	}
 
 	return {
 		cluster,

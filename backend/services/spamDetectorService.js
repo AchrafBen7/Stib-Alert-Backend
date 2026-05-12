@@ -1,6 +1,6 @@
 const Signalement = require("../models/Signalement");
 
-const URL_PATTERN = /\bhttps?:\/\/|www\.|\.com\b|\.be\b|\.fr\b|\.net\b/i;
+const URL_PATTERN = /\bhttps?:\/\/[^\s]+|\bwww\.[a-z0-9.-]+\.[a-z]{2,}/i;
 const PHONE_PATTERN = /\b(?:\+?32|0)\s?[0-9]{1,2}\s?[0-9]{2,3}\s?[0-9]{2,3}\s?[0-9]{2,3}\b/;
 const EMAIL_PATTERN = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/;
 const REPEATED_CHARS = /(.)\1{5,}/;
@@ -116,7 +116,7 @@ async function scoreSpam({
 		reasons.push("empty_description");
 	} else {
 		if (URL_PATTERN.test(text)) {
-			score += 50;
+			score += 70;
 			reasons.push("url_detected");
 		}
 		if (EMAIL_PATTERN.test(text)) {

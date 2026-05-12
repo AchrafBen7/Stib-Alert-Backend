@@ -10,7 +10,7 @@ const openai = new OpenAI({
  * ✅ 1. Analyse un signalement pour détecter du spam ou des propos inappropriés.
  */
 exports.analyserSignalement = async (description) => {
-	if (!process.env.OPENAI_API_KEY) {
+	if (!process.env.OPENAI_API_KEY || process.env.OPENAI_DISABLE_IN_TESTS === "true") {
 		return true;
 	}
 

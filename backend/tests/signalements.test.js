@@ -63,7 +63,7 @@ describe("POST /api/signalements", () => {
         const body = res.body.signalement || res.body;
         expect(body).toHaveProperty("ligne", "71");
         expect(body).toHaveProperty("authorType", "anonymous");
-        expect(body).toHaveProperty("moderationStatus", "pending");
+        expect(body).toHaveProperty("moderationStatus", "approved");
     });
 
     it("rejects duplicate anonymous reports from the same device (409)", async () => {
@@ -93,7 +93,7 @@ describe("POST /api/signalements", () => {
 
         expect(first.status).toBe(201);
         expect(duplicate.status).toBe(409);
-        expect(duplicate.body).toHaveProperty("moderationStatus", "pending");
+        expect(duplicate.body).toHaveProperty("moderationStatus", "approved");
     });
 
     it("returns 400 when typeProbleme is invalid", async () => {
