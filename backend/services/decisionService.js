@@ -460,6 +460,20 @@ async function computeDecision({ userId, userCoord = null, line = null }) {
 		minutesUntilDep > -30 &&
 		minutesUntilDep < ROUTINE_TIME_WINDOW_MIN;
 
+	// Real-time vehicle tracking on the disrupted line.
+	let liveLine = null;
+	try {
+		const { getLineRealtime } = require("./lineRealtimeService");
+		const userStopId = cluster.arretId?._id || cluster.arretId;
+		liveLine = await getLineRealtime({
+			lineId: cluster.ligne,
+			userStopId: userStopId ? String(userStopId) : null,
+			maxVehicles: 3,
+		});
+	} catch (e) {
+		console.warn("[decision] realtime fetch failed:", e.message);
+	}
+
 	return {
 		verdict: top.severity === "critical" ? "AVOID" : "CAUTION",
 		headline,
@@ -480,6 +494,7 @@ async function computeDecision({ userId, userCoord = null, line = null }) {
 			longitude: cluster.longitude,
 		},
 		recommendation,
+		liveLine,
 	};
 }
 
