@@ -324,24 +324,24 @@ describe("Resolution Voting", () => {
 		expect(updated.expiresAt.getTime()).toBeGreaterThanOrEqual(before);
 	});
 
-	test("3 resolve votes mark cluster resolved", async () => {
+	test("2 resolve votes mark cluster resolved for anonymous voters", async () => {
+		// New asymmetric threshold: DEFAULT (anonymous / new user) = 2 votes
+		// to resolve. Previously 3 — but that punished users who saw it was OK.
 		await confirmResolved({ clusterIndex: cluster.clusterIndex, actorHash: "v1" });
-		await confirmResolved({ clusterIndex: cluster.clusterIndex, actorHash: "v2" });
-		const result = await confirmResolved({ clusterIndex: cluster.clusterIndex, actorHash: "v3" });
+		const result = await confirmResolved({ clusterIndex: cluster.clusterIndex, actorHash: "v2" });
 
 		expect(result.resolved).toBe(true);
-		expect(result.confirmationCount).toBeGreaterThanOrEqual(3);
+		expect(result.confirmationCount).toBeGreaterThanOrEqual(2);
 
 		const updated = await Cluster.findOne({ clusterIndex: cluster.clusterIndex });
 		expect(updated.status).toBe("resolved");
 	});
 
-	test("2 resolve votes keep cluster active", async () => {
-		await confirmResolved({ clusterIndex: cluster.clusterIndex, actorHash: "v1" });
-		const result = await confirmResolved({ clusterIndex: cluster.clusterIndex, actorHash: "v2" });
+	test("1 resolve vote alone does not resolve (anonymous threshold = 2)", async () => {
+		const result = await confirmResolved({ clusterIndex: cluster.clusterIndex, actorHash: "v1" });
 
 		expect(result.resolved).toBe(false);
-		expect(result.confirmationCount).toBe(2);
+		expect(result.confirmationCount).toBe(1);
 
 		const updated = await Cluster.findOne({ clusterIndex: cluster.clusterIndex });
 		expect(updated.status).toBe("active");
