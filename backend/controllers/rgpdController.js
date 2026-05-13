@@ -158,6 +158,26 @@ exports.deleteMyAccount = async (req, res) => {
 	}
 };
 
+exports.myInsights = async (req, res) => {
+	try {
+		const userId = req.user?.userId;
+		if (!userId) {
+			return res.status(401).json({ message: "Authentification requise." });
+		}
+		const { computeInsights } = require("../services/insightsService");
+		const daysBack = Number(req.query.daysBack) || 30;
+		const insights = await computeInsights({ userId, daysBack });
+		if (!insights) {
+			return res.status(404).json({ message: "Utilisateur introuvable." });
+		}
+		res.setHeader("Cache-Control", "private, max-age=600");
+		return res.status(200).json(insights);
+	} catch (error) {
+		console.error("[rgpd.myInsights]", error);
+		return res.status(500).json({ message: "Erreur insights.", error: error.message });
+	}
+};
+
 exports.myContributions = async (req, res) => {
 	try {
 		const userId = req.user?.userId;
