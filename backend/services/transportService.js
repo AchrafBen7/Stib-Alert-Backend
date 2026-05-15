@@ -63,10 +63,22 @@ function normalizeLine(line) {
 }
 
 function lineCandidates(lineId) {
-	const normalized = normalizeLine(lineId);
+	const raw = String(lineId || "").trim();
+	const normalized = normalizeLine(raw);
 	if (!normalized) return [];
 	const base = normalized.split(":")[0];
-	return [...new Set([normalized, base])];
+	const candidates = new Set([normalized, base, raw]);
+	// Imported variant lineids use proper-cased direction suffixes
+	// ("46:City", "46:Suburb"); normalizeLine uppercases everything, so we
+	// also add the proper-cased reconstructions to keep the lookup tolerant.
+	if (normalized.includes(":")) {
+		const [, suffixUpper] = normalized.split(":");
+		if (suffixUpper) {
+			const properCase = suffixUpper.charAt(0) + suffixUpper.slice(1).toLowerCase();
+			candidates.add(`${base}:${properCase}`);
+		}
+	}
+	return [...candidates].filter(Boolean);
 }
 
 function toMinutes(value) {
@@ -971,12 +983,13 @@ async function getTransportStop(stopId) {
 async function getTransportLine(lineId) {
 	return cache.remember(stableKey("transport-line", { lineId }), TTL.lineOverview, async () => {
 		const candidates = lineCandidates(lineId);
+		const baseId = normalizeLine(lineId).split(":")[0];
 		const exactLine = await Ligne.findOne({ lineid: { $in: candidates } }).populate("points.id").lean();
 		let line = exactLine;
 		let mergedStops = null;
 
-		if (!line) {
-			const variants = await Ligne.find({ lineid: { $regex: `^${candidates[0]}:` } }).populate("points.id").lean();
+		if (!line && baseId) {
+			const variants = await Ligne.find({ lineid: { $regex: `^${baseId}:` } }).populate("points.id").lean();
 			if (variants.length) {
 				const primary = variants.find((variant) => variant.direction === "City") || variants[0];
 				mergedStops = (primary.points || [])
