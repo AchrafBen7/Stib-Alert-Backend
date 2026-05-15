@@ -22,6 +22,7 @@ const { startStibOfficialSeedLoop } = require("./services/stibOfficialSeedServic
 const { startCommunityJobs } = require("./services/communityJobsService");
 const { startMercisLoop } = require("./services/mercisService");
 const { startPreTripPushLoop } = require("./services/preTripPushService");
+const { bootstrapStaticCatalogIfEmpty } = require("./services/staticCatalogBootstrap");
 
 app.get("/privacy", (req, res) => {
 	res.setHeader("Content-Type", "text/html; charset=utf-8");
@@ -98,6 +99,8 @@ async function startServer() {
 		console.error("❌ Serveur HTTP non lancé : MongoDB indisponible.");
 		process.exit(1);
 	}
+
+	await bootstrapStaticCatalogIfEmpty();
 
 	startStibOfficialSeedLoop();
 	startCommunityJobs();

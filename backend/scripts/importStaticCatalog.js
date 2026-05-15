@@ -187,7 +187,12 @@ async function removeStaleStaticData(catalog) {
 	}
 }
 
-async function main() {
+/**
+ * Imports the STIB static catalog. Idempotent (upserts). Returns counts.
+ * - skipDbConnect: pass true if the caller already opened the Mongo connection
+ *   (so we don't re-open and we don't exit the process).
+ */
+async function importStaticCatalog({ skipDbConnect = false } = {}) {
 	const catalogPath = resolveCatalogPath();
 	if (!catalogPath) {
 		throw new Error("Fichier stib-static-catalog-merged.json introuvable.");
@@ -198,9 +203,11 @@ async function main() {
 		throw new Error("Le catalogue STIB fusionné est invalide.");
 	}
 
-	const isConnected = await connectDB();
-	if (!isConnected) {
-		throw new Error("Connexion MongoDB impossible.");
+	if (!skipDbConnect) {
+		const isConnected = await connectDB();
+		if (!isConnected) {
+			throw new Error("Connexion MongoDB impossible.");
+		}
 	}
 
 	const datasetTag = `stib-static-catalog:${raw.generatedAt || new Date().toISOString()}`;
@@ -224,10 +231,20 @@ async function main() {
 	await removeStaleStaticData(raw);
 
 	console.log("🎯 Import STIB statique terminé.");
-	process.exit(0);
+	return {
+		stops: stopOperations.length,
+		lines: lineOperations.length,
+		catalogPath,
+	};
 }
 
-main().catch((error) => {
-	console.error("❌ Import STIB statique impossible:", error);
-	process.exit(1);
-});
+module.exports = { importStaticCatalog };
+
+if (require.main === module) {
+	importStaticCatalog()
+		.then(() => process.exit(0))
+		.catch((error) => {
+			console.error("❌ Import STIB statique impossible:", error);
+			process.exit(1);
+		});
+}
