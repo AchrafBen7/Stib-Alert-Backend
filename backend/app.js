@@ -68,6 +68,13 @@ app.use("/api/assistant", require("./routes/assistantRoutes"));
 
 app.get("/", (req, res) => res.send("STIB Alert API fonctionne !"));
 
+// /health is intentionally DB-free so external keep-warm pings can wake the
+// Render free-tier container without waiting on Mongo. Cron-job.org / GitHub
+// Actions hit this every ~14min to keep the dyno hot.
+app.get("/health", (req, res) => {
+	res.status(200).json({ ok: true, uptime: process.uptime() });
+});
+
 app.use((err, req, res, _next) => {
     if (err.type === "entity.too.large") {
         return res.status(413).json({ message: "Payload trop volumineux." });
