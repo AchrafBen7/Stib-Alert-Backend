@@ -1,6 +1,7 @@
 const Contribution = require("../models/Contribution");
 const Cluster = require("../models/Cluster");
 const Signalement = require("../models/Signalement");
+const logger = require("./logger");
 
 let oneSignal = null;
 try {
@@ -57,7 +58,7 @@ async function detectAndSendThanks() {
 				if (oneSignal?.sendPushToPlayerIds) {
 					await oneSignal.sendPushToPlayerIds({
 						playerIds: [user.oneSignalPlayerId],
-						title: "Merci 🙌",
+						title: "Merci",
 						message: `Ton signalement sur la ligne ${cluster.ligne} a aidé ${peopleHelped} personne${peopleHelped > 1 ? "s" : ""} ce matin.`,
 						data: {
 							type: "thanks",
@@ -67,7 +68,7 @@ async function detectAndSendThanks() {
 					});
 				}
 			} catch (pushErr) {
-				console.warn("[mercis] push failed:", pushErr.message);
+				logger.warn("[mercis] push failed", { error: pushErr.message });
 			}
 		}
 	}
@@ -79,12 +80,12 @@ function startMercisLoop() {
 	if (process.env.MERCIS_ENABLED === "false") return null;
 	if (timer) return timer;
 
-	detectAndSendThanks().catch((e) => console.warn("[mercis] initial run failed:", e.message));
+	detectAndSendThanks().catch((e) => logger.warn("[mercis] initial run failed:", { error: e.message }));
 	timer = setInterval(() => {
-		detectAndSendThanks().catch((e) => console.warn("[mercis] tick failed:", e.message));
+		detectAndSendThanks().catch((e) => logger.warn("[mercis] tick failed:", { error: e.message }));
 	}, THANKS_BATCH_INTERVAL_MS);
 	timer.unref?.();
-	console.log(`✅ Mercis loop started (interval=${THANKS_BATCH_INTERVAL_MS}ms)`);
+	logger.info(`✅ Mercis loop started (interval=${THANKS_BATCH_INTERVAL_MS}ms)`);
 	return timer;
 }
 

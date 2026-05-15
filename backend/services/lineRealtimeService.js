@@ -1,6 +1,7 @@
 const Ligne = require("../models/Ligne");
 const Arret = require("../models/Arret");
 const { getVehiclePositions, getWaitingTimes } = require("./belgianMobility");
+const logger = require("./logger");
 
 const EARTH_RADIUS_M = 6_371_000;
 
@@ -168,7 +169,7 @@ async function getLineRealtime({ lineId, userStopId = null, maxVehicles = 3 }) {
 				};
 			});
 	} catch (e) {
-		console.warn("[lineRealtime] vehicle positions failed:", e.message);
+		logger.warn("[lineRealtime] vehicle positions failed", { error: e.message });
 	}
 
 	// Filter vehicles still approaching the user's stop (positive direction)
@@ -202,7 +203,7 @@ async function getLineRealtime({ lineId, userStopId = null, maxVehicles = 3 }) {
 				}
 			}
 		} catch (e) {
-			console.warn("[lineRealtime] waiting times failed:", e.message);
+			logger.warn("[lineRealtime] waiting times failed", { error: e.message });
 		}
 	}
 

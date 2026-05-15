@@ -1,6 +1,7 @@
 const Signalement = require("../models/Signalement");
 const Cluster = require("../models/Cluster");
 const { calculateAggregateTrust } = require("./trustScorerService");
+const logger = require("./logger");
 
 let emitClusterEvent = null;
 try {
@@ -98,7 +99,7 @@ function safeEmit(eventType, cluster) {
 			emitClusterEvent(eventType, cluster);
 		}
 	} catch (err) {
-		console.warn("[clusterService] emit failed:", err.message);
+		logger.warn("[clusterService] emit failed", { error: err.message });
 	}
 }
 
@@ -369,7 +370,7 @@ async function runClusteringSweep({ batchSize = 200 } = {}) {
 			await assignSignalementToCluster(report);
 			assigned++;
 		} catch (err) {
-			console.error("[clusterService] assign error:", err.message);
+			logger.error("[clusterService] assign error", { error: err.message });
 		}
 	}
 

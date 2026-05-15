@@ -106,7 +106,7 @@ function buildEventPayload(user, signalement, eventType) {
 
 	if (isFavoriteLine && eventType !== "resolved") {
 		return {
-			title: `⚠️ Perturbation sur ta ligne ${line}`,
+			title: `Perturbation sur ta ligne ${line}`,
 			message: departureTime
 				? `Départ habituel ${departureTime}. ${stopName} est touché et Stibi surveille déjà une alternative.`
 				: `${stopName} est touché sur ta ligne favorite ${line}. Stibi surveille déjà la suite.`,

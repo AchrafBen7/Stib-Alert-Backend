@@ -1,5 +1,6 @@
 const Utilisateur = require("../models/Utilisateur");
 const { computeDecision } = require("./decisionService");
+const logger = require("./logger");
 
 let oneSignal = null;
 try {
@@ -74,21 +75,20 @@ function shortBriefFromDecision(decision) {
 	if (!decision) return null;
 	if (decision.verdict === "ALL_CLEAR") {
 		return {
-			title: "Bonne nouvelle 👌",
+			title: "Bonne nouvelle",
 			body: decision.headline || "Tes lignes habituelles sont fluides ce matin.",
 			category: "all_clear",
 		};
 	}
 	if (decision.verdict === "WATCH") {
 		return {
-			title: "À surveiller 👀",
+			title: "À surveiller",
 			body: decision.subhead || decision.headline || "Quelques signalements ponctuels sur tes lignes.",
 			category: "watch",
 		};
 	}
 	const cluster = decision.affectedCluster;
 	const reco = decision.recommendation;
-	const verdictEmoji = decision.verdict === "AVOID" ? "🚫" : "⚠️";
 
 	let body;
 	if (reco?.action && reco?.walkToStop) {
@@ -103,7 +103,7 @@ function shortBriefFromDecision(decision) {
 	}
 
 	return {
-		title: `${verdictEmoji} Avant de partir`,
+		title: "Avant de partir",
 		body,
 		category: decision.verdict.toLowerCase(),
 	};
@@ -139,7 +139,7 @@ async function dispatchPushForUser(user) {
 		await Utilisateur.findByIdAndUpdate(user._id, { $set: { lastPreTripPushAt: new Date() } });
 		return { sent: true, verdict: decision.verdict };
 	} catch (pushErr) {
-		console.warn("[pre-trip push]", `user ${user._id}: ${pushErr.message}`);
+		logger.warn("[pre-trip push]", { detail: `user ${user._id}: ${pushErr.message}` });
 		return { sent: false, reason: pushErr.message };
 	}
 }
@@ -197,12 +197,12 @@ function startPreTripPushLoop() {
 	if (process.env.PRE_TRIP_PUSH_ENABLED === "false") return null;
 	if (timer) return timer;
 
-	evaluateAndSendPreTripPushes().catch((e) => console.warn("[pre-trip push] initial run failed:", e.message));
+	evaluateAndSendPreTripPushes().catch((e) => logger.warn("[pre-trip push] initial run failed:", { error: e.message }));
 	timer = setInterval(() => {
-		evaluateAndSendPreTripPushes().catch((e) => console.warn("[pre-trip push] tick failed:", e.message));
+		evaluateAndSendPreTripPushes().catch((e) => logger.warn("[pre-trip push] tick failed:", { error: e.message }));
 	}, TICK_INTERVAL_MS);
 	timer.unref?.();
-	console.log(`✅ Pre-trip push loop started (lead=${TRIGGER_LEAD_MINUTES}min, tick=${TICK_INTERVAL_MS}ms)`);
+	logger.info(`✅ Pre-trip push loop started (lead=${TRIGGER_LEAD_MINUTES}min, tick=${TICK_INTERVAL_MS}ms)`);
 	return timer;
 }
 

@@ -58,7 +58,7 @@ function buildPushContent(ligne, typeProbleme) {
 		: " Vérifie les alternatives.";
 
 	return {
-		title:   `⚠️ Ligne ${ligne}`,
+		title:   `Ligne ${ligne}`,
 		message: `${label} sur ta ligne.${altText}`,
 	};
 }

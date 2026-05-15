@@ -2,6 +2,7 @@ const Cluster = require("../models/Cluster");
 const Arret = require("../models/Arret");
 const Utilisateur = require("../models/Utilisateur");
 const { fetchItinerairesGoogle, fetchItinerairesGoogleWalk, fetchItinerairesGoogleBike } = require("./googleDirections");
+const logger = require("./logger");
 
 const EARTH_RADIUS_M = 6_371_000;
 const NEARBY_STOP_RADIUS_M = 250;
@@ -319,7 +320,7 @@ async function buildAlternativeRecommendation({ disruptedArret, disruptedLine, u
 				}
 			}
 		} catch (e) {
-			console.warn("[decision] alternative route fetch failed:", e.message);
+			logger.warn("[decision] alternative route fetch failed", { error: e.message });
 		}
 	}
 
@@ -431,7 +432,7 @@ async function computeTripDecision({ userId, originCoord, destCoord, destination
 			`${destCoord.lat},${destCoord.lng}`
 		);
 	} catch (e) {
-		console.warn("[decision.trip] Google fetch failed:", e.message);
+		logger.warn("[decision.trip] Google fetch failed", { error: e.message });
 	}
 
 	if (!Array.isArray(directions) || directions.length === 0) {
@@ -600,7 +601,7 @@ async function computeDecision({ userId, userCoord = null, line = null }) {
 			maxVehicles: 3,
 		});
 	} catch (e) {
-		console.warn("[decision] realtime fetch failed:", e.message);
+		logger.warn("[decision] realtime fetch failed", { error: e.message });
 	}
 
 	return {
