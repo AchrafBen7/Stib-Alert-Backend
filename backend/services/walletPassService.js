@@ -70,6 +70,11 @@ function buildPassJson({ user, pass, serialNumber }) {
 	const subscription = pass.subscriptionLabel || "Abonnement STIB";
 	const expiry = pass.expiryDate ? new Date(pass.expiryDate) : null;
 
+	// boardingPass layout is the cleanest fit for a transit subscription —
+	// Wallet renders it as a proper ticket (route bar + secondary row +
+	// stripe) rather than the storeCard's awkward giant primary text. We
+	// model the trip as "Bruxelles → Réseau STIB" which is semantically
+	// accurate for a network-wide pass.
 	return {
 		formatVersion: 1,
 		passTypeIdentifier: passTypeId,
@@ -77,16 +82,30 @@ function buildPassJson({ user, pass, serialNumber }) {
 		organizationName: "StibAlert",
 		description: "Carte de transport MoBIB",
 		serialNumber,
-		logoText: "MoBIB",
+		logoText: "MoBIB · STIB-MIVB",
 		foregroundColor: "rgb(255, 255, 255)",
 		backgroundColor: "rgb(118, 173, 84)", // MoBIB green
 		labelColor: "rgb(255, 255, 255)",
-		storeCard: {
+		expirationDate: expiry ? expiry.toISOString() : undefined,
+		boardingPass: {
+			transitType: "PKTransitTypeGeneric",
+			headerFields: [
+				{
+					key: "type",
+					label: "TYPE",
+					value: subscription.toUpperCase(),
+				},
+			],
 			primaryFields: [
 				{
-					key: "subscription",
-					label: "ABONNEMENT",
-					value: subscription,
+					key: "from",
+					label: "BRUXELLES",
+					value: "STIB",
+				},
+				{
+					key: "to",
+					label: "RÉSEAU",
+					value: "MIVB",
 				},
 			],
 			secondaryFields: [
@@ -109,31 +128,26 @@ function buildPassJson({ user, pass, serialNumber }) {
 					label: "N° CARTE",
 					value: maskCardNumber(cardNumber),
 				},
-				{
-					key: "network",
-					label: "RÉSEAU",
-					value: "STIB · MIVB",
-				},
 			],
 			backFields: [
 				{
 					key: "fullNumber",
-					label: "Numéro complet",
+					label: "Numéro de carte (complet)",
 					value: cardNumber,
 				},
 				{
 					key: "linkedAccount",
-					label: "Compte associé",
+					label: "Compte StibAlert",
 					value: user?.email || "—",
 				},
 				{
 					key: "notes",
 					label: "À propos",
-					value: "Représentation visuelle de votre carte MoBIB STIB. Pour valider votre passage, utilisez la carte physique. Cette carte numérique facilite le suivi de votre abonnement dans StibAlert.",
+					value: "Représentation visuelle de votre carte MoBIB. Pour valider votre passage, utilisez la carte physique — ce pass est une vue d'ensemble pour retrouver vos infos d'abonnement.",
 				},
 				{
 					key: "support",
-					label: "Support",
+					label: "Contact",
 					value: "support@stibalert.app",
 				},
 			],
