@@ -43,6 +43,7 @@ router.post("/inscription", signupLimiter, validateSignup, handleValidation, ins
 router.post("/activation", activationLimiter, validateActivation, handleValidation, activerCompte);
 router.post("/renvoyer-code", activationLimiter, utilisateurController.renvoyerCode);
 router.post("/connexion", loginLimiter, validateLogin, handleValidation, connexion);
+router.post("/apple-signin", loginLimiter, utilisateurController.appleSignin);
 router.post("/deconnexion", protect, deconnexion);
 router.post("/refresh", refreshLimiter, utilisateurController.refresh);
 

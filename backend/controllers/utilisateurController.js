@@ -8,6 +8,7 @@ const { predireTendances } = require("../config/openai");
 const crypto = require("crypto");
 const { getWaitingTimes } = require("../services/belgianMobility");
 const { registerDevice } = require("../services/oneSignalService");
+const { verifyAppleIdentityToken } = require("../services/appleSignInService");
 
 const REFRESH_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 
@@ -263,13 +264,73 @@ exports.activerCompte = async (req, res) => {
 	}
 };
 
+// ✅ Sign in with Apple (iOS only — the client sends the identity token issued
+// by AuthenticationServices). Idempotent: same Apple user → same account.
+exports.appleSignin = async (req, res) => {
+	try {
+		const { identityToken, fullName } = req.body || {};
+		if (!identityToken) {
+			return res.status(400).json({ message: "identityToken requis." });
+		}
+
+		let appleClaims;
+		try {
+			appleClaims = await verifyAppleIdentityToken(identityToken);
+		} catch (verifyErr) {
+			console.warn("[apple-signin] verification failed:", verifyErr.message);
+			return res.status(401).json({ message: "Identity token invalide." });
+		}
+
+		// First try to match by appleUserId (stable across email rotations on
+		// Apple's side, including the private-relay rotation case).
+		let utilisateur = await Utilisateur.findOne({ appleUserId: appleClaims.sub });
+
+		// Fall back to email match for first-time sign-ins where we have an
+		// email and the user previously signed up another way.
+		if (!utilisateur && appleClaims.email) {
+			utilisateur = await Utilisateur.findOne({ email: appleClaims.email });
+			if (utilisateur) {
+				utilisateur.appleUserId = appleClaims.sub;
+				await utilisateur.save();
+			}
+		}
+
+		// Create on first sign-in.
+		if (!utilisateur) {
+			const fallbackEmail = appleClaims.email
+				|| `apple_${appleClaims.sub.slice(0, 12)}@stibalert.invalid`;
+			const displayName = (typeof fullName === "string" && fullName.trim())
+				|| (appleClaims.email ? appleClaims.email.split("@")[0] : "Utilisateur Apple");
+
+			utilisateur = await Utilisateur.create({
+				nom: displayName,
+				email: fallbackEmail,
+				motDePasse: null,           // Apple-only: no local password
+				appleUserId: appleClaims.sub,
+				notifications: true,
+				langue: "FR",
+			});
+		}
+
+		const auth = await buildAuthResponse(utilisateur);
+		return res.json({ message: "Connexion Apple réussie", ...auth });
+	} catch (error) {
+		console.error("[apple-signin]", error);
+		return res.status(500).json({ message: "Connexion Apple impossible." });
+	}
+};
+
 // ✅ Connexion d'un utilisateur
 exports.connexion = async (req, res) => {
 	try {
 		const { email, motDePasse } = req.body;
 
 		const utilisateur = await Utilisateur.findOne({ email });
-		if (!utilisateur || !(await bcrypt.compare(motDePasse, utilisateur.motDePasse))) {
+		// Reject email/password login for Apple-only accounts (no local hash).
+		if (!utilisateur || !utilisateur.motDePasse) {
+			return res.status(401).json({ message: "Email ou mot de passe incorrect." });
+		}
+		if (!(await bcrypt.compare(motDePasse, utilisateur.motDePasse))) {
 			return res.status(401).json({ message: "Email ou mot de passe incorrect." });
 		}
 		const auth = await buildAuthResponse(utilisateur);

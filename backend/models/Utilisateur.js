@@ -4,7 +4,9 @@ const utilisateurSchema = new mongoose.Schema(
 	{
 		nom: { type: String, required: true },
 		email: { type: String, required: true, unique: true },
-		motDePasse: { type: String, required: true },
+		// Optional because Sign in with Apple users never set one — the field
+		// still holds a bcrypt hash for email/password users.
+		motDePasse: { type: String, default: null },
 		photoProfil: { type: String },
 		tokenPush: { type: String },
 		oneSignalPlayerId: { type: String },
@@ -32,6 +34,7 @@ const utilisateurSchema = new mongoose.Schema(
 		votes: [{ type: mongoose.Schema.Types.ObjectId, ref: "Signalement" }],
 		refreshToken: { type: String, default: null },
 		refreshTokenExpiry: { type: Date, default: null },
+		appleUserId: { type: String, default: null, index: true, sparse: true },
 	},
 	{ timestamps: true }
 );
