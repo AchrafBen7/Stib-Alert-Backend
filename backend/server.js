@@ -23,6 +23,7 @@ const { startCommunityJobs } = require("./services/communityJobsService");
 const { startMercisLoop } = require("./services/mercisService");
 const { startPreTripPushLoop } = require("./services/preTripPushService");
 const { bootstrapStaticCatalogIfEmpty } = require("./services/staticCatalogBootstrap");
+const { bootstrapDemoAccountIfRequested } = require("./services/demoAccountBootstrap");
 
 app.get("/privacy", (req, res) => {
 	res.setHeader("Content-Type", "text/html; charset=utf-8");
@@ -101,6 +102,7 @@ async function startServer() {
 	}
 
 	await bootstrapStaticCatalogIfEmpty();
+	await bootstrapDemoAccountIfRequested();
 
 	startStibOfficialSeedLoop();
 	startCommunityJobs();
