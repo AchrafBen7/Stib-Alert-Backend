@@ -79,8 +79,8 @@ function buildPassJson({ user, pass, serialNumber }) {
 		serialNumber,
 		logoText: "MoBIB",
 		foregroundColor: "rgb(255, 255, 255)",
-		backgroundColor: "rgb(36, 63, 115)", // STIB navy
-		labelColor: "rgb(255, 200, 56)",
+		backgroundColor: "rgb(118, 173, 84)", // MoBIB green
+		labelColor: "rgb(255, 255, 255)",
 		storeCard: {
 			primaryFields: [
 				{
@@ -175,19 +175,27 @@ async function generateMobibPass({ user, pass }) {
 	const serialNumber = String(user?._id || crypto.randomUUID());
 	const passJson = buildPassJson({ user, pass, serialNumber });
 
-	const newPass = new PKPass({
+	// Load the icon + logo assets — Apple Wallet REQUIRES icon.png (it
+	// refuses the pass as "invalid data" otherwise) and a logo improves the
+	// pass header. Files live in backend/wallet-assets and are sized to
+	// Apple's PassKit recommendations.
+	const assetDir = path.join(__dirname, "..", "wallet-assets");
+	const files = {
 		"pass.json": Buffer.from(JSON.stringify(passJson), "utf8"),
-	}, {
+	};
+	for (const name of ["icon.png", "icon@2x.png", "icon@3x.png", "logo.png", "logo@2x.png", "logo@3x.png"]) {
+		const filePath = path.join(assetDir, name);
+		if (fs.existsSync(filePath)) {
+			files[name] = fs.readFileSync(filePath);
+		}
+	}
+
+	const newPass = new PKPass(files, {
 		wwdr: fs.readFileSync(process.env.WALLET_WWDR_PATH),
 		signerCert: fs.readFileSync(process.env.WALLET_SIGNER_CERT_PATH),
 		signerKey: fs.readFileSync(process.env.WALLET_SIGNER_KEY_PATH),
 		signerKeyPassphrase: process.env.WALLET_SIGNER_KEY_PASS || undefined,
 	});
-
-	// No icons embedded — Wallet shows a generic icon if missing, which is
-	// acceptable for v1. Drop icon.png / logo.png in backend/certs/wallet/
-	// later and load them here via newPass.addBuffer("icon.png", ...) for a
-	// branded look.
 
 	const buffer = newPass.getAsBuffer();
 	logger.info("[wallet] generated mobib pass", {
