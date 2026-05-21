@@ -94,11 +94,11 @@ async function ensureExternalTransportStop({ operator, nomArret, ligne, latitude
 	return Arret.findOneAndUpdate(
 		{ stop_id: stopId },
 		{
+			// Only insert-exclusive fields go here. nom/latitude/longitude live in
+			// $set below — having them in both operators makes MongoDB throw
+			// "Updating the path 'nom' would create a conflict at 'nom'".
 			$setOnInsert: {
 				stop_id: stopId,
-				nom: nomArret,
-				latitude: latitudeParsed,
-				longitude: longitudeParsed,
 				sourceDataset: `${operator}-local`,
 			},
 			$set: {
