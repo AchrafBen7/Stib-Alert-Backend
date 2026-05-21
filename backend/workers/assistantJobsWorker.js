@@ -3,7 +3,6 @@ require("dotenv").config();
 const connectDB = require("../config/db");
 const redis = require("../config/redis");
 const { startAssistantProactivePushLoop } = require("../services/assistantProactivePushService");
-const { startAssistantWeeklyDigestLoop } = require("../services/assistantWeeklyDigestService");
 
 async function startWorker() {
 	if (redis) {
@@ -21,7 +20,6 @@ async function startWorker() {
 
 	const timers = [
 		startAssistantProactivePushLoop(),
-		startAssistantWeeklyDigestLoop(),
 	].filter(Boolean);
 
 	if (timers.length === 0) {
