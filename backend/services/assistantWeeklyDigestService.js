@@ -2,6 +2,7 @@ const Utilisateur = require("../models/Utilisateur");
 const Signalement = require("../models/Signalement");
 const AssistantNotificationLog = require("../models/AssistantNotificationLog");
 const { sendNotificationWithDeepLink } = require("./oneSignalService");
+const { isInQuietHours } = require("./pushPreferences");
 
 let isRunning = false;
 
@@ -83,7 +84,7 @@ async function evaluateAndSendWeeklyDigests() {
 			oneSignalPlayerId: { $exists: true, $ne: null },
 			favoriteLines: { $exists: true, $not: { $size: 0 } },
 		})
-			.select("_id favoriteLines")
+			.select("_id favoriteLines quietHoursEnabled quietHoursStartHour quietHoursEndHour")
 			.lean();
 
 		let evaluated = 0;
@@ -91,7 +92,8 @@ async function evaluateAndSendWeeklyDigests() {
 
 		for (const user of users) {
 			evaluated += 1;
-			const digest = await buildWeeklyDigest(user);
+			if (isInQuietHours(user)) continue; // respect silent window
+				const digest = await buildWeeklyDigest(user);
 			if (!digest) continue;
 			if (await alreadySentThisWeek(user._id, digest.weekKey)) continue;
 

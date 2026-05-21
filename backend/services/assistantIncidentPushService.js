@@ -3,6 +3,7 @@ const Arret = require("../models/Arret");
 const AssistantNotificationLog = require("../models/AssistantNotificationLog");
 const { sendNotificationWithDeepLink } = require("./oneSignalService");
 const { buildCommunityMeta } = require("./signalementCommunityService");
+const { isInQuietHours } = require("./pushPreferences");
 
 const EVENT_POLICY = {
 	new_signalement: { cooldownMinutes: 15, priority: "elevated" },
@@ -156,6 +157,8 @@ async function sendFavoriteIncidentPushes(signalement, eventType = "new_signalem
 
 	const users = await Utilisateur.find({
 		notifications: true,
+		// "Alertes communauté" toggle — exclude users who turned it off.
+		communityClusterPushEnabled: { $ne: false },
 		oneSignalPlayerId: { $exists: true, $ne: null },
 		$or: [
 			{ favoris: { $in: stopIds } },
@@ -164,12 +167,15 @@ async function sendFavoriteIncidentPushes(signalement, eventType = "new_signalem
 			...(line ? [{ favoriteLines: line.toUpperCase() }] : []),
 		],
 	})
-		.select("_id favoriteLines routine")
+		.select("_id favoriteLines routine quietHoursEnabled quietHoursStartHour quietHoursEndHour")
 		.lean();
 
 	let sent = 0;
 
 	for (const user of users) {
+		// Respect the user's silent window.
+		if (isInQuietHours(user)) continue;
+
 		const payload = buildEventPayload(user, signalement, eventType);
 		const contextKey = `${primaryStopId}:${line || "line-unknown"}:${eventType}`;
 		const skip = await shouldSkipEventPush({

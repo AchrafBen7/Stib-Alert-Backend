@@ -1,5 +1,7 @@
 const AssistantNotificationLog = require("../models/AssistantNotificationLog");
+const Utilisateur = require("../models/Utilisateur");
 const { sendNotificationWithDeepLink } = require("./oneSignalService");
+const { isInQuietHours } = require("./pushPreferences");
 
 const POLICY_BY_TYPE = {
 	commute_detour: { cooldownMinutes: 10, priority: "high" },
@@ -45,6 +47,16 @@ async function findRecentLog({ userId, type, contextKey, cooldownMinutes }) {
 }
 
 async function sendManagedCommutePush({ userId, brief, preferredStopId = null }) {
+	// Safety net for the (legacy) assistant push path, which had no gating:
+	// honour the master switch + the silent window. Stibi is otherwise retired
+	// from the app, and this loop only runs via the separate assistant worker.
+	const prefs = await Utilisateur.findById(userId)
+		.select("notifications quietHoursEnabled quietHoursStartHour quietHoursEndHour")
+		.lean();
+	if (!prefs || prefs.notifications === false || isInQuietHours(prefs)) {
+		return { sent: false, skipped: true, reason: "preference_disabled" };
+	}
+
 	const type = resolveCommuteNotificationType(brief);
 	const policy = POLICY_BY_TYPE[type] || POLICY_BY_TYPE.commute_watch;
 	const contextKey = buildContextKey({ brief, preferredStopId });

@@ -1,6 +1,7 @@
 const Utilisateur = require("../models/Utilisateur");
 const AssistantNotificationLog = require("../models/AssistantNotificationLog");
 const { sendNotificationWithDeepLink } = require("./oneSignalService");
+const { isInQuietHours } = require("./pushPreferences");
 
 // ─── Brussels corridors ───────────────────────────────────────────────────────
 // Key  = affected line
@@ -90,10 +91,12 @@ async function sendAlertsForNewPerturbations(newSignalements) {
 		try {
 			users = await Utilisateur.find({
 				notifications:      true,
+				// "Alertes communauté" toggle — exclude users who turned it off.
+				communityClusterPushEnabled: { $ne: false },
 				oneSignalPlayerId:  { $exists: true, $ne: null },
 				favoriteLines:      ligne,
 			})
-				.select("_id oneSignalPlayerId")
+				.select("_id oneSignalPlayerId quietHoursEnabled quietHoursStartHour quietHoursEndHour")
 				.lean();
 		} catch (err) {
 			console.warn(`[perturbation-alert] user query failed for ligne ${ligne}: ${err.message}`);
@@ -105,6 +108,9 @@ async function sendAlertsForNewPerturbations(newSignalements) {
 		const { title, message } = buildPushContent(ligne, sig.typeProbleme);
 
 		for (const user of users) {
+			// Respect the user's silent window.
+			if (isInQuietHours(user)) { skipped++; continue; }
+
 			// Deduplication check
 			try {
 				const recent = await AssistantNotificationLog.findOne({
