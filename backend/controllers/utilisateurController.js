@@ -281,14 +281,22 @@ exports.appleSignin = async (req, res) => {
 			return res.status(401).json({ message: "Identity token invalide." });
 		}
 
+		// Normalise the Apple-provided email the same way email/password signup
+		// does (lowercase + trim). Without this, an existing account created as
+		// "Achraf@x.com" wouldn't match Apple's "achraf@x.com" and a duplicate
+		// account would be created instead of linking.
+		const appleEmail = appleClaims.email
+			? String(appleClaims.email).trim().toLowerCase()
+			: null;
+
 		// First try to match by appleUserId (stable across email rotations on
 		// Apple's side, including the private-relay rotation case).
 		let utilisateur = await Utilisateur.findOne({ appleUserId: appleClaims.sub });
 
 		// Fall back to email match for first-time sign-ins where we have an
 		// email and the user previously signed up another way.
-		if (!utilisateur && appleClaims.email) {
-			utilisateur = await Utilisateur.findOne({ email: appleClaims.email });
+		if (!utilisateur && appleEmail) {
+			utilisateur = await Utilisateur.findOne({ email: appleEmail });
 			if (utilisateur) {
 				utilisateur.appleUserId = appleClaims.sub;
 				await utilisateur.save();
@@ -297,10 +305,10 @@ exports.appleSignin = async (req, res) => {
 
 		// Create on first sign-in.
 		if (!utilisateur) {
-			const fallbackEmail = appleClaims.email
+			const fallbackEmail = appleEmail
 				|| `apple_${appleClaims.sub.slice(0, 12)}@stibalert.invalid`;
 			const displayName = (typeof fullName === "string" && fullName.trim())
-				|| (appleClaims.email ? appleClaims.email.split("@")[0] : "Utilisateur Apple");
+				|| (appleEmail ? appleEmail.split("@")[0] : "Utilisateur Apple");
 
 			utilisateur = await Utilisateur.create({
 				nom: displayName,

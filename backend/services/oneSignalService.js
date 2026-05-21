@@ -29,7 +29,10 @@ async function oneSignalRequest(path, body) {
 		method: "POST",
 		headers: {
 			"Content-Type": "application/json",
-			Authorization: `Basic ${ONESIGNAL_REST_API_KEY}`,
+			// New-format OneSignal keys (os_v2_app_…) use the "Key" scheme.
+			// "Basic" was the legacy REST-API-key scheme; sending a v2 key with
+			// Basic gets rejected, so push never leaves the backend.
+			Authorization: `Key ${ONESIGNAL_REST_API_KEY}`,
 		},
 		body: JSON.stringify({
 			app_id: ONESIGNAL_APP_ID,

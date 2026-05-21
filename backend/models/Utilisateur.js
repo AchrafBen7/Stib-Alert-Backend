@@ -3,7 +3,10 @@ const mongoose = require("mongoose");
 const utilisateurSchema = new mongoose.Schema(
 	{
 		nom: { type: String, required: true },
-		email: { type: String, required: true, unique: true },
+		// lowercase + trim so an email can never be stored in two casings and
+		// silently spawn duplicate accounts (e.g. Apple Sign-In returning a
+		// differently-cased address than the email/password signup).
+		email: { type: String, required: true, unique: true, lowercase: true, trim: true },
 		// Optional because Sign in with Apple users never set one — the field
 		// still holds a bcrypt hash for email/password users.
 		motDePasse: { type: String, default: null },
