@@ -63,6 +63,7 @@ app.use("/api/lignes", require("./routes/ligneRoutes"));
 app.use("/api/chatbot", require("./routes/chatbotRoutes"));
 app.use("/api/arrets", require("./routes/arretRoute"));
 app.use("/api/stib", require("./routes/stibRealtimeRoutes"));
+app.use("/api/sncb", require("./routes/sncbRoutes"));
 app.use("/api/transport", require("./routes/transportRoutes"));
 app.use("/api/assistant", require("./routes/assistantRoutes"));
 app.use("/api/wallet", require("./routes/walletRoutes"));
