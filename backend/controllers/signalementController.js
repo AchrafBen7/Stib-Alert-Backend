@@ -62,6 +62,59 @@ function privacyHash(value) {
 		.digest("hex");
 }
 
+function normalizeTransportOperator(value) {
+	const normalized = String(value || "stib").trim().toLowerCase();
+	if (["stib", "delijn", "sncb", "tec"].includes(normalized)) return normalized;
+	return "stib";
+}
+
+function externalStopId(operator, name) {
+	const slug = String(name || "")
+		.normalize("NFD")
+		.replace(/[\u0300-\u036f]/g, "")
+		.toLowerCase()
+		.replace(/[^a-z0-9]+/g, "-")
+		.replace(/^-+|-+$/g, "")
+		.slice(0, 80);
+	return `${operator}:${slug || crypto.createHash("sha1").update(String(name || "unknown")).digest("hex").slice(0, 12)}`;
+}
+
+function transportTypeForOperator(operator) {
+	if (operator === "sncb") return "Train";
+	return "Bus";
+}
+
+async function ensureExternalTransportStop({ operator, nomArret, ligne, latitudeParsed, longitudeParsed }) {
+	if (operator === "stib") return null;
+	if (!Number.isFinite(latitudeParsed) || !Number.isFinite(longitudeParsed)) {
+		throw new Error("Coordonnées requises pour signaler une gare ou un arrêt externe.");
+	}
+
+	const stopId = externalStopId(operator, nomArret);
+	return Arret.findOneAndUpdate(
+		{ stop_id: stopId },
+		{
+			$setOnInsert: {
+				stop_id: stopId,
+				nom: nomArret,
+				latitude: latitudeParsed,
+				longitude: longitudeParsed,
+				sourceDataset: `${operator}-local`,
+			},
+			$set: {
+				nom: nomArret,
+				latitude: latitudeParsed,
+				longitude: longitudeParsed,
+			},
+			$addToSet: {
+				lignesDesservies: ligne,
+				typeTransport: transportTypeForOperator(operator),
+			},
+		},
+		{ new: true, upsert: true }
+	);
+}
+
 async function findRecentAnonymousDuplicate({ arretId, ligne, typeProbleme, reporterIpHash, reporterDeviceHash }) {
 	if (!reporterIpHash && !reporterDeviceHash) return null;
 
@@ -207,17 +260,44 @@ const groupWaitingTimesByStop = async (line, arrets) => {
 
 exports.ajouterSignalement = async (req, res) => {
 	try {
-		const { nomArret, ligne, typeProbleme, description, latitude, longitude } = req.body;
+		const { nomArret, ligne, typeProbleme, description, latitude, longitude, transportOperator } = req.body;
+		const operator = normalizeTransportOperator(transportOperator);
 		let photo = req.file ? req.file.path : undefined;
 
 		const latitudeParsed = parseFloat(latitude);
 		const longitudeParsed = parseFloat(longitude);
 
 		let arret = await Arret.findOne({ nom: nomArret });
+		if (!arret && operator !== "stib") {
+			try {
+				arret = await ensureExternalTransportStop({
+					operator,
+					nomArret,
+					ligne,
+					latitudeParsed,
+					longitudeParsed,
+				});
+			} catch (externalStopError) {
+				return res.status(400).json({ message: externalStopError.message });
+			}
+		}
 		if (!arret) return res.status(404).json({ message: `L'arrêt "${nomArret}" n'existe pas.` });
 
 		if (!arret.lignesDesservies.includes(ligne)) {
-			return res.status(400).json({ message: `L'arrêt "${nomArret}" ne dessert pas la ligne "${ligne}".` });
+			if (operator !== "stib") {
+				await Arret.updateOne(
+					{ _id: arret._id },
+					{
+						$addToSet: {
+							lignesDesservies: ligne,
+							typeTransport: transportTypeForOperator(operator),
+						},
+					}
+				);
+				arret.lignesDesservies.push(ligne);
+			} else {
+				return res.status(400).json({ message: `L'arrêt "${nomArret}" ne dessert pas la ligne "${ligne}".` });
+			}
 		}
 
 		const reporterIpHash = privacyHash(clientIp(req));

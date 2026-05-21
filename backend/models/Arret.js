@@ -7,7 +7,7 @@ const arretSchema = new mongoose.Schema({
 	latitude: { type: Number, required: true },
 	longitude: { type: Number, required: true },
 	physicalStopIds: [{ type: String }],
-	typeTransport: [{ type: String, enum: ["Tram", "Bus", "Métro"] }],
+	typeTransport: [{ type: String, enum: ["Tram", "Bus", "Métro", "Train"] }],
 	lignesDesservies: [{ type: String }],
 	etat: { type: String, enum: ["Vert", "Orange", "Rouge"], default: "Vert" },
 	signalementsRecents: [{ type: mongoose.Schema.Types.ObjectId, ref: "Signalement" }],

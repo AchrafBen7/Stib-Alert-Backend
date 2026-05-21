@@ -50,6 +50,7 @@ exports.validateSignalement = [
 	body("description").trim().isLength({ min: 3, max: 500 }),
 	body("latitude").optional().isFloat({ min: -90, max: 90 }),
 	body("longitude").optional().isFloat({ min: -180, max: 180 }),
+	body("transportOperator").optional().trim().isIn(["stib", "delijn", "sncb", "tec"]),
 ];
 
 exports.validateVote = [

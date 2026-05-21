@@ -1,0 +1,412 @@
+{
+  "source": "iRail (api.irail.be/v1/stations)",
+  "count": 50,
+  "bbox": {
+    "south": 50.76,
+    "north": 50.94,
+    "west": 4.23,
+    "east": 4.49
+  },
+  "stations": [
+    {
+      "id": "BE.NMBS.008811940",
+      "uri": "http://irail.be/stations/NMBS/008811940",
+      "name": "Anderlecht",
+      "lat": 50.8179,
+      "lng": 4.2918,
+      "standardname": "Anderlecht"
+    },
+    {
+      "id": "BE.NMBS.008814472",
+      "uri": "http://irail.be/stations/NMBS/008814472",
+      "name": "Arcades",
+      "lat": 50.809722,
+      "lng": 4.398333,
+      "standardname": "Arcaden/Arcades"
+    },
+    {
+      "id": "BE.NMBS.008814423",
+      "uri": "http://irail.be/stations/NMBS/008814423",
+      "name": "Beersel",
+      "lat": 50.766616,
+      "lng": 4.302605,
+      "standardname": "Beersel"
+    },
+    {
+      "id": "BE.NMBS.008812211",
+      "uri": "http://irail.be/stations/NMBS/008812211",
+      "name": "Berchem-Sainte-Agathe",
+      "lat": 50.872625,
+      "lng": 4.289895,
+      "standardname": "Sint-Agatha-Berchem/Berchem-Sainte-Agathe"
+    },
+    {
+      "id": "BE.NMBS.008812021",
+      "uri": "http://irail.be/stations/NMBS/008812021",
+      "name": "Bockstael",
+      "lat": 50.87943,
+      "lng": 4.348513,
+      "standardname": "Bockstael"
+    },
+    {
+      "id": "BE.NMBS.008811437",
+      "uri": "http://irail.be/stations/NMBS/008811437",
+      "name": "Boitsfort",
+      "lat": 50.794698,
+      "lng": 4.408112,
+      "standardname": "Bosvoorde/Boitsfort"
+    },
+    {
+      "id": "BE.NMBS.008814456",
+      "uri": "http://irail.be/stations/NMBS/008814456",
+      "name": "Boondael",
+      "lat": 50.801665,
+      "lng": 4.393387,
+      "standardname": "Boondaal/Boondael"
+    },
+    {
+      "id": "BE.NMBS.008811163",
+      "uri": "http://irail.be/stations/NMBS/008811163",
+      "name": "Bordet",
+      "lat": 50.877785,
+      "lng": 4.410026,
+      "standardname": "Bordet"
+    },
+    {
+      "id": "BE.NMBS.008819406",
+      "uri": "http://irail.be/stations/NMBS/008819406",
+      "name": "Brussels Airport - Zaventem",
+      "lat": 50.896456,
+      "lng": 4.482076,
+      "standardname": "Brussels Airport - Zaventem"
+    },
+    {
+      "id": "BE.NMBS.008813003",
+      "uri": "http://irail.be/stations/NMBS/008813003",
+      "name": "Bruxelles-Central",
+      "lat": 50.845658,
+      "lng": 4.356801,
+      "standardname": "Brussel-Centraal/Bruxelles-Central"
+    },
+    {
+      "id": "BE.NMBS.008813037",
+      "uri": "http://irail.be/stations/NMBS/008813037",
+      "name": "Bruxelles-Chapelle",
+      "lat": 50.841127,
+      "lng": 4.347866,
+      "standardname": "Brussel-Kapellekerk/Bruxelles-Chapelle"
+    },
+    {
+      "id": "BE.NMBS.008813045",
+      "uri": "http://irail.be/stations/NMBS/008813045",
+      "name": "Bruxelles-Congrès",
+      "lat": 50.852067,
+      "lng": 4.362051,
+      "standardname": "Brussel-Congres/Bruxelles-Congrès"
+    },
+    {
+      "id": "BE.NMBS.008811304",
+      "uri": "http://irail.be/stations/NMBS/008811304",
+      "name": "Bruxelles-Luxembourg",
+      "lat": 50.838943,
+      "lng": 4.373674,
+      "standardname": "Brussel-Luxemburg/Bruxelles-Luxembourg"
+    },
+    {
+      "id": "BE.NMBS.008814001",
+      "uri": "http://irail.be/stations/NMBS/008814001",
+      "name": "Bruxelles-Midi",
+      "lat": 50.835707,
+      "lng": 4.336531,
+      "standardname": "Brussel-Zuid/Bruxelles-Midi"
+    },
+    {
+      "id": "BE.NMBS.008812005",
+      "uri": "http://irail.be/stations/NMBS/008812005",
+      "name": "Bruxelles-Nord",
+      "lat": 50.859663,
+      "lng": 4.360846,
+      "standardname": "Brussel-Noord/Bruxelles-Nord"
+    },
+    {
+      "id": "BE.NMBS.008815040",
+      "uri": "http://irail.be/stations/NMBS/008815040",
+      "name": "Bruxelles-Ouest",
+      "lat": 50.848552,
+      "lng": 4.321042,
+      "standardname": "Brussel-West/Bruxelles-Ouest"
+    },
+    {
+      "id": "BE.NMBS.008811916",
+      "uri": "http://irail.be/stations/NMBS/008811916",
+      "name": "Bruxelles-Schuman",
+      "lat": 50.843276,
+      "lng": 4.380722,
+      "standardname": "Brussel-Schuman/Bruxelles-Schuman"
+    },
+    {
+      "id": "BE.NMBS.008811148",
+      "uri": "http://irail.be/stations/NMBS/008811148",
+      "name": "Buda",
+      "lat": 50.907495,
+      "lng": 4.417074,
+      "standardname": "Buda"
+    },
+    {
+      "id": "BE.NMBS.008811205",
+      "uri": "http://irail.be/stations/NMBS/008811205",
+      "name": "Delta",
+      "lat": 50.818357,
+      "lng": 4.403869,
+      "standardname": "Delta"
+    },
+    {
+      "id": "BE.NMBS.008811213",
+      "uri": "http://irail.be/stations/NMBS/008811213",
+      "name": "Diegem",
+      "lat": 50.890478,
+      "lng": 4.442774,
+      "standardname": "Diegem"
+    },
+    {
+      "id": "BE.NMBS.008812237",
+      "uri": "http://irail.be/stations/NMBS/008812237",
+      "name": "Dilbeek",
+      "lat": 50.866728,
+      "lng": 4.243393,
+      "standardname": "Dilbeek"
+    },
+    {
+      "id": "BE.NMBS.008811411",
+      "uri": "http://irail.be/stations/NMBS/008811411",
+      "name": "Etterbeek",
+      "lat": 50.822187,
+      "lng": 4.389513,
+      "standardname": "Etterbeek"
+    },
+    {
+      "id": "BE.NMBS.008811106",
+      "uri": "http://irail.be/stations/NMBS/008811106",
+      "name": "Evere",
+      "lat": 50.86778,
+      "lng": 4.400965,
+      "standardname": "Evere"
+    },
+    {
+      "id": "BE.NMBS.008814118",
+      "uri": "http://irail.be/stations/NMBS/008814118",
+      "name": "Forest-Est",
+      "lat": 50.810195,
+      "lng": 4.320943,
+      "standardname": "Vorst-Oost/Forest-Est"
+    },
+    {
+      "id": "BE.NMBS.008814373",
+      "uri": "http://irail.be/stations/NMBS/008814373",
+      "name": "Forest-Midi",
+      "lat": 50.809215,
+      "lng": 4.309167,
+      "standardname": "Vorst-Zuid/Forest-Midi"
+    },
+    {
+      "id": "BE.NMBS.008811403",
+      "uri": "http://irail.be/stations/NMBS/008811403",
+      "name": "Germoir",
+      "lat": 50.829929,
+      "lng": 4.37866,
+      "standardname": "Mouterij/Germoir"
+    },
+    {
+      "id": "BE.NMBS.008812229",
+      "uri": "http://irail.be/stations/NMBS/008812229",
+      "name": "Grand-Bigard",
+      "lat": 50.868337,
+      "lng": 4.273543,
+      "standardname": "Groot-Bijgaarden"
+    },
+    {
+      "id": "BE.NMBS.008811445",
+      "uri": "http://irail.be/stations/NMBS/008811445",
+      "name": "Groenendael",
+      "lat": 50.766103,
+      "lng": 4.449489,
+      "standardname": "Groenendaal"
+    },
+    {
+      "id": "BE.NMBS.008811155",
+      "uri": "http://irail.be/stations/NMBS/008811155",
+      "name": "Haren",
+      "lat": 50.888878,
+      "lng": 4.419978,
+      "standardname": "Haren"
+    },
+    {
+      "id": "BE.NMBS.008811130",
+      "uri": "http://irail.be/stations/NMBS/008811130",
+      "name": "Haren-Sud",
+      "lat": 50.889696,
+      "lng": 4.415357,
+      "standardname": "Haren-Sud/Haren-Zuid"
+    },
+    {
+      "id": "BE.NMBS.008811460",
+      "uri": "http://irail.be/stations/NMBS/008811460",
+      "name": "Hoeilaart",
+      "lat": 50.760161,
+      "lng": 4.467414,
+      "standardname": "Hoeilaart"
+    },
+    {
+      "id": "BE.NMBS.008814159",
+      "uri": "http://irail.be/stations/NMBS/008814159",
+      "name": "Holleken",
+      "lat": 50.767631,
+      "lng": 4.353952,
+      "standardname": "Holleken"
+    },
+    {
+      "id": "BE.NMBS.008812047",
+      "uri": "http://irail.be/stations/NMBS/008812047",
+      "name": "Jette",
+      "lat": 50.880833,
+      "lng": 4.32622,
+      "standardname": "Jette"
+    },
+    {
+      "id": "BE.NMBS.008814142",
+      "uri": "http://irail.be/stations/NMBS/008814142",
+      "name": "Linkebeek",
+      "lat": 50.773681,
+      "lng": 4.339434,
+      "standardname": "Linkebeek"
+    },
+    {
+      "id": "BE.NMBS.008814357",
+      "uri": "http://irail.be/stations/NMBS/008814357",
+      "name": "Lot",
+      "lat": 50.766364,
+      "lng": 4.273696,
+      "standardname": "Lot"
+    },
+    {
+      "id": "BE.NMBS.008811171",
+      "uri": "http://irail.be/stations/NMBS/008811171",
+      "name": "Meiser",
+      "lat": 50.854072,
+      "lng": 4.394421,
+      "standardname": "Meiser"
+    },
+    {
+      "id": "BE.NMBS.008811197",
+      "uri": "http://irail.be/stations/NMBS/008811197",
+      "name": "Merode",
+      "lat": 50.839284,
+      "lng": 4.398934,
+      "standardname": "Merode"
+    },
+    {
+      "id": "BE.NMBS.008814431",
+      "uri": "http://irail.be/stations/NMBS/008814431",
+      "name": "Moensberg",
+      "lat": 50.77832,
+      "lng": 4.330733,
+      "standardname": "Moensberg"
+    },
+    {
+      "id": "BE.NMBS.008814365",
+      "uri": "http://irail.be/stations/NMBS/008814365",
+      "name": "Ruisbroek",
+      "lat": 50.79183,
+      "lng": 4.295333,
+      "standardname": "Ruisbroek"
+    },
+    {
+      "id": "BE.NMBS.008814449",
+      "uri": "http://irail.be/stations/NMBS/008814449",
+      "name": "Saint-Job",
+      "lat": 50.79441,
+      "lng": 4.362761,
+      "standardname": "Sint-Job"
+    },
+    {
+      "id": "BE.NMBS.008811007",
+      "uri": "http://irail.be/stations/NMBS/008811007",
+      "name": "Schaerbeek",
+      "lat": 50.878513,
+      "lng": 4.378636,
+      "standardname": "Schaarbeek/Schaerbeek"
+    },
+    {
+      "id": "BE.NMBS.008812013",
+      "uri": "http://irail.be/stations/NMBS/008812013",
+      "name": "Simonis",
+      "lat": 50.863645,
+      "lng": 4.32898,
+      "standardname": "Simonis"
+    },
+    {
+      "id": "BE.NMBS.008815016",
+      "uri": "http://irail.be/stations/NMBS/008815016",
+      "name": "Tour et Taxis",
+      "lat": 50.87175167644673,
+      "lng": 4.341090917587279,
+      "standardname": "Thurn en Taxis/Tour et Taxis"
+    },
+    {
+      "id": "BE.NMBS.008814134",
+      "uri": "http://irail.be/stations/NMBS/008814134",
+      "name": "Uccle-Calevoet",
+      "lat": 50.791749,
+      "lng": 4.332207,
+      "standardname": "Ukkel-Kalevoet/Uccle-Calevoet"
+    },
+    {
+      "id": "BE.NMBS.008814126",
+      "uri": "http://irail.be/stations/NMBS/008814126",
+      "name": "Uccle-Stalle",
+      "lat": 50.802411,
+      "lng": 4.323901,
+      "standardname": "Ukkel-Stalle/Uccle-Stalle"
+    },
+    {
+      "id": "BE.NMBS.008811189",
+      "uri": "http://irail.be/stations/NMBS/008811189",
+      "name": "Vilvorde",
+      "lat": 50.924583,
+      "lng": 4.432823,
+      "standardname": "Vilvoorde"
+    },
+    {
+      "id": "BE.NMBS.008814464",
+      "uri": "http://irail.be/stations/NMBS/008814464",
+      "name": "Vivier d'Oie",
+      "lat": 50.796145,
+      "lng": 4.374052,
+      "standardname": "Diesdelle/Vivier d'Oie"
+    },
+    {
+      "id": "BE.NMBS.008811429",
+      "uri": "http://irail.be/stations/NMBS/008811429",
+      "name": "Watermael",
+      "lat": 50.80917,
+      "lng": 4.399887,
+      "standardname": "Watermaal/Watermael"
+    },
+    {
+      "id": "BE.NMBS.008811221",
+      "uri": "http://irail.be/stations/NMBS/008811221",
+      "name": "Zaventem",
+      "lat": 50.885723,
+      "lng": 4.469886,
+      "standardname": "Zaventem"
+    },
+    {
+      "id": "BE.NMBS.008812062",
+      "uri": "http://irail.be/stations/NMBS/008812062",
+      "name": "Zellik",
+      "lat": 50.890028,
+      "lng": 4.274541,
+      "standardname": "Zellik"
+    }
+  ]
+}

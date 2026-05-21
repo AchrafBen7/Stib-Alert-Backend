@@ -7,6 +7,7 @@
 		"dev": "nodemon server.js",
 		"worker:assistant": "node workers/assistantJobsWorker.js",
 		"seed:stib-static": "node scripts/importStaticCatalog.js",
+		"seed:sncb": "node scripts/importSncbStations.js",
 		"test": "jest --runInBand --forceExit",
 		"test:watch": "jest --watch --runInBand --forceExit"
 	},
