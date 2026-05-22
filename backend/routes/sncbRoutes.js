@@ -1,5 +1,6 @@
 const express = require("express");
 const { nextDepartures, fullSchedule } = require("../services/nmbsScheduleService");
+const { realtime } = require("../services/irailService");
 
 const router = express.Router();
 
@@ -22,6 +23,22 @@ router.get("/schedule", (req, res) => {
 		return res.status(400).json({ message: "stationId requis." });
 	}
 	res.json(fullSchedule(stationId));
+});
+
+// GET /api/sncb/realtime?stationId=gs:nmbssncb:S8814001
+// Live departures (delays/cancellations) for a gare + official NMBS
+// disturbances, via iRail. Lazy + cached server-side; no polling, and no load
+// on the Belgian Mobility quota.
+router.get("/realtime", async (req, res) => {
+	const stationId = String(req.query.stationId || "").trim();
+	if (!stationId) {
+		return res.status(400).json({ message: "stationId requis." });
+	}
+	try {
+		res.json(await realtime(stationId));
+	} catch (error) {
+		res.json({ stationId, fetchedAt: null, departures: [], disruptions: [] });
+	}
 });
 
 module.exports = router;
