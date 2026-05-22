@@ -57,4 +57,34 @@ function nextDepartures(stationId, limit = 8) {
 	return { stationId, dayType, items };
 }
 
-module.exports = { nextDepartures };
+// Full theoretical timetable for a gare: every departure of the day for all
+// three day-types (weekday / Saturday / Sunday), so the client can render a
+// complete schedule and switch days without re-fetching. Still served from the
+// bundled dataset — zero Mobility API calls. `today` tells the client which
+// day-type to preselect.
+function fullSchedule(stationId) {
+	const data = load();
+	const station = data.stations[stationId];
+	const { dayType } = brusselsNow();
+	const mapDay = (list) =>
+		(list || []).map(([mins, destination, line]) => ({
+			minutes: mins,
+			time: fmt(mins),
+			destination,
+			line,
+		}));
+	if (!station) {
+		return { stationId, today: dayType, days: { wk: [], sa: [], su: [] } };
+	}
+	return {
+		stationId,
+		today: dayType,
+		days: {
+			wk: mapDay(station.wk),
+			sa: mapDay(station.sa),
+			su: mapDay(station.su),
+		},
+	};
+}
+
+module.exports = { nextDepartures, fullSchedule };
