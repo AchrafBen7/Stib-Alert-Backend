@@ -67,6 +67,8 @@ app.use("/api/sncb", require("./routes/sncbRoutes"));
 app.use("/api/operators", require("./routes/operatorRoutes"));
 app.use("/api/transport", require("./routes/transportRoutes"));
 app.use("/api/assistant", require("./routes/assistantRoutes"));
+app.use("/api/stib-ai", require("./routes/stibAiRoutes"));
+app.use("/stib-ai", require("./routes/stibAiRoutes"));
 app.use("/api/wallet", require("./routes/walletRoutes"));
 
 app.get("/", (req, res) => res.send("STIB Alert API fonctionne !"));
