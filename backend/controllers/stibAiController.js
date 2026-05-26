@@ -250,3 +250,108 @@ exports.streamChat = async (req, res) => {
 		if (!res.writableEnded) res.end();
 	}
 };
+
+// POST /api/stib-ai/voice
+// Single-shot, non-streamed voice handler. Returns JSON {spokenReply, destination?}
+// so the iOS layer can play it through AVSpeechSynthesizer and, if a destination
+// is detected, trigger the existing trip-building pipeline. Same context builder
+// and system prompt as streamChat; one extra hard instruction forcing the model
+// to produce a short oral reply with no markdown.
+exports.voiceAsk = async (req, res) => {
+	const text = String(req.body?.text || "").trim();
+	if (!text) {
+		return res.status(400).json({ message: "text requis." });
+	}
+
+	const key = apiKey();
+	if (!key) {
+		return res.status(503).json({ message: "L'assistant IA n'est pas configuré." });
+	}
+
+	const gatewayUrl = process.env.AI_GATEWAY_URL || DEFAULT_GATEWAY_URL;
+	if (!shouldUseGeminiNative(gatewayUrl)) {
+		// Voice endpoint only supports the native Gemini gateway (JSON mode).
+		return res.status(501).json({ message: "Voice non supporté sur ce gateway." });
+	}
+	const model = modelForGateway(process.env.AI_MODEL || DEFAULT_MODEL, gatewayUrl);
+
+	const contextMessage = req.body?.context ? buildContextMessage(req.body.context) : "";
+	const voiceInstruction = [
+		"RÉPONSE VOCALE OBLIGATOIRE :",
+		"- 1 à 2 phrases courtes (≤ 30 mots), français parlé, naturel.",
+		"- AUCUN markdown, AUCUNE liste, AUCUN emoji, AUCUN [[L:NUM]], AUCUN astérisque.",
+		"- Si l'utilisateur demande un itinéraire vers un lieu, mets le nom du lieu (gare, place, arrêt, quartier) dans 'destination'. Sinon 'destination': null.",
+		"- Retourne UNIQUEMENT un JSON valide conforme au schéma demandé.",
+	].join("\n");
+
+	const systemContext = [STIB_AI_SYSTEM_PROMPT, contextMessage, voiceInstruction]
+		.filter(Boolean)
+		.join("\n\n");
+
+	const baseUrl = gatewayUrl.replace(/\/$/, "");
+	const url = `${baseUrl}/models/${encodeURIComponent(model)}:generateContent`;
+
+	const controller = new AbortController();
+	req.on("close", () => controller.abort());
+
+	try {
+		const upstream = await fetch(url, {
+			method: "POST",
+			headers: {
+				"x-goog-api-key": key,
+				"Content-Type": "application/json",
+			},
+			body: JSON.stringify({
+				contents: [
+					{ role: "user", parts: [{ text: systemContext }] },
+					{ role: "user", parts: [{ text: `QUESTION DE L'UTILISATEUR :\n${text}` }] },
+				],
+				generationConfig: {
+					temperature: 0.4,
+					topP: 0.9,
+					responseMimeType: "application/json",
+					responseSchema: {
+						type: "object",
+						properties: {
+							spokenReply: { type: "string" },
+							destination: { type: "string", nullable: true },
+						},
+						required: ["spokenReply"],
+					},
+				},
+			}),
+			signal: controller.signal,
+		});
+
+		if (!upstream.ok) {
+			const body = await upstream.text().catch(() => "");
+			logger.warn("stib_ai_voice_upstream_error", {
+				status: upstream.status,
+				body: body.slice(0, 500),
+			});
+			return res.status(502).json({ message: "Assistant indisponible." });
+		}
+
+		const payload = await upstream.json();
+		const raw = payload?.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
+		let parsed;
+		try {
+			parsed = JSON.parse(raw);
+		} catch (error) {
+			logger.warn("stib_ai_voice_parse_error", { raw: raw.slice(0, 300) });
+			parsed = { spokenReply: "Je n'ai pas pu te répondre, réessaie.", destination: null };
+		}
+
+		const spokenReply = String(parsed.spokenReply || "").trim().slice(0, 400)
+			|| "Je n'ai pas pu te répondre, réessaie.";
+		const destination = parsed.destination && typeof parsed.destination === "string"
+			? parsed.destination.trim().slice(0, 200)
+			: null;
+
+		return res.json({ spokenReply, destination: destination || null });
+	} catch (error) {
+		if (error.name === "AbortError") return res.end();
+		logger.warn("stib_ai_voice_handler_error", { message: error.message });
+		return res.status(502).json({ message: "Erreur réseau assistant." });
+	}
+};
