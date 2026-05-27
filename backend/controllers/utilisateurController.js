@@ -61,13 +61,21 @@ const buildFavorisDetails = async (favoris = []) => {
 	const favoriIds = favoris.map((favori) => favori._id || favori);
 	if (favoriIds.length === 0) return [];
 
+	const now = new Date();
 	const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
 	const signalements = await Signalement.find({
 		arretId: { $in: favoriIds },
 		dateSignalement: { $gte: since },
+		status: { $in: ["active", "grouped"] },
+		moderationStatus: "approved",
+		$or: [
+			{ expiresAt: { $exists: false } },
+			{ expiresAt: null },
+			{ expiresAt: { $gt: now } },
+		],
 	})
 		.sort({ dateSignalement: -1 })
-		.select("arretId ligne typeProbleme votesPositifs confiance dateSignalement");
+		.select("arretId ligne typeProbleme votesPositifs confiance dateSignalement status moderationStatus expiresAt");
 
 	const grouped = new Map();
 	for (const signalement of signalements) {

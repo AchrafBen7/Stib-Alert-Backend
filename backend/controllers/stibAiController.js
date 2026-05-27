@@ -277,13 +277,22 @@ exports.voiceAsk = async (req, res) => {
 
 	const contextMessage = req.body?.context ? buildContextMessage(req.body.context) : "";
 	const voiceInstruction = [
-		"RÉPONSE VOCALE OBLIGATOIRE :",
-		"- Français parlé, naturel, ton amical (tu).",
-		"- Pour une QUESTION SIMPLE (info, perturbation, météo trafic) : 1-2 phrases, ≤ 30 mots.",
-		"- Pour une DEMANDE D'ITINÉRAIRE : explique le trajet étape par étape avec les arrêts et lignes (3-5 phrases, ≤ 80 mots). Exemple : 'Tu marches 5 minutes jusqu'à Buissonnets, tu prends la ligne 7 direction Heysel, tu descends à Meiser après 8 arrêts, puis tu reprends la ligne 81 jusqu'à Schaerbeek. Environ 25 minutes au total.'",
-		"- AUCUN markdown, AUCUNE liste à puces, AUCUN emoji, AUCUN [[L:NUM]], AUCUN astérisque.",
-		"- Si l'utilisateur demande un itinéraire vers un lieu, mets le nom du lieu (gare, place, arrêt, quartier) dans 'destination'. Sinon 'destination': null.",
-		"- Retourne UNIQUEMENT un JSON valide conforme au schéma demandé.",
+		"FORMAT OBLIGATOIRE — tu produis DEUX versions du même message :",
+		"",
+		"1) spokenReply (LU À VOIX HAUTE) :",
+		"   - Français parlé, naturel, ton amical (tu).",
+		"   - Question simple : 1-2 phrases, ≤ 30 mots.",
+		"   - Itinéraire : 3-5 phrases, ≤ 80 mots, étape par étape (arrêts + lignes prononcés en clair, ex: 'tu prends la ligne 81 jusqu'à Schaerbeek').",
+		"   - AUCUN markdown, AUCUN [[L:NUM]], AUCUN emoji, AUCUN astérisque.",
+		"",
+		"2) displayReply (AFFICHÉ À L'ÉCRAN, mêmes phrases mais enrichies) :",
+		"   - MÊME contenu que spokenReply, mais chaque code de ligne STIB doit être mis dans le marqueur [[L:NUMÉRO]] pour qu'il s'affiche en badge coloré. Exemple : 'Tu prends la [[L:81]] direction Montgomery, puis la [[L:7]] jusqu'à Schaerbeek.'",
+		"   - Pas de markdown lourd, pas d'astérisque, pas de listes à puces (les phrases naturelles suffisent).",
+		"   - Ne mets [[L:NUM]] QUE pour des numéros de ligne STIB réels (1-100), jamais pour des durées, arrêts ou autres.",
+		"",
+		"3) destination : nom du lieu cible si itinéraire (gare, place, arrêt, quartier), sinon null.",
+		"",
+		"Retourne UNIQUEMENT un JSON valide conforme au schéma.",
 	].join("\n");
 
 	const systemContext = [STIB_AI_SYSTEM_PROMPT, contextMessage, voiceInstruction]
@@ -304,9 +313,10 @@ exports.voiceAsk = async (req, res) => {
 				type: "object",
 				properties: {
 					spokenReply: { type: "string" },
+					displayReply: { type: "string" },
 					destination: { type: "string", nullable: true },
 				},
-				required: ["spokenReply"],
+				required: ["spokenReply", "displayReply"],
 			},
 		},
 	});
@@ -371,11 +381,13 @@ exports.voiceAsk = async (req, res) => {
 
 		const spokenReply = String(parsed.spokenReply || "").trim().slice(0, 800)
 			|| "Je n'ai pas pu te répondre, réessaie.";
+		const displayReply = String(parsed.displayReply || spokenReply).trim().slice(0, 1200)
+			|| spokenReply;
 		const destination = parsed.destination && typeof parsed.destination === "string"
 			? parsed.destination.trim().slice(0, 200)
 			: null;
 
-		return res.json({ spokenReply, destination: destination || null });
+		return res.json({ spokenReply, displayReply, destination: destination || null });
 	} catch (error) {
 		if (error.name === "AbortError") return res.end();
 		logger.warn("stib_ai_voice_handler_error", { message: error.message });

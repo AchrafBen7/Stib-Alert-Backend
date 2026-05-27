@@ -10,6 +10,14 @@ try {
 	emitClusterEvent = () => {};
 }
 
+let sendAlertsForPublishedCommunityCluster = null;
+try {
+	sendAlertsForPublishedCommunityCluster =
+		require("./communityClusterAlertService").sendAlertsForPublishedCommunityCluster;
+} catch (e) {
+	sendAlertsForPublishedCommunityCluster = null;
+}
+
 const CLUSTER = {
 	MIN_REPORTS_TO_PUBLISH: 3,
 	MIN_TRUST_TO_PUBLISH: 50,
@@ -104,6 +112,8 @@ function safeEmit(eventType, cluster) {
 }
 
 async function recomputeClusterFromReports(cluster) {
+	const previousStatus = cluster.status;
+
 	const reports = await Signalement.find({
 		_id: { $in: cluster.signalementIds },
 		status: { $nin: ["spam", "archived"] },
@@ -158,11 +168,20 @@ async function recomputeClusterFromReports(cluster) {
 	const fromLastReport = new Date(lastReport.getTime() + CLUSTER.REPORT_EXPIRY_MS);
 	cluster.expiresAt = fromLastReport > maxLifetime ? maxLifetime : fromLastReport;
 
-	const wasActive = cluster.isModified("status") ? cluster.get("status", null, { getters: false }) : null;
 	await cluster.save();
 
-	if (cluster.status === "active" && wasActive !== "active") {
+	if (cluster.status === "active" && previousStatus !== "active") {
 		safeEmit("published", cluster);
+		if (typeof sendAlertsForPublishedCommunityCluster === "function") {
+			try {
+				await sendAlertsForPublishedCommunityCluster(cluster);
+			} catch (err) {
+				logger.warn("[clusterService] community cluster push failed", {
+					clusterIndex: cluster.clusterIndex,
+					error: err.message,
+				});
+			}
+		}
 	} else if (cluster.status === "archived") {
 		safeEmit("archived", cluster);
 	} else if (cluster.status === "active") {

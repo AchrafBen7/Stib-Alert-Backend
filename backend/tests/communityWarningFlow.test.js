@@ -1,10 +1,20 @@
 const request = require("supertest");
+
+jest.mock("../services/oneSignalService", () => ({
+	sendNotificationWithDeepLink: jest.fn().mockResolvedValue({ success: true }),
+	registerDevice: jest.fn().mockResolvedValue({ success: true }),
+	sendNotificationToUser: jest.fn().mockResolvedValue({ success: true }),
+}));
+
 const app = require("../app");
 const { connect, disconnect, clearAll } = require("./mongoSetup");
 const { registerAndLogin, createSignalement, ensureTestArret } = require("./helpers");
 const Signalement = require("../models/Signalement");
 const Utilisateur = require("../models/Utilisateur");
+const Arret = require("../models/Arret");
+const AssistantNotificationLog = require("../models/AssistantNotificationLog");
 const { _test } = require("../services/transportService");
+const { sendNotificationWithDeepLink } = require("../services/oneSignalService");
 
 beforeAll(connect);
 afterAll(disconnect);
@@ -20,6 +30,10 @@ async function approvedSignalementsForMap() {
 }
 
 describe("community warning production flow", () => {
+	beforeEach(() => {
+		sendNotificationWithDeepLink.mockClear();
+	});
+
 	it("creates a map warning after 3 reports, confirms still blocked, then hides it after 3 resolved votes", async () => {
 		await ensureTestArret({
 			stopId: "WARN071",
@@ -68,6 +82,61 @@ describe("community warning production flow", () => {
 
 		clusters = _test.buildCommunityReportClusters(await approvedSignalementsForMap());
 		expect(clusters).toHaveLength(0);
+	});
+
+	it("notifies users who favorited the affected stop when a community cluster becomes active", async () => {
+		await ensureTestArret({
+			stopId: "PUSH071",
+			nom: "Push Stop 71",
+			ligne: "71",
+		});
+		const arret = await Arret.findOne({ stop_id: "PUSH071" }).lean();
+
+		const { userId: watcherUserId } = await registerAndLogin("watch-stop@test.com");
+		await Utilisateur.findByIdAndUpdate(watcherUserId, {
+			favoris: [arret._id],
+			oneSignalPlayerId: "player-watch-stop",
+			notifications: true,
+			communityClusterPushEnabled: true,
+			quietHoursEnabled: false,
+		});
+
+		for (const email of ["push1@test.com", "push2@test.com", "push3@test.com"]) {
+			const { token } = await registerAndLogin(email);
+			await createSignalement(token, {
+				nomArret: "Push Stop 71",
+				ligne: "71",
+				typeProbleme: "Panne",
+				description: `Cluster push test ${email}`,
+			});
+		}
+
+		const logsAfterPublish = await AssistantNotificationLog.find({
+			userId: watcherUserId,
+			type: "community_cluster_alert",
+		}).lean();
+		expect(logsAfterPublish).toHaveLength(1);
+		expect(logsAfterPublish[0].contextKey).toMatch(/^community_cluster:/);
+		expect(sendNotificationWithDeepLink).toHaveBeenCalledTimes(1);
+		expect(sendNotificationWithDeepLink.mock.calls[0][0]).toMatchObject({
+			userId: String(watcherUserId),
+			type: "community_cluster_alert",
+		});
+
+		const { token } = await registerAndLogin("push4@test.com");
+		await createSignalement(token, {
+			nomArret: "Push Stop 71",
+			ligne: "71",
+			typeProbleme: "Panne",
+			description: "Fourth report should update without pushing again",
+		});
+
+		const logsAfterUpdate = await AssistantNotificationLog.find({
+			userId: watcherUserId,
+			type: "community_cluster_alert",
+		}).lean();
+		expect(logsAfterUpdate).toHaveLength(1);
+		expect(sendNotificationWithDeepLink).toHaveBeenCalledTimes(1);
 	});
 
 	it("keeps anonymous reports in moderation until an admin approves them", async () => {
