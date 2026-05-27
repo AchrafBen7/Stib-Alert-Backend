@@ -70,6 +70,7 @@ app.use("/api/assistant", require("./routes/assistantRoutes"));
 app.use("/api/stib-ai", require("./routes/stibAiRoutes"));
 app.use("/stib-ai", require("./routes/stibAiRoutes"));
 app.use("/api/wallet", require("./routes/walletRoutes"));
+app.use("/api/geocode", require("./routes/geocodeRoutes"));
 
 app.get("/", (req, res) => res.send("STIB Alert API fonctionne !"));
 
