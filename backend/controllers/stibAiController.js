@@ -291,39 +291,59 @@ exports.voiceAsk = async (req, res) => {
 		.join("\n\n");
 
 	const baseUrl = gatewayUrl.replace(/\/$/, "");
-	const url = `${baseUrl}/models/${encodeURIComponent(model)}:generateContent`;
+	const requestBody = JSON.stringify({
+		contents: [
+			{ role: "user", parts: [{ text: systemContext }] },
+			{ role: "user", parts: [{ text: `QUESTION DE L'UTILISATEUR :\n${text}` }] },
+		],
+		generationConfig: {
+			temperature: 0.4,
+			topP: 0.9,
+			responseMimeType: "application/json",
+			responseSchema: {
+				type: "object",
+				properties: {
+					spokenReply: { type: "string" },
+					destination: { type: "string", nullable: true },
+				},
+				required: ["spokenReply"],
+			},
+		},
+	});
 
 	const controller = new AbortController();
 	req.on("close", () => controller.abort());
 
-	try {
-		const upstream = await fetch(url, {
+	// Gemini 2.5-flash sometimes returns 503 "high demand" — Google explicitly
+	// says these spikes are temporary. We retry the same model once with a
+	// short backoff, then fall back to 1.5-flash (less loaded) if it still
+	// 503s. Anything else is bubbled up immediately.
+	async function callModel(modelName) {
+		return fetch(`${baseUrl}/models/${encodeURIComponent(modelName)}:generateContent`, {
 			method: "POST",
 			headers: {
 				"x-goog-api-key": key,
 				"Content-Type": "application/json",
 			},
-			body: JSON.stringify({
-				contents: [
-					{ role: "user", parts: [{ text: systemContext }] },
-					{ role: "user", parts: [{ text: `QUESTION DE L'UTILISATEUR :\n${text}` }] },
-				],
-				generationConfig: {
-					temperature: 0.4,
-					topP: 0.9,
-					responseMimeType: "application/json",
-					responseSchema: {
-						type: "object",
-						properties: {
-							spokenReply: { type: "string" },
-							destination: { type: "string", nullable: true },
-						},
-						required: ["spokenReply"],
-					},
-				},
-			}),
+			body: requestBody,
 			signal: controller.signal,
 		});
+	}
+
+	const fallbackModel = model.includes("2.5") ? "gemini-1.5-flash" : "gemini-1.5-flash";
+
+	try {
+		let upstream = await callModel(model);
+
+		if (upstream.status === 503) {
+			logger.warn("stib_ai_voice_503_retry", { model });
+			await new Promise((r) => setTimeout(r, 700));
+			upstream = await callModel(model);
+		}
+		if (upstream.status === 503 && model !== fallbackModel) {
+			logger.warn("stib_ai_voice_503_fallback", { from: model, to: fallbackModel });
+			upstream = await callModel(fallbackModel);
+		}
 
 		if (!upstream.ok) {
 			const body = await upstream.text().catch(() => "");
@@ -331,6 +351,11 @@ exports.voiceAsk = async (req, res) => {
 				status: upstream.status,
 				body: body.slice(0, 500),
 			});
+			if (upstream.status === 503 || upstream.status === 429) {
+				return res.status(503).json({
+					message: "L'assistant est saturé pour quelques secondes, réessaie tout de suite.",
+				});
+			}
 			return res.status(502).json({ message: "Assistant indisponible." });
 		}
 
