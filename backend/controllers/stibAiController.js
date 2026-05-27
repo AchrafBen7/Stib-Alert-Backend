@@ -278,8 +278,10 @@ exports.voiceAsk = async (req, res) => {
 	const contextMessage = req.body?.context ? buildContextMessage(req.body.context) : "";
 	const voiceInstruction = [
 		"RÉPONSE VOCALE OBLIGATOIRE :",
-		"- 1 à 2 phrases courtes (≤ 30 mots), français parlé, naturel.",
-		"- AUCUN markdown, AUCUNE liste, AUCUN emoji, AUCUN [[L:NUM]], AUCUN astérisque.",
+		"- Français parlé, naturel, ton amical (tu).",
+		"- Pour une QUESTION SIMPLE (info, perturbation, météo trafic) : 1-2 phrases, ≤ 30 mots.",
+		"- Pour une DEMANDE D'ITINÉRAIRE : explique le trajet étape par étape avec les arrêts et lignes (3-5 phrases, ≤ 80 mots). Exemple : 'Tu marches 5 minutes jusqu'à Buissonnets, tu prends la ligne 7 direction Heysel, tu descends à Meiser après 8 arrêts, puis tu reprends la ligne 81 jusqu'à Schaerbeek. Environ 25 minutes au total.'",
+		"- AUCUN markdown, AUCUNE liste à puces, AUCUN emoji, AUCUN [[L:NUM]], AUCUN astérisque.",
 		"- Si l'utilisateur demande un itinéraire vers un lieu, mets le nom du lieu (gare, place, arrêt, quartier) dans 'destination'. Sinon 'destination': null.",
 		"- Retourne UNIQUEMENT un JSON valide conforme au schéma demandé.",
 	].join("\n");
@@ -342,7 +344,7 @@ exports.voiceAsk = async (req, res) => {
 			parsed = { spokenReply: "Je n'ai pas pu te répondre, réessaie.", destination: null };
 		}
 
-		const spokenReply = String(parsed.spokenReply || "").trim().slice(0, 400)
+		const spokenReply = String(parsed.spokenReply || "").trim().slice(0, 800)
 			|| "Je n'ai pas pu te répondre, réessaie.";
 		const destination = parsed.destination && typeof parsed.destination === "string"
 			? parsed.destination.trim().slice(0, 200)
