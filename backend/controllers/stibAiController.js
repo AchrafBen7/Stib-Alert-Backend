@@ -58,8 +58,32 @@ function geminiNativeUrl(gatewayUrl, model) {
 	return `${baseUrl}/models/${encodeURIComponent(model)}:streamGenerateContent?alt=sse`;
 }
 
+// Override appliqué au chat textuel — équivalent du voiceInstruction pour
+// le mode voix. L'app fait l'extraction + le géocodage + le planning AVANT
+// d'appeler Gemini, donc si TRAJET CALCULÉ apparaît dans le contexte, le
+// modèle DOIT le décrire au lieu de renvoyer l'utilisateur au planner.
+// Sans cet override, Gemini retombait régulièrement sur "veuillez utiliser
+// le planificateur" même quand proposedRoutes était bien populé.
+const TEXT_CHAT_INSTRUCTION = [
+	"============================================",
+	"MODE CHAT TEXTE — RAPPELS QUI ÉCRASENT LE PROMPT SYSTÈME",
+	"============================================",
+	"",
+	"L'app iOS a déjà résolu la destination + calculé l'itinéraire AVANT cet appel. Si une section TRAJET CALCULÉ est présente dans le contexte, c'est ta source de vérité absolue — tu DOIS la décrire en détail (format ## Meilleure option, badges [[L:NUM]], arrêts en **MAJUSCULES**), tu n'as PAS à la valider, ni demander confirmation.",
+	"",
+	"⛔️ PHRASES STRICTEMENT INTERDITES (jamais) :",
+	"  - 'Je ne trouve pas de trajet' / 'Je n'ai pas de trajet calculé' QUAND un TRAJET CALCULÉ est présent (c'est factuellement faux)",
+	"  - 'utilisez le planificateur' / 'le planner d'itinéraire de l'app' (l'app L'A déjà fait pour toi avant d'appeler ce prompt)",
+	"  - 'cette destination n'est pas reconnue' (le géocodage Google + catalogue STIB a déjà tranché)",
+	"  - 'Voulez-vous aller à X ? Sinon, utilisez le planificateur' (formule de refus interdite)",
+	"",
+	"✅ Si TRAJET CALCULÉ est ABSENT ET l'utilisateur demande un trajet :",
+	"  - Demande UNE précision courte et actionnable (ex: 'Quelle station précisément ?', 'Près de quel monument ?', 'C'est l'arrêt de tram ou la rue ?')",
+	"  - Maximum 1 question, courte. Pas de paragraphe.",
+].join("\n");
+
 function geminiContents(messages, contextMessage) {
-	const systemContext = [STIB_AI_SYSTEM_PROMPT, contextMessage].filter(Boolean).join("\n\n");
+	const systemContext = [STIB_AI_SYSTEM_PROMPT, contextMessage, TEXT_CHAT_INSTRUCTION].filter(Boolean).join("\n\n");
 	const contents = [];
 	if (systemContext) {
 		contents.push({ role: "user", parts: [{ text: systemContext }] });
@@ -202,6 +226,7 @@ exports.streamChat = async (req, res) => {
 				messages: [
 					{ role: "system", content: STIB_AI_SYSTEM_PROMPT },
 					...(contextMessage ? [{ role: "system", content: contextMessage }] : []),
+					{ role: "system", content: TEXT_CHAT_INSTRUCTION },
 					...messages,
 				],
 			}),
