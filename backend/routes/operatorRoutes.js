@@ -1,6 +1,7 @@
 const express = require("express");
 const { OPERATORS, stopsInViewport, lines, disruptions } = require("../services/operatorTransitService");
 const delijnLive = require("../services/delijnLiveService");
+const tecLive = require("../services/tecLiveService");
 
 const router = express.Router();
 
@@ -45,8 +46,6 @@ router.get("/:op/disruptions", validOp, async (req, res) => {
 	if (req.params.op === "delijn" && delijnLive.isConfigured()) {
 		const live = await delijnLive.getNetworkDisruptions();
 		if (live) {
-			// On mappe vers la forme historique {alerts:[]} en complétant avec
-			// les champs live pour que l'iOS puisse afficher un badge LIVE.
 			const alerts = live.disruptions.map((d) => ({
 				id: d.id,
 				header: d.title,
@@ -64,8 +63,31 @@ router.get("/:op/disruptions", validOp, async (req, res) => {
 				alerts,
 			});
 		}
-		// Pas de live disponible → fallback transparent ci-dessous.
 	}
+	// TEC : GTFS-RT JSON via Belgian Mobility Company (même clé que STIB).
+	// 1 appel toutes les 3 min seulement → quota mutualisé négligeable.
+	if (req.params.op === "tec" && tecLive.isConfigured()) {
+		const live = await tecLive.getNetworkDisruptions();
+		if (live) {
+			const alerts = live.disruptions.map((d) => ({
+				id: d.id,
+				header: d.title,
+				description: d.description,
+				url: d.url || "",
+				routeIds: d.affectedLines.map((l) => l.line),
+				startDate: d.startDate,
+				endDate: d.endDate,
+			}));
+			return res.json({
+				operator: "tec",
+				live: true,
+				fetchedAt: live.fetchedAt,
+				count: alerts.length,
+				alerts,
+			});
+		}
+	}
+	// Fallback : snapshot statique (mai 2025) si aucune API live disponible.
 	res.json({
 		operator: req.params.op,
 		live: false,
