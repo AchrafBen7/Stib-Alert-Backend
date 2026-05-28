@@ -1,5 +1,5 @@
 const express = require("express");
-const { OPERATORS, stopsInViewport, lines, disruptions } = require("../services/operatorTransitService");
+const { OPERATORS, stopsInViewport, lines } = require("../services/operatorTransitService");
 const delijnLive = require("../services/delijnLiveService");
 const tecLive = require("../services/tecLiveService");
 
@@ -93,11 +93,15 @@ router.get("/:op/disruptions", validOp, async (req, res) => {
 			});
 		}
 	}
-	// Fallback : snapshot statique (mai 2025) si aucune API live disponible.
+	// Aucune source live disponible (clé manquante OU API down). On renvoie
+	// une liste vide avec live:false plutôt que les anciens snapshots
+	// statiques (qui dataient de mai 2025, ~80% des alertes étaient
+	// périmées). L'iOS gère "0 alertes + live:false" comme un état dégradé
+	// neutre — préférable à de la désinformation.
 	res.json({
 		operator: req.params.op,
 		live: false,
-		alerts: disruptions(req.params.op),
+		alerts: [],
 	});
 });
 

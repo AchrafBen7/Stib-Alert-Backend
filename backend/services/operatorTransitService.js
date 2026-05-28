@@ -22,10 +22,14 @@ function loadJSON(file, fallback) {
 
 function bundle(op) {
 	if (cache[op]) return cache[op];
+	// disruptions ne sont plus servies depuis un snapshot statique : la voie
+	// nominale passe désormais par delijnLiveService / tecLiveService dans
+	// operatorRoutes.js. Si l'API live échoue, on retourne une liste vide
+	// plutôt que des fausses alertes périmées de 2024.
 	cache[op] = {
 		stops: loadJSON(`${op}-stops.json`, { stops: [] }).stops || [],
 		lines: loadJSON(`${op}-lines.json`, []),
-		disruptions: loadJSON(`${op}-disruptions.json`, { alerts: [] }).alerts || [],
+		disruptions: [],
 	};
 	return cache[op];
 }
