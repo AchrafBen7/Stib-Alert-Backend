@@ -105,32 +105,58 @@ function geminiChunkText(payload) {
 }
 
 async function streamGeminiNative({ gatewayUrl, model, key, messages, contextMessage, controller, req, res }) {
-	const upstream = await fetch(geminiNativeUrl(gatewayUrl, model), {
-		method: "POST",
-		headers: {
-			"x-goog-api-key": key,
-			"Content-Type": "application/json",
-			Accept: "text/event-stream",
+	const body = JSON.stringify({
+		contents: geminiContents(messages, contextMessage),
+		generationConfig: {
+			temperature: 0.35,
+			topP: 0.9,
 		},
-		body: JSON.stringify({
-			contents: geminiContents(messages, contextMessage),
-			generationConfig: {
-				temperature: 0.35,
-				topP: 0.9,
-			},
-		}),
-		signal: controller.signal,
 	});
 
+	async function callModel(modelName) {
+		return fetch(geminiNativeUrl(gatewayUrl, modelName), {
+			method: "POST",
+			headers: {
+				"x-goog-api-key": key,
+				"Content-Type": "application/json",
+				Accept: "text/event-stream",
+			},
+			body,
+			signal: controller.signal,
+		});
+	}
+
+	// Même résilience que voiceAsk : Gemini 2.5-flash sort régulièrement
+	// du 503 "high demand" sur les pics de trafic. On retry 1× après 700 ms
+	// sur le même modèle, puis on bascule sur 1.5-flash (moins chargé)
+	// AVANT de jeter l'éponge. Sans ça, le user voyait juste
+	// "L'assistant IA est temporairement indisponible" → expérience cassée
+	// alors qu'un simple retry passait.
+	const fallbackModel = "gemini-1.5-flash";
+	let upstream = await callModel(model);
+
+	if (upstream.status === 503) {
+		logger.warn("stib_ai_503_retry", { model });
+		await new Promise((r) => setTimeout(r, 700));
+		upstream = await callModel(model);
+	}
+	if (upstream.status === 503 && model !== fallbackModel) {
+		logger.warn("stib_ai_503_fallback", { from: model, to: fallbackModel });
+		upstream = await callModel(fallbackModel);
+	}
+
 	if (!upstream.ok) {
-		const body = await upstream.text().catch(() => "");
+		const errBody = await upstream.text().catch(() => "");
 		logger.warn("stib_ai_gemini_error", {
 			status: upstream.status,
-			body: body.slice(0, 500),
+			body: errBody.slice(0, 500),
 		});
+		// Message aligné avec voiceAsk pour cohérence STIB·AI texte vs voix.
 		const message = upstream.status === 429
 			? "L'assistant reçoit trop de demandes pour le moment. Réessaie dans quelques secondes."
-			: "L'assistant IA Gemini est temporairement indisponible. Vérifie la clé API ou le modèle configuré.";
+			: upstream.status === 503
+				? "L'assistant est saturé pour quelques secondes, réessaie tout de suite."
+				: "L'assistant IA est temporairement indisponible. Réessaie dans un instant.";
 		writeSseDelta(res, message);
 		writeSseDone(res);
 		return res.end();
