@@ -39,6 +39,12 @@ router.get("/me/insights", protect, rgpdController.myInsights);
 router.delete("/me", protect, rgpdController.deleteMyAccount);
 router.get("/privacy/policy", rgpdController.privacyPolicy);
 
+// Avatar : upload via multipart "avatar" (Cloudinary) + delete (revient
+// à l'initiale rendue côté iOS depuis le prénom).
+const avatarController = require("../controllers/avatarController");
+router.post("/me/avatar", protect, avatarController.uploadMiddleware, avatarController.uploadAvatar);
+router.delete("/me/avatar", protect, avatarController.deleteAvatar);
+
 router.post("/inscription", signupLimiter, validateSignup, handleValidation, inscription);
 router.post("/activation", activationLimiter, validateActivation, handleValidation, activerCompte);
 router.post("/renvoyer-code", activationLimiter, utilisateurController.renvoyerCode);
