@@ -1,14 +1,19 @@
 name: Keep Render dyno warm
 
 # Render free tier puts the service to sleep after ~15 min of inactivity.
-# This workflow pings /health every 14 minutes during Brussels waking hours
-# (05:00 — 23:59 UTC ≈ 06:00 — 00:59 local in winter / 07:00 — 01:59 summer),
-# which is enough to keep the container hot for ~99% of real-world traffic
-# while letting it sleep overnight to stay within the free-tier compute budget.
+# Pings /health every 14 minutes 24/7 — Apple App Review opère sur des
+# fuseaux US business hours qui couvrent largement la nuit Bruxelles.
+# Sans 24/7, le reviewer tombait potentiellement sur un cold start 10 s
+# au lancement = motif de rejet "doesn't load reliably".
+#
+# /health est intentionnellement DB-free (~50 ms), donc 24/7 keep-warm
+# n'augmente pas significativement le runtime Render. Le compteur 750 h/mois
+# du free tier mesure le dyno-uptime, pas les requêtes — le dyno tournerait
+# de toute façon dès qu'un user réel arrive.
 
 on:
   schedule:
-    - cron: "*/14 5-23 * * *"
+    - cron: "*/14 * * * *"
   workflow_dispatch: {}
 
 jobs:

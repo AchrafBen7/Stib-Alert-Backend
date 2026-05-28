@@ -74,6 +74,14 @@ app.use("/api/geocode", require("./routes/geocodeRoutes"));
 
 app.get("/", (req, res) => res.send("STIB Alert API fonctionne !"));
 
+// Pages HTML publiques pour App Store Connect (URL privacy + support
+// exigées par Apple, doivent être accessibles sans auth). Servies depuis
+// publicLegalController plutôt que d'un GitHub Pages séparé — plus simple.
+const publicLegal = require("./controllers/publicLegalController");
+app.get("/privacy", publicLegal.privacyHTML);
+app.get("/legal/privacy", publicLegal.privacyHTML);
+app.get("/support", publicLegal.supportHTML);
+
 // /health is intentionally DB-free so external keep-warm pings can wake the
 // Render free-tier container without waiting on Mongo. Cron-job.org / GitHub
 // Actions hit this every ~14min to keep the dyno hot.
