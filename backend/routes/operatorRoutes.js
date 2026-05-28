@@ -1,5 +1,6 @@
 const express = require("express");
 const { OPERATORS, stopsInViewport, lines, disruptions } = require("../services/operatorTransitService");
+const delijnLive = require("../services/delijnLiveService");
 
 const router = express.Router();
 
@@ -37,8 +38,77 @@ router.get("/:op/lines", validOp, (req, res) => {
 });
 
 // GET /api/operators/delijn/disruptions — official perturbations.
-router.get("/:op/disruptions", validOp, (req, res) => {
-	res.json({ operator: req.params.op, alerts: disruptions(req.params.op) });
+// Pour De Lijn, version LIVE depuis l'API officielle (cache 3 min).
+// Si la clé est absente ou l'API down → fallback snapshot statique.
+// Pour TEC, reste le snapshot statique (pas d'API live branchée pour l'instant).
+router.get("/:op/disruptions", validOp, async (req, res) => {
+	if (req.params.op === "delijn" && delijnLive.isConfigured()) {
+		const live = await delijnLive.getNetworkDisruptions();
+		if (live) {
+			// On mappe vers la forme historique {alerts:[]} en complétant avec
+			// les champs live pour que l'iOS puisse afficher un badge LIVE.
+			const alerts = live.disruptions.map((d) => ({
+				id: d.id,
+				header: d.title,
+				description: d.description,
+				url: "",
+				routeIds: d.affectedLines.map((l) => `gr:delijn:${l.entity}${l.line}`),
+				startDate: d.startDate,
+				endDate: d.endDate,
+			}));
+			return res.json({
+				operator: "delijn",
+				live: true,
+				fetchedAt: live.fetchedAt,
+				count: alerts.length,
+				alerts,
+			});
+		}
+		// Pas de live disponible → fallback transparent ci-dessous.
+	}
+	res.json({
+		operator: req.params.op,
+		live: false,
+		alerts: disruptions(req.params.op),
+	});
+});
+
+// GET /api/operators/delijn/stops/:stopId/realtime
+// Prochains passages en temps réel (next ~30 min, avec délai en minutes).
+// Cache 60s par arrêt côté backend → 240 req/min Kernel API de De Lijn
+// supporte ~100 utilisateurs simultanés sans saturer.
+router.get("/:op/stops/:stopId/realtime", validOp, async (req, res) => {
+	if (req.params.op !== "delijn") {
+		return res.status(404).json({ message: "Endpoint disponible uniquement pour De Lijn." });
+	}
+	if (!delijnLive.isConfigured()) {
+		return res.status(503).json({
+			message: "Service temps réel De Lijn non configuré (DELIJN_API_KEY manquante).",
+			live: false,
+			passages: [],
+		});
+	}
+	const data = await delijnLive.getStopRealtime(req.params.stopId);
+	res.json(data);
+});
+
+// GET /api/operators/delijn/stops/:stopId/disruptions
+// Déviations (omleidingen) + pannes (storingen) qui touchent cet arrêt précis.
+router.get("/:op/stops/:stopId/disruptions", validOp, async (req, res) => {
+	if (req.params.op !== "delijn") {
+		return res.status(404).json({ message: "Endpoint disponible uniquement pour De Lijn." });
+	}
+	if (!delijnLive.isConfigured()) {
+		return res.status(503).json({
+			message: "Service De Lijn non configuré.",
+			live: false,
+			omleidingen: [],
+			storingen: [],
+		});
+	}
+	const data = await delijnLive.getStopDisruptions(req.params.stopId);
+	if (!data) return res.status(502).json({ message: "Service De Lijn indisponible." });
+	res.json(data);
 });
 
 module.exports = router;
