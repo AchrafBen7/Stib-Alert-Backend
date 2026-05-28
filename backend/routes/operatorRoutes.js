@@ -46,12 +46,18 @@ router.get("/:op/disruptions", validOp, async (req, res) => {
 	if (req.params.op === "delijn" && delijnLive.isConfigured()) {
 		const live = await delijnLive.getNetworkDisruptions();
 		if (live) {
+			// IMPORTANT : le catalogue iOS (delijn-lines.json) stocke des
+			// GTFS route_id type "gr:delijn:18010" alors que l'API De Lijn
+			// renvoie un lijnnummer ("128"). Reconstruction d'un "gr:delijn:X"
+			// est impossible sans table de correspondance. On émet donc le
+			// short_name BRUT comme routeId — l'iOS matche désormais
+			// sur OperatorLine.shortName (commit miroir côté Swift).
 			const alerts = live.disruptions.map((d) => ({
 				id: d.id,
 				header: d.title,
 				description: d.description,
 				url: "",
-				routeIds: d.affectedLines.map((l) => `gr:delijn:${l.entity}${l.line}`),
+				routeIds: d.affectedLines.map((l) => String(l.line)),
 				startDate: d.startDate,
 				endDate: d.endDate,
 			}));
