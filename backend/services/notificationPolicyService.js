@@ -9,6 +9,11 @@ const FREQ_CAP_DAY_RELAXED = 20;
 // Fenêtre de dé-dup inter-types (alignée sur le plus long cooldown existant).
 const DEDUP_WINDOW_MS = 4 * 60 * 60 * 1000;
 
+// B5 — Types NON comptés dans le plafond de fréquence : gratifications,
+// briefs et résumés ne sont pas des alertes d'incident et ne doivent pas
+// étouffer une vraie perturbation.
+const NON_ALERT_TYPES = ["thanks", "pre_trip_brief", "digest_summary", "community_still_happening"];
+
 // Incidents critiques — cohérent avec perturbationAlertService / clusterService.
 const CRITICAL_TYPES = new Set(["Accident", "Agression", "Interruption"]);
 
@@ -68,25 +73,33 @@ async function evaluatePush({ userId, user, ligne, stopId, clusterIndex, stage, 
 		if (level === "critique") return { allow: false, defer: false, reason: "rule_critical_only", incidentKey };
 	}
 
-	// 3. Dé-dup inter-types (incidentKey + étape).
+	// 3. Dé-dup inter-types. B6 — Une "première alerte" (perturbation, cluster,
+	// corridor_new) dé-duplique sur l'incidentKey SEUL (1 alerte par incident,
+	// peu importe le type/étape). Seules les transitions d'état
+	// (still_blocked / resolved) gardent un dédup par étape (1 push par étape).
+	const isFirstAlert = !stage || stage === "new_signalement";
 	try {
-		const recent = await AssistantNotificationLog.findOne({
+		const dedupQuery = {
 			userId,
 			incidentKey,
 			deferred: { $ne: true },
 			sentAt: { $gte: new Date(Date.now() - DEDUP_WINDOW_MS) },
-			...(stage ? { stage } : {}),
-		}).lean();
+		};
+		if (!isFirstAlert) dedupQuery.stage = stage;
+		const recent = await AssistantNotificationLog.findOne(dedupQuery).lean();
 		if (recent) return { allow: false, defer: false, reason: "duplicate_incident", incidentKey };
 	} catch (_) { /* lecture log non bloquante */ }
 
 	// 4. Plafond de fréquence global (critique exempté).
+	// B5 — On ne compte QUE les vraies alertes : mercis / brief pré-trajet /
+	// résumé digest / re-sollicitation ne doivent pas étouffer une perturbation.
 	if (!critical) {
 		const now = Date.now();
 		try {
+			const baseCount = { userId, deferred: { $ne: true }, type: { $nin: NON_ALERT_TYPES } };
 			const [hourCount, dayCount] = await Promise.all([
-				AssistantNotificationLog.countDocuments({ userId, deferred: { $ne: true }, sentAt: { $gte: new Date(now - 60 * 60 * 1000) } }),
-				AssistantNotificationLog.countDocuments({ userId, deferred: { $ne: true }, sentAt: { $gte: new Date(now - 24 * 60 * 60 * 1000) } }),
+				AssistantNotificationLog.countDocuments({ ...baseCount, sentAt: { $gte: new Date(now - 60 * 60 * 1000) } }),
+				AssistantNotificationLog.countDocuments({ ...baseCount, sentAt: { $gte: new Date(now - 24 * 60 * 60 * 1000) } }),
 			]);
 			const hourCap = freq === "tout" ? FREQ_CAP_HOUR_RELAXED : FREQ_CAP_HOUR;
 			const dayCap = freq === "tout" ? FREQ_CAP_DAY_RELAXED : FREQ_CAP_DAY;

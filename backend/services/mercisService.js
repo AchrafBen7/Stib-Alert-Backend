@@ -33,7 +33,7 @@ async function detectAndSendThanks() {
 		const contributions = await Contribution.find({
 			clusterIndex: cluster.clusterIndex,
 			thanksSent: false,
-		}).populate("utilisateurId", "_id email nom oneSignalPlayerId notifications mercisPushEnabled quietHoursEnabled quietHoursStartHour quietHoursEndHour");
+		}).populate("utilisateurId", "_id email nom oneSignalPlayerId notifications mercisPushEnabled quietHoursEnabled quietHoursStartHour quietHoursEndHour notificationFrequency");
 
 		if (contributions.length === 0) continue;
 
@@ -52,6 +52,9 @@ async function detectAndSendThanks() {
 
 			if (user.notifications === false) continue;
 			if (user.mercisPushEnabled === false) continue;
+			// B7 — Les "mercis" ne sont pas critiques : non envoyés en mode
+			// "Critique seul" ou "Résumé".
+			if (user.notificationFrequency === "critique" || user.notificationFrequency === "digest") continue;
 			if (!user.oneSignalPlayerId) continue;
 
 			try {

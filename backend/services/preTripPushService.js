@@ -1,5 +1,6 @@
 const Utilisateur = require("../models/Utilisateur");
 const { computeDecision } = require("./decisionService");
+const { brusselsHour } = require("./pushPreferences");
 const logger = require("./logger");
 
 let oneSignal = null;
@@ -64,7 +65,8 @@ function isInQuietHours(user, now = new Date()) {
 	if (user.quietHoursEnabled === false) return false;
 	const start = Number.isInteger(user.quietHoursStartHour) ? user.quietHoursStartHour : 22;
 	const end = Number.isInteger(user.quietHoursEndHour) ? user.quietHoursEndHour : 7;
-	const hour = now.getHours();
+	// B1 — heure de Bruxelles (pas l'heure serveur UTC).
+	const hour = brusselsHour(now);
 	if (start === end) return false;
 	if (start < end) return hour >= start && hour < end;
 	// Wraps midnight: e.g. 22-7
@@ -119,6 +121,11 @@ async function dispatchPushForUser(user) {
 	if (!user.oneSignalPlayerId) return { sent: false, reason: "no_player_id" };
 	if (user.notifications === false) return { sent: false, reason: "notifications_disabled" };
 	if (user.preTripPushEnabled === false) return { sent: false, reason: "pretrip_disabled" };
+	// B7 — Le brief pré-trajet n'est PAS critique : en mode "Critique seul" ou
+	// "Résumé", on ne l'envoie pas (respect du sélecteur de débit).
+	if (user.notificationFrequency === "critique" || user.notificationFrequency === "digest") {
+		return { sent: false, reason: "frequency_excludes_pretrip" };
+	}
 
 	try {
 		if (oneSignal?.sendPushToPlayerIds) {
@@ -156,7 +163,7 @@ async function evaluateAndSendPreTripPushes(now = new Date()) {
 			oneSignalPlayerId: { $exists: true, $ne: null },
 			"routine.enabled": true,
 		})
-			.select("_id routine oneSignalPlayerId notifications preTripPushEnabled lastPreTripPushAt")
+			.select("_id routine oneSignalPlayerId notifications preTripPushEnabled lastPreTripPushAt notificationFrequency")
 			.lean();
 
 		let evaluated = 0;
