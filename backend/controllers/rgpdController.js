@@ -194,6 +194,32 @@ exports.myContributions = async (req, res) => {
 			.select("ligne typeProbleme role helpedPublishCluster peopleHelped createdAt clusterIndex")
 			.lean();
 
+		// #2 — Statut VIVANT : on attache l'état courant du cluster lié à
+		// chaque contribution (à vérifier / confirmé / toujours actif / résolu)
+		// pour la section "Tes signalements".
+		try {
+			const Cluster = require("../models/Cluster");
+			const indexes = [...new Set(recent.map((r) => r.clusterIndex).filter((i) => i != null))];
+			if (indexes.length) {
+				const clusters = await Cluster.find({ clusterIndex: { $in: indexes } })
+					.select("clusterIndex status confidenceStatus resolved reportCount stillBlockedConfirmationCount")
+					.lean();
+				const byIndex = new Map(clusters.map((c) => [c.clusterIndex, c]));
+				for (const item of recent) {
+					const c = item.clusterIndex != null ? byIndex.get(item.clusterIndex) : null;
+					if (c) {
+						item.liveStatus = c.resolved ? "resolved" : c.status; // active|unpublished|resolved|archived
+						item.confidenceStatus = c.confidenceStatus || null;   // confirmed|likely|unverified
+						item.reportCount = c.reportCount || 0;
+					} else {
+						item.liveStatus = null;
+					}
+				}
+			}
+		} catch (statusErr) {
+			console.warn("[rgpd.myContributions] live status join failed:", statusErr.message);
+		}
+
 		return res.status(200).json({
 			summary,
 			recent,
