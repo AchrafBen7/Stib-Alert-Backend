@@ -2,6 +2,7 @@ const Utilisateur = require("../models/Utilisateur");
 const AssistantNotificationLog = require("../models/AssistantNotificationLog");
 const { sendNotificationWithDeepLink } = require("./oneSignalService");
 const { isInQuietHours } = require("./pushPreferences");
+const { evaluatePush, logDeferred } = require("./notificationPolicyService");
 
 // ─── Brussels corridors ───────────────────────────────────────────────────────
 // Key  = affected line
@@ -107,7 +108,7 @@ async function sendAlertsForNewPerturbations(newSignalements) {
 				oneSignalPlayerId:  { $exists: true, $ne: null },
 				favoriteLines:      ligne,
 			})
-				.select("_id oneSignalPlayerId quietHoursEnabled quietHoursStartHour quietHoursEndHour")
+				.select("_id oneSignalPlayerId quietHoursEnabled quietHoursStartHour quietHoursEndHour notificationFrequency notificationRules")
 				.lean();
 		} catch (err) {
 			console.warn(`[perturbation-alert] user query failed for ligne ${ligne}: ${err.message}`);
@@ -123,6 +124,21 @@ async function sendAlertsForNewPerturbations(newSignalements) {
 			// (Accident / Agression) qui passent toujours. Un user en
 			// quiet hours rate sinon une info sécurité urgente.
 			if (!isCriticalIncident(sig.typeProbleme) && isInQuietHours(user)) { skipped++; continue; }
+
+				// #1/#2/#3/#4 — débit, dé-dup inter-types, plafond, règle ligne.
+				const policyDecision = await evaluatePush({
+					userId: user._id,
+					user,
+					ligne,
+					isCritical: isCriticalIncident(sig.typeProbleme),
+				});
+				if (!policyDecision.allow) {
+					if (policyDecision.defer) {
+						await logDeferred({ userId: user._id, type: "perturbation_alert", incidentKey: policyDecision.incidentKey, title, message });
+					}
+					skipped++;
+					continue;
+				}
 
 			// Deduplication check
 			try {
@@ -154,6 +170,7 @@ async function sendAlertsForNewPerturbations(newSignalements) {
 					userId:     user._id,
 					type:       "perturbation_alert",
 					contextKey,
+					incidentKey: policyDecision.incidentKey,
 					priority:   "high",
 					title,
 					message,

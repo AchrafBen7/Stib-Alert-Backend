@@ -4,6 +4,7 @@ const AssistantNotificationLog = require("../models/AssistantNotificationLog");
 const { sendNotificationWithDeepLink } = require("./oneSignalService");
 const { buildCommunityMeta } = require("./signalementCommunityService");
 const { isInQuietHours } = require("./pushPreferences");
+const { evaluatePush, logDeferred } = require("./notificationPolicyService");
 
 const EVENT_POLICY = {
 	new_signalement: { cooldownMinutes: 15, priority: "elevated" },
@@ -26,11 +27,12 @@ async function shouldSkipEventPush({ userId, type, contextKey, title, message })
 	return Boolean(recent && recent.title === title && recent.message === message);
 }
 
-async function logEventPush({ userId, type, contextKey, title, message, decision = null, stage = null }) {
+async function logEventPush({ userId, type, contextKey, incidentKey = null, title, message, decision = null, stage = null }) {
 	await AssistantNotificationLog.create({
 		userId,
 		type,
 		contextKey,
+		incidentKey,
 		priority: EVENT_POLICY[type]?.priority || "normal",
 		title,
 		message,
@@ -167,7 +169,7 @@ async function sendFavoriteIncidentPushes(signalement, eventType = "new_signalem
 			...(line ? [{ favoriteLines: line.toUpperCase() }] : []),
 		],
 	})
-		.select("_id favoriteLines routine quietHoursEnabled quietHoursStartHour quietHoursEndHour")
+		.select("_id favoriteLines routine quietHoursEnabled quietHoursStartHour quietHoursEndHour notificationFrequency notificationRules")
 		.lean();
 
 	let sent = 0;
@@ -193,6 +195,23 @@ async function sendFavoriteIncidentPushes(signalement, eventType = "new_signalem
 			continue;
 		}
 
+		// #1/#2/#3/#4 — débit, dé-dup inter-types (incidentKey+étape), plafond,
+		// règle par ligne/arrêt. `stage` = type d'événement (new/still/resolved).
+		const decision = await evaluatePush({
+			userId: user._id,
+			user,
+			ligne: line,
+			stopId: primaryStopId,
+			stage: eventType,
+			isCritical,
+		});
+		if (!decision.allow) {
+			if (decision.defer) {
+				await logDeferred({ userId: user._id, type: `corridor_${eventType}`, incidentKey: decision.incidentKey, title: payload.title, message: payload.message, stage: eventType });
+			}
+			continue;
+		}
+
 		await sendNotificationWithDeepLink({
 			userId: String(user._id),
 			title: payload.title,
@@ -206,8 +225,10 @@ async function sendFavoriteIncidentPushes(signalement, eventType = "new_signalem
 			userId: user._id,
 			type: eventType,
 			contextKey,
+			incidentKey: decision.incidentKey,
 			title: payload.title,
 			message: payload.message,
+			stage: eventType,
 		});
 		sent += 1;
 	}

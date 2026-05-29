@@ -18,6 +18,24 @@ const assistantNotificationLogSchema = new mongoose.Schema(
 			required: true,
 			index: true,
 		},
+		// Clé d'incident CANONIQUE partagée entre types (perturbation officielle
+		// + cluster communautaire sur la même ligne/arrêt) → dé-dup inter-types.
+		incidentKey: {
+			type: String,
+			default: null,
+			index: true,
+		},
+		// true = push supprimé (plafond de fréquence / mode digest), à agréger
+		// dans le résumé. Résumé une fois que digestedAt est renseigné.
+		deferred: {
+			type: Boolean,
+			default: false,
+			index: true,
+		},
+		digestedAt: {
+			type: Date,
+			default: null,
+		},
 		priority: {
 			type: String,
 			default: "normal",

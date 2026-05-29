@@ -4,10 +4,14 @@ const Cluster = require("../models/Cluster");
 const DeviceLimit = require("../models/DeviceLimit");
 
 let sendStillHappeningPrompts = null;
+let sendDeferredDigests = null;
 try {
-	sendStillHappeningPrompts = require("./communityClusterAlertService").sendStillHappeningPrompts;
+	const svc = require("./communityClusterAlertService");
+	sendStillHappeningPrompts = svc.sendStillHappeningPrompts;
+	sendDeferredDigests = svc.sendDeferredDigests;
 } catch (e) {
 	sendStillHappeningPrompts = null;
+	sendDeferredDigests = null;
 }
 
 const CLUSTERING_INTERVAL_MS = parseInt(process.env.COMMUNITY_CLUSTERING_INTERVAL_MS, 10) || 30 * 1000;
@@ -15,6 +19,8 @@ const EXPIRATION_INTERVAL_MS = parseInt(process.env.COMMUNITY_EXPIRATION_INTERVA
 const CLEANUP_INTERVAL_MS = parseInt(process.env.COMMUNITY_CLEANUP_INTERVAL_MS, 10) || 60 * 60 * 1000;
 // A3 — re-sollicitation "toujours le cas ?".
 const STILL_HAPPENING_INTERVAL_MS = parseInt(process.env.COMMUNITY_STILL_HAPPENING_INTERVAL_MS, 10) || 5 * 60 * 1000;
+// Digest des notifications reportées (plafond de fréquence / mode digest).
+const DIGEST_INTERVAL_MS = parseInt(process.env.COMMUNITY_DIGEST_INTERVAL_MS, 10) || 30 * 60 * 1000;
 const STILL_HAPPENING_QUIET_MIN = 20;   // pas de nouvelle activité depuis 20 min
 const STILL_HAPPENING_MIN_AGE_MIN = 25;  // cluster vieux d'au moins 25 min
 const STILL_HAPPENING_REPROMPT_MIN = 30; // ne pas re-demander avant 30 min
@@ -23,6 +29,7 @@ let clusteringTimer = null;
 let expirationTimer = null;
 let cleanupTimer = null;
 let stillHappeningTimer = null;
+let digestTimer = null;
 
 async function clusteringTick() {
 	try {
@@ -152,6 +159,19 @@ async function stillHappeningTick() {
 	}
 }
 
+// Digest : envoie les résumés des notifications reportées.
+async function digestTick() {
+	if (!sendDeferredDigests) return;
+	try {
+		const result = await sendDeferredDigests();
+		if (result?.sent > 0) {
+			console.log(`[community-jobs] digest: summaries sent=${result.sent}`);
+		}
+	} catch (error) {
+		console.error("[community-jobs] digestTick error:", error.message);
+	}
+}
+
 function startCommunityJobs() {
 	if (process.env.COMMUNITY_JOBS_ENABLED === "false") {
 		console.warn("⚠️ Community jobs disabled via COMMUNITY_JOBS_ENABLED=false");
@@ -177,11 +197,14 @@ function startCommunityJobs() {
 	stillHappeningTimer = setInterval(() => { stillHappeningTick().catch(() => {}); }, STILL_HAPPENING_INTERVAL_MS);
 	stillHappeningTimer.unref?.();
 
+	digestTimer = setInterval(() => { digestTick().catch(() => {}); }, DIGEST_INTERVAL_MS);
+	digestTimer.unref?.();
+
 	console.log(
-		`✅ Community jobs started (clustering=${CLUSTERING_INTERVAL_MS}ms, expiration=${EXPIRATION_INTERVAL_MS}ms, cleanup=${CLEANUP_INTERVAL_MS}ms, stillHappening=${STILL_HAPPENING_INTERVAL_MS}ms)`
+		`✅ Community jobs started (clustering=${CLUSTERING_INTERVAL_MS}ms, expiration=${EXPIRATION_INTERVAL_MS}ms, cleanup=${CLEANUP_INTERVAL_MS}ms, stillHappening=${STILL_HAPPENING_INTERVAL_MS}ms, digest=${DIGEST_INTERVAL_MS}ms)`
 	);
 
-	return { clusteringTimer, expirationTimer, cleanupTimer, stillHappeningTimer };
+	return { clusteringTimer, expirationTimer, cleanupTimer, stillHappeningTimer, digestTimer };
 }
 
 function stopCommunityJobs() {
@@ -201,6 +224,10 @@ function stopCommunityJobs() {
 		clearInterval(stillHappeningTimer);
 		stillHappeningTimer = null;
 	}
+	if (digestTimer) {
+		clearInterval(digestTimer);
+		digestTimer = null;
+	}
 }
 
 module.exports = {
@@ -210,4 +237,5 @@ module.exports = {
 	expirationTick,
 	cleanupTick,
 	stillHappeningTick,
+	digestTick,
 };

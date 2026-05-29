@@ -456,6 +456,7 @@ exports.modifierProfil = async (req, res) => {
 			"quietHoursEnabled",
 			"quietHoursStartHour",
 			"quietHoursEndHour",
+			"notificationFrequency",
 		];
 		const update = {};
 		for (const key of allowed) {
@@ -465,6 +466,26 @@ exports.modifierProfil = async (req, res) => {
 			update.favoriteLines = [...new Set((req.body.favoriteLines || [])
 				.map((line) => String(line || "").trim().toUpperCase())
 				.filter(Boolean))];
+		}
+		// Règles de notif par ligne/arrêt/zone — remplace l'ensemble, validé.
+		if (req.body.notificationRules !== undefined) {
+			const scopes = new Set(["line", "stop", "zone"]);
+			const levels = new Set(["tout", "essentiel", "critique", "off"]);
+			const seen = new Set();
+			update.notificationRules = (Array.isArray(req.body.notificationRules) ? req.body.notificationRules : [])
+				.map((r) => ({
+					scope: String(r?.scope || "").trim().toLowerCase(),
+					key: String(r?.key || "").trim(),
+					level: String(r?.level || "essentiel").trim().toLowerCase(),
+				}))
+				.filter((r) => {
+					if (!scopes.has(r.scope) || !r.key || !levels.has(r.level)) return false;
+					const k = `${r.scope}:${r.key}`;
+					if (seen.has(k)) return false;
+					seen.add(k);
+					return true;
+				})
+				.slice(0, 100);
 		}
 		// #3 — Favoris multi-opérateurs : on remplace l'ensemble (le client
 		// envoie la liste complète, idempotent). Dédup par op:stopId, opérateurs

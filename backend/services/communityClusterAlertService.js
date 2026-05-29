@@ -3,6 +3,7 @@ const Arret = require("../models/Arret");
 const AssistantNotificationLog = require("../models/AssistantNotificationLog");
 const { sendNotificationWithDeepLink } = require("./oneSignalService");
 const { isInQuietHours } = require("./pushPreferences");
+const { evaluatePush, isCriticalType, logDeferred } = require("./notificationPolicyService");
 const logger = require("./logger");
 
 // Community polish — cooldown 4h → 1h. Trop conservateur avant : un user
@@ -68,7 +69,7 @@ async function sendAlertsForPublishedCommunityCluster(cluster) {
 			oneSignalPlayerId: { $exists: true, $ne: null },
 			favoris: arretId,
 		})
-			.select("_id oneSignalPlayerId quietHoursEnabled quietHoursStartHour quietHoursEndHour")
+			.select("_id oneSignalPlayerId quietHoursEnabled quietHoursStartHour quietHoursEndHour notificationFrequency notificationRules")
 			.lean();
 	} catch (err) {
 		logger.warn("[community-cluster-alert] user query failed", {
@@ -81,9 +82,10 @@ async function sendAlertsForPublishedCommunityCluster(cluster) {
 
 	let sent = 0;
 	let skipped = 0;
+	const critical = isCriticalType(cluster.typeProbleme);
 
 	for (const user of users) {
-		if (isInQuietHours(user)) {
+		if (!critical && isInQuietHours(user)) {
 			skipped++;
 			continue;
 		}
@@ -96,6 +98,23 @@ async function sendAlertsForPublishedCommunityCluster(cluster) {
 		}).lean();
 
 		if (recent) {
+			skipped++;
+			continue;
+		}
+
+		// #1/#2/#3/#4 — débit, dé-dup inter-types, plafond, règle par ligne/arrêt.
+		const decision = await evaluatePush({
+			userId: user._id,
+			user,
+			ligne: cluster.ligne,
+			stopId: String(arretId),
+			clusterIndex: cluster.clusterIndex,
+			isCritical: critical,
+		});
+		if (!decision.allow) {
+			if (decision.defer) {
+				await logDeferred({ userId: user._id, type: NOTIFICATION_TYPE, incidentKey: decision.incidentKey, title, message });
+			}
 			skipped++;
 			continue;
 		}
@@ -118,7 +137,8 @@ async function sendAlertsForPublishedCommunityCluster(cluster) {
 			userId: user._id,
 			type: NOTIFICATION_TYPE,
 			contextKey,
-			priority: "high",
+			incidentKey: decision.incidentKey,
+			priority: critical ? "high" : "normal",
 			title,
 			message,
 			sentAt: new Date(),
@@ -195,8 +215,79 @@ async function sendStillHappeningPrompts(cluster) {
 	return { sent, targetUsers: users.length };
 }
 
+// #1 — Digest : agrège les notifications reportées (plafond/mode digest) en UN
+// seul résumé par utilisateur, au plus une fois toutes les 3 h. Respecte quiet
+// hours et le master notifications. Marque les items comme digérés.
+const DIGEST_TYPE = "digest_summary";
+const DIGEST_MIN_INTERVAL_MS = 3 * 60 * 60 * 1000;
+
+async function sendDeferredDigests() {
+	const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+	let groups = [];
+	try {
+		groups = await AssistantNotificationLog.aggregate([
+			{ $match: { deferred: true, digestedAt: null, sentAt: { $gte: since } } },
+			{ $group: { _id: "$userId", count: { $sum: 1 }, incidentKeys: { $addToSet: "$incidentKey" }, ids: { $push: "$_id" } } },
+		]);
+	} catch (err) {
+		logger.warn("[digest] aggregate failed", { error: err.message });
+		return { sent: 0 };
+	}
+
+	let sent = 0;
+	for (const group of groups) {
+		const userId = group._id;
+		if (!userId) continue;
+
+		// 1 digest max / 3 h.
+		const recentDigest = await AssistantNotificationLog.findOne({
+			userId, type: DIGEST_TYPE, sentAt: { $gte: new Date(Date.now() - DIGEST_MIN_INTERVAL_MS) },
+		}).lean();
+		if (recentDigest) continue;
+
+		const user = await Utilisateur.findById(userId)
+			.select("notifications oneSignalPlayerId quietHoursEnabled quietHoursStartHour quietHoursEndHour")
+			.lean();
+		if (!user || user.notifications === false || !user.oneSignalPlayerId) continue;
+		if (isInQuietHours(user)) continue; // on retentera au prochain tick hors silence
+
+		const lines = [...new Set((group.incidentKeys || [])
+			.map((k) => String(k || "").split(":")[0])
+			.filter(Boolean))].slice(0, 6);
+		const linesText = lines.length ? `Lignes ${lines.join(", ")}` : "Plusieurs lignes";
+		const title = group.count > 1 ? `${group.count} alertes pendant ton absence` : "1 alerte pendant ton absence";
+		const message = `${linesText} ${lines.length > 1 ? "ont été" : "a été"} perturbée(s). Ouvre pour le récap.`;
+
+		const result = await sendNotificationWithDeepLink({
+			userId: String(userId),
+			title,
+			message,
+			type: DIGEST_TYPE,
+			id: "digest",
+			deepLink: "stibalert://signalements",
+		});
+		if (result?.success === false) continue;
+
+		await AssistantNotificationLog.create({
+			userId, type: DIGEST_TYPE, contextKey: `digest:${Date.now()}`,
+			priority: "normal", title, message, sentAt: new Date(),
+		});
+		// Marque les items agrégés comme digérés.
+		try {
+			await AssistantNotificationLog.updateMany(
+				{ _id: { $in: group.ids } },
+				{ $set: { digestedAt: new Date() } }
+			);
+		} catch (_) { /* non bloquant */ }
+		sent++;
+	}
+
+	return { sent, users: groups.length };
+}
+
 module.exports = {
 	COMMUNITY_CLUSTER_COOLDOWN_MS,
 	sendAlertsForPublishedCommunityCluster,
 	sendStillHappeningPrompts,
+	sendDeferredDigests,
 };

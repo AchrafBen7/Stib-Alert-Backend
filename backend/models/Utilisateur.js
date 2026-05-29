@@ -43,6 +43,21 @@ const utilisateurSchema = new mongoose.Schema(
 		quietHoursEnabled: { type: Boolean, default: true },
 		quietHoursStartHour: { type: Number, default: 22, min: 0, max: 23 },
 		quietHoursEndHour: { type: Number, default: 7, min: 0, max: 23 },
+		// Débit global des alertes : "tout" (relâche les plafonds), "essentiel"
+		// (défaut), "critique" (seul Accident/Agression/Interruption passe),
+		// "digest" (rien en direct sauf critique, tout va au résumé).
+		notificationFrequency: {
+			type: String,
+			enum: ["tout", "essentiel", "critique", "digest"],
+			default: "essentiel",
+		},
+		// Affinage par ligne/arrêt/zone : niveau de notif par cible suivie.
+		// level : "tout" | "essentiel" | "critique" | "off".
+		notificationRules: [{
+			scope: { type: String, enum: ["line", "stop", "zone"], required: true },
+			key: { type: String, required: true },   // ex. "92", un stopId, ou "home"
+			level: { type: String, enum: ["tout", "essentiel", "critique", "off"], default: "essentiel" },
+		}],
 		lastPreTripPushAt: { type: Date, default: null },
 		role: { type: String, enum: ["Utilisateur", "Admin"], default: "Utilisateur" },
 		votes: [{ type: mongoose.Schema.Types.ObjectId, ref: "Signalement" }],
