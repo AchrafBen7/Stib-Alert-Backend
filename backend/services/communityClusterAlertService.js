@@ -5,7 +5,12 @@ const { sendNotificationWithDeepLink } = require("./oneSignalService");
 const { isInQuietHours } = require("./pushPreferences");
 const logger = require("./logger");
 
-const COMMUNITY_CLUSTER_COOLDOWN_MS = 4 * 60 * 60 * 1000;
+// Community polish — cooldown 4h → 1h. Trop conservateur avant : un user
+// qui prend les transports matin + soir ratait potentiellement le push du
+// retour parce qu'il avait reçu celui du matin sur la même ligne. 1h reste
+// suffisant pour ne pas spammer (même cluster 2 fois dans la même heure
+// = même incident, push 1 fois).
+const COMMUNITY_CLUSTER_COOLDOWN_MS = 60 * 60 * 1000;
 const NOTIFICATION_TYPE = "community_cluster_alert";
 
 function normalizeId(value) {

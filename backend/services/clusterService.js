@@ -152,9 +152,20 @@ async function recomputeClusterFromReports(cluster) {
 	cluster.latitude = lat;
 	cluster.longitude = lng;
 
-	const shouldPublish =
+	// Community polish — voie rapide : si le trust agrégé est largement
+	// au-dessus du seuil normal (65+ : généralement utilisateur vérifié
+	// + device trusted), on accepte 2 reports au lieu de 3. Cela évite le
+	// lag 30-40s observé sur les vraies perturbations rapportées par 2
+	// utilisateurs réguliers (les cas où on voudrait publier le plus vite).
+	const TRUSTED_FAST_TRACK_MIN_TRUST = 65;
+	const TRUSTED_FAST_TRACK_MIN_REPORTS = 2;
+	const shouldPublishFastTrack =
+		reportCount >= TRUSTED_FAST_TRACK_MIN_REPORTS &&
+		aggregateTrust >= TRUSTED_FAST_TRACK_MIN_TRUST;
+	const shouldPublishNormal =
 		reportCount >= CLUSTER.MIN_REPORTS_TO_PUBLISH &&
 		aggregateTrust >= CLUSTER.MIN_TRUST_TO_PUBLISH;
+	const shouldPublish = shouldPublishFastTrack || shouldPublishNormal;
 
 	if (cluster.resolved) {
 		cluster.status = "resolved";
