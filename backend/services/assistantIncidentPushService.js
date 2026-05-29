@@ -171,10 +171,14 @@ async function sendFavoriteIncidentPushes(signalement, eventType = "new_signalem
 		.lean();
 
 	let sent = 0;
+	// BUG #1 — Mêmes types que perturbationAlertService : Accident et
+	// Agression bypassent les quiet hours (info sécurité urgente).
+	const CRITICAL_INCIDENT_TYPES = new Set(["Accident", "Agression"]);
+	const isCritical = CRITICAL_INCIDENT_TYPES.has(signalement?.typeProbleme);
 
 	for (const user of users) {
-		// Respect the user's silent window.
-		if (isInQuietHours(user)) continue;
+		// Respect the user's silent window — sauf si incident critique.
+		if (!isCritical && isInQuietHours(user)) continue;
 
 		const payload = buildEventPayload(user, signalement, eventType);
 		const contextKey = `${primaryStopId}:${line || "line-unknown"}:${eventType}`;

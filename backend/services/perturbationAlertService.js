@@ -39,6 +39,17 @@ const PROBLEM_LABEL = {
 // 4-hour cooldown: don't push the same perturbation (by externalId/signalementId) twice to the same user
 const ALERT_COOLDOWN_MS = 4 * 60 * 60 * 1000;
 
+// BUG #1 — Incidents critiques qui bypass les quiet hours utilisateur.
+// Accident (blessure possible, déviation majeure) et Agression (sécurité)
+// sont assez sérieux pour réveiller un user qui a activé son silence
+// nocturne. Les autres types (Retard, Panne légère, Propreté…) restent
+// soumis à quiet hours.
+const CRITICAL_INCIDENT_TYPES = new Set(["Accident", "Agression"]);
+
+function isCriticalIncident(typeProbleme) {
+	return CRITICAL_INCIDENT_TYPES.has(typeProbleme);
+}
+
 // Only send between 06:00 and 22:00 Brussels local time
 function isInBrusselsAlertWindow() {
 	const hour = Number(
@@ -108,8 +119,10 @@ async function sendAlertsForNewPerturbations(newSignalements) {
 		const { title, message } = buildPushContent(ligne, sig.typeProbleme);
 
 		for (const user of users) {
-			// Respect the user's silent window.
-			if (isInQuietHours(user)) { skipped++; continue; }
+			// Respect the user's silent window — sauf incidents critiques
+			// (Accident / Agression) qui passent toujours. Un user en
+			// quiet hours rate sinon une info sécurité urgente.
+			if (!isCriticalIncident(sig.typeProbleme) && isInQuietHours(user)) { skipped++; continue; }
 
 			// Deduplication check
 			try {
