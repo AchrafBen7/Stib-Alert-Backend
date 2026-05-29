@@ -55,7 +55,8 @@ app.get("/.well-known/apple-app-site-association", sendAppleAppSiteAssociation);
 
 app.use("/api/signalements", require("./routes/signalementRoutes"));
 app.use("/api/clusters", require("./routes/clusterRoutes"));
-app.use("/api/decision", require("./routes/decisionRoutes"));
+// /api/decision retiré : feature "Verdict sheet" jamais wired côté iOS.
+// decisionService garde un usage interne via preTripPushService.
 app.use("/api/lines", require("./routes/lineRealtimeRoutes"));
 app.use("/admin/moderation", require("./routes/moderationRoutes"));
 app.use("/api/utilisateurs", require("./routes/utilisateurRoutes"));
