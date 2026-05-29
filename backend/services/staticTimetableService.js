@@ -232,6 +232,61 @@ async function getScheduledStopDepartures({ stopIds = [], stopName = null, lines
 	return uniqueDepartures(departures).slice(0, limit);
 }
 
+/**
+ * Retourne TOUS les horaires théoriques d'un arrêt STIB, groupés par
+ * ligne+direction+dayType. Utilisé par le nouveau onglet "Horaires" dans
+ * ArretDetailPage côté iOS (parité avec GareDetailPage SNCB qui a la même
+ * mécanique).
+ *
+ * Forme renvoyée :
+ *   [{ line: "81", destination: "MONTGOMERY", dayTypes: {
+ *        weekday: ["05:38", "05:59", ...],
+ *        saturday: [...],
+ *        sunday: [...] }, ... }]
+ */
+async function getFullStopSchedule(stopId) {
+	const id = String(stopId || "").trim();
+	if (!id) return [];
+
+	const { byStopId } = await loadScheduleIndex();
+	const entries = byStopId.get(id) || [];
+	if (!entries.length) return [];
+
+	// Group: line + destination → { dayType → [HH:MM, ...] }
+	const grouped = new Map();
+	for (const entry of entries) {
+		const key = `${entry.line}|${entry.destination || ""}`;
+		if (!grouped.has(key)) {
+			grouped.set(key, {
+				line: entry.line,
+				destination: entry.destination || null,
+				dayTypes: {},
+			});
+		}
+		const bundle = grouped.get(key);
+		if (!bundle.dayTypes[entry.dayType]) bundle.dayTypes[entry.dayType] = [];
+		// scheduleMinutes -> "HH:MM"
+		const hh = String(Math.floor(entry.scheduleMinutes / 60)).padStart(2, "0");
+		const mm = String(entry.scheduleMinutes % 60).padStart(2, "0");
+		bundle.dayTypes[entry.dayType].push(`${hh}:${mm}`);
+	}
+
+	// Sort les départures de chaque dayType chronologiquement + dédup.
+	for (const bundle of grouped.values()) {
+		for (const dayType of Object.keys(bundle.dayTypes)) {
+			bundle.dayTypes[dayType] = [...new Set(bundle.dayTypes[dayType])].sort();
+		}
+	}
+
+	// Tri du résultat : ligne (numérique) puis destination.
+	return [...grouped.values()].sort((a, b) => {
+		const lineCmp = a.line.localeCompare(b.line, undefined, { numeric: true });
+		if (lineCmp !== 0) return lineCmp;
+		return (a.destination || "").localeCompare(b.destination || "");
+	});
+}
+
 module.exports = {
 	getScheduledStopDepartures,
+	getFullStopSchedule,
 };
