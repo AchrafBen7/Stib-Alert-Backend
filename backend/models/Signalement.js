@@ -58,7 +58,14 @@ const signalementSchema = new mongoose.Schema(
 		votesPositifs: { type: Number, default: 0 }, // 👍 Approuvé par les utilisateurs
 		votesNegatifs: { type: Number, default: 0 }, // 👎 Jugé faux par les utilisateurs
 		signalements: { type: Number, default: 0 }, // 🚨 Nombre de signalements pour faux signalement
-		abuseReports: [{ ip: { type: String, required: true }, createdAt: { type: Date, default: Date.now } }],
+		// #4 — Flags "faux" pondérés : un flag d'un compte fiable pèse plus
+		// qu'un flag anonyme. userId pour dédup forte (sinon ip).
+		abuseReports: [{
+			ip: { type: String, default: null },
+			userId: { type: mongoose.Schema.Types.ObjectId, ref: "Utilisateur", default: null },
+			weight: { type: Number, default: 1 },
+			createdAt: { type: Date, default: Date.now },
+		}],
 
 		// 📍 Coordonnées GPS du signalement
 		latitude: { type: Number, required: false },

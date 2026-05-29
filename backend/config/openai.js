@@ -339,3 +339,82 @@ exports.predireTendances = async (signalementsHistorique) => {
 		return "Impossible de faire une prédiction pour le moment.";
 	}
 };
+
+/**
+ * ✅ A5 — Modération IA dédiée (endpoint OpenAI Moderation). Bien plus fiable
+ * que le yes/no gpt-4o pour insultes / haine / harcèlement / violence.
+ * Retourne { flagged, categories, blocked } où `blocked` = true seulement
+ * pour les catégories graves (on n'empêche pas un signalement réel pour une
+ * catégorie mineure). Fail-open : si l'API échoue, on ne bloque pas.
+ */
+exports.moderateContent = async (text) => {
+	const safe = { flagged: false, blocked: false, categories: [] };
+	if (!text || !process.env.OPENAI_API_KEY || process.env.OPENAI_DISABLE_IN_TESTS === "true") {
+		return safe;
+	}
+	try {
+		const response = await openai.moderations.create({
+			model: "omni-moderation-latest",
+			input: String(text).slice(0, 2000),
+		});
+		const result = response?.results?.[0];
+		if (!result) return safe;
+
+		const cats = result.categories || {};
+		const flaggedCategories = Object.keys(cats).filter((k) => cats[k] === true);
+		// Catégories graves qui justifient un blocage dans un contexte transport.
+		const blockingCategories = [
+			"hate", "hate/threatening",
+			"harassment", "harassment/threatening",
+			"violence", "violence/graphic",
+			"sexual", "sexual/minors",
+		];
+		const blocked = flaggedCategories.some((c) => blockingCategories.includes(c));
+
+		return {
+			flagged: Boolean(result.flagged),
+			blocked,
+			categories: flaggedCategories,
+		};
+	} catch (error) {
+		console.warn("[moderateContent] OpenAI moderation skipped:", error.message);
+		return safe;
+	}
+};
+
+/**
+ * ✅ A6 — Résumé IA STRUCTURÉ d'un cluster : « wat / waarom / hoelang / wat nu »
+ * en UNE phrase actionnable. Transforme N signalements bruts en info claire.
+ * Ex : "Probleem op lijn 6 tussen Zuid en Hallepoort — vertraging ±15 min,
+ * neem tram 51 als alternatief."
+ * Fail-open : retourne null si indisponible (l'UI retombe sur le résumé brut).
+ */
+exports.genererResumeCluster = async ({ ligne, arret, typeProbleme, descriptions = [], reportCount = 0, langue = "FR" }) => {
+	if (!process.env.OPENAI_API_KEY || process.env.OPENAI_DISABLE_IN_TESTS === "true") {
+		return null;
+	}
+	try {
+		const langLabel = langue === "NL" ? "néerlandais" : langue === "EN" ? "anglais" : "français";
+		const corpus = descriptions.filter(Boolean).slice(0, 25).join(" | ") || typeProbleme;
+		const prompt = [
+			`Tu es l'assistant transport de Bruxelles. ${reportCount} voyageurs signalent un problème`,
+			`sur la ligne ${ligne} à l'arrêt ${arret} (type : ${typeProbleme}).`,
+			`Signalements bruts : "${corpus}".`,
+			`Rédige UNE seule phrase en ${langLabel}, claire et actionnable, qui répond à :`,
+			`QUOI se passe, POURQUOI (si connu), COMBIEN DE TEMPS (estimation si possible),`,
+			`et QUOI FAIRE (alternative si pertinent). Pas de liste, pas de préambule, max 30 mots.`,
+		].join(" ");
+
+		const response = await openai.chat.completions.create({
+			model: "gpt-4o",
+			messages: [{ role: "user", content: prompt }],
+			max_tokens: 90,
+			temperature: 0.4,
+		});
+		const out = response?.choices?.[0]?.message?.content?.trim();
+		return out && out.length > 0 ? out : null;
+	} catch (error) {
+		console.warn("[genererResumeCluster] OpenAI summary skipped:", error.message);
+		return null;
+	}
+};

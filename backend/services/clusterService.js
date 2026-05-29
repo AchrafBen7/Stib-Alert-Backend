@@ -18,6 +18,55 @@ try {
 	sendAlertsForPublishedCommunityCluster = null;
 }
 
+// A6 — Générateur de résumé IA (optionnel, fail-open).
+let genererResumeCluster = null;
+try {
+	genererResumeCluster = require("../config/openai").genererResumeCluster;
+} catch (e) {
+	genererResumeCluster = null;
+}
+
+const SUMMARY_MIN_INTERVAL_MS = 90 * 1000;
+
+// A6 — Régénère (en arrière-plan, non bloquant) le résumé "wat/waarom/
+// hoelang/wat nu" quand le cluster actif a évolué. Throttlé pour ne pas
+// marteler OpenAI sur une rafale de confirmations.
+function maybeRegenerateClusterSummary(cluster) {
+	if (!genererResumeCluster || cluster.status !== "active") return;
+	const countChanged = cluster.summaryReportCount !== cluster.reportCount;
+	const stale = !cluster.summaryUpdatedAt
+		|| (Date.now() - new Date(cluster.summaryUpdatedAt).getTime()) > SUMMARY_MIN_INTERVAL_MS;
+	if (!countChanged && cluster.summary) return;
+	if (!stale) return;
+
+	// Fire-and-forget : ne ralentit JAMAIS le chemin de création/vote.
+	(async () => {
+		try {
+			const reports = await Signalement.find({ _id: { $in: cluster.signalementIds } })
+				.select("description")
+				.limit(25)
+				.lean();
+			const arret = await require("../models/Arret").findById(cluster.arretId).select("nom").lean().catch(() => null);
+			const summary = await genererResumeCluster({
+				ligne: cluster.ligne,
+				arret: arret?.nom || "un arrêt",
+				typeProbleme: cluster.typeProbleme,
+				descriptions: reports.map((r) => r.description),
+				reportCount: cluster.reportCount,
+			});
+			if (summary) {
+				await Cluster.updateOne(
+					{ _id: cluster._id },
+					{ $set: { summary, summaryUpdatedAt: new Date(), summaryReportCount: cluster.reportCount } }
+				);
+				safeEmit("updated", { ...cluster.toObject?.() || cluster, summary });
+			}
+		} catch (err) {
+			logger.warn("[clusterService] summary generation failed", { error: err.message });
+		}
+	})();
+}
+
 const CLUSTER = {
 	MIN_REPORTS_TO_PUBLISH: 3,
 	MIN_TRUST_TO_PUBLISH: 50,
@@ -52,6 +101,49 @@ function deriveConfidence(reportCount, aggregateTrust) {
 	if (reportCount >= 4 && aggregateTrust >= 60) return "high";
 	if (reportCount >= 3 && aggregateTrust >= 50) return "medium";
 	return "low";
+}
+
+// A1 — Score de confiance UNIFIÉ 0–1. Agrège les facteurs de la formule
+// documentée : K (corroboration), U (réputation+proximité, déjà dans le
+// trust), R (récence), O (officiel). Seuils : ≥0.80 confirmé, ≥0.50 probable.
+function deriveUnifiedConfidence({ reportCount, aggregateTrust, freshnessMinutes, isOfficial, stillBlocked = 0, resolved = 0 }) {
+	if (isOfficial) {
+		return { score: 0.97, status: "confirmed" };
+	}
+	const K = Math.min(1, reportCount / 4);              // corroboration
+	const U = Math.min(1, Math.max(0, aggregateTrust / 100)); // réputation + proximité
+	const ageMin = Number.isFinite(freshnessMinutes) ? Math.max(0, freshnessMinutes) : 120;
+	const R = Math.max(0, 1 - ageMin / 240);             // récence (≈0 à 4h)
+	const stillBoost = Math.min(0.15, stillBlocked * 0.05);
+	const resolvedPenalty = Math.min(0.4, resolved * 0.12);
+
+	let score = 0.34 * K + 0.30 * U + 0.24 * R + 0.12;   // 0.12 = plancher "posté"
+	score += stillBoost - resolvedPenalty;
+	score = Math.min(0.99, Math.max(0.05, score));
+
+	const status = score >= 0.80 ? "confirmed" : score >= 0.50 ? "likely" : "unverified";
+	return { score: Number(score.toFixed(2)), status };
+}
+
+// A2 — Durée de vie par gravité (Klein 1h / Gemiddeld 3h / Ernstig 6h).
+// Une alerte vieillit selon le TYPE d'incident : un accident reste pertinent
+// longtemps, une affluence se périme vite.
+const LIFETIME_KLEIN_MS = 1 * 60 * 60 * 1000;
+const LIFETIME_GEMIDDELD_MS = 3 * 60 * 60 * 1000;
+const LIFETIME_ERNSTIG_MS = 6 * 60 * 60 * 1000;
+
+function incidentLifetimeMs(typeProbleme) {
+	const t = String(typeProbleme || "").toLowerCase();
+	// Ernstig (6h) — sécurité / coupure réseau majeure.
+	if (["accident", "agression", "interruption", "travaux"].some((k) => t.includes(k))) {
+		return LIFETIME_ERNSTIG_MS;
+	}
+	// Gemiddeld (3h) — exploitation dégradée.
+	if (["panne", "déviation", "deviation", "retard", "non desservi", "perturbation"].some((k) => t.includes(k))) {
+		return LIFETIME_GEMIDDELD_MS;
+	}
+	// Klein (1h) — confort / info.
+	return LIFETIME_KLEIN_MS;
 }
 
 function uniqueContributors(reports) {
@@ -152,6 +244,19 @@ async function recomputeClusterFromReports(cluster) {
 	cluster.latitude = lat;
 	cluster.longitude = lng;
 
+	// A1 — Score de confiance unifié 0–1 + statut (confirmé/probable/à vérifier).
+	const freshnessMinutes = Math.max(0, (Date.now() - lastReport.getTime()) / 60000);
+	const unified = deriveUnifiedConfidence({
+		reportCount,
+		aggregateTrust,
+		freshnessMinutes,
+		isOfficial: cluster.isOfficial,
+		stillBlocked: cluster.stillBlockedConfirmationCount || 0,
+		resolved: cluster.resolveConfirmationCount || 0,
+	});
+	cluster.confidenceScore = unified.score;
+	cluster.confidenceStatus = unified.status;
+
 	// Community polish — voie rapide : si le trust agrégé est largement
 	// au-dessus du seuil normal (65+ : généralement utilisateur vérifié
 	// + device trusted), on accepte 2 reports au lieu de 3. Cela évite le
@@ -175,8 +280,12 @@ async function recomputeClusterFromReports(cluster) {
 		cluster.status = "unpublished";
 	}
 
-	const maxLifetime = new Date(cluster.firstReportedAt.getTime() + CLUSTER.CLUSTER_LIFETIME_MS);
-	const fromLastReport = new Date(lastReport.getTime() + CLUSTER.REPORT_EXPIRY_MS);
+	// A2 — Expiration par gravité (Klein 1h / Gemiddeld 3h / Ernstig 6h).
+	// Le cluster vit `lifetime` depuis le dernier report, plafonné à `lifetime`
+	// depuis le 1er report.
+	const lifetimeMs = incidentLifetimeMs(cluster.typeProbleme);
+	const maxLifetime = new Date(cluster.firstReportedAt.getTime() + lifetimeMs);
+	const fromLastReport = new Date(lastReport.getTime() + lifetimeMs);
 	cluster.expiresAt = fromLastReport > maxLifetime ? maxLifetime : fromLastReport;
 
 	await cluster.save();
@@ -198,6 +307,9 @@ async function recomputeClusterFromReports(cluster) {
 	} else if (cluster.status === "active") {
 		safeEmit("updated", cluster);
 	}
+
+	// A6 — Résumé IA (non bloquant) si le cluster actif a évolué.
+	maybeRegenerateClusterSummary(cluster);
 
 	return cluster;
 }

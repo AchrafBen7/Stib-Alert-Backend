@@ -14,6 +14,17 @@ const utilisateurSchema = new mongoose.Schema(
 		tokenPush: { type: String },
 		oneSignalPlayerId: { type: String },
 		favoris: [{ type: mongoose.Schema.Types.ObjectId, ref: "Arret" }],
+		// #3 — Favoris multi-opérateurs (SNCB / De Lijn / TEC) synchronisés
+		// serveur, comme les favoris STIB. Avant : stockés UNIQUEMENT en local
+		// (UserDefaults) → perdus à la réinstallation, jamais cross-device.
+		operatorFavorites: [{
+			op: { type: String, trim: true, lowercase: true },     // "sncb" | "delijn" | "tec"
+			stopId: { type: String, trim: true },
+			name: { type: String, trim: true, maxlength: 160 },
+			lat: { type: Number, default: null },
+			lng: { type: Number, default: null },
+			createdAt: { type: Date, default: Date.now },
+		}],
 		favoriteLines: [{ type: String, trim: true, uppercase: true }],
 		routine: {
 			enabled: { type: Boolean, default: false },

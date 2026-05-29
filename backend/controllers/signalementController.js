@@ -1,7 +1,7 @@
 const Signalement = require("../models/Signalement");
 const Arret = require("../models/Arret");
 const Utilisateur = require("../models/Utilisateur");
-const { analyserSignalement, genererResumeSignalements, traduireSignalement } = require("../config/openai");
+const { analyserSignalement, genererResumeSignalements, traduireSignalement, moderateContent } = require("../config/openai");
 const { emitSignalement } = require("../config/websocket");
 const { getWaitingTimes } = require("../services/belgianMobility");
 const { getScheduledStopDepartures } = require("../services/staticTimetableService");
@@ -319,21 +319,39 @@ exports.ajouterSignalement = async (req, res) => {
 			});
 		}
 
+		// A5 — Double garde IA en parallèle : validation sémantique (gpt-4o)
+		// + modération dédiée (endpoint Moderation, insultes/haine/violence).
+		// Les deux sont fail-open (une panne OpenAI ne bloque pas un vrai
+		// signalement).
 		let estValide = true;
+		let moderation = { blocked: false, categories: [] };
 		try {
-			estValide = await analyserSignalement(description);
+			[estValide, moderation] = await Promise.all([
+				analyserSignalement(description).catch(() => true),
+				moderateContent(description).catch(() => ({ blocked: false, categories: [] })),
+			]);
 		} catch (err) {
-			console.warn("[ajouterSignalement] OpenAI validation skipped:", err.message);
+			console.warn("[ajouterSignalement] OpenAI checks skipped:", err.message);
+		}
+		if (moderation.blocked) {
+			if (reporterDeviceHash) {
+				await incrementSpamFlag(reporterDeviceHash, { reason: `moderation:${moderation.categories.join(",")}` }).catch(() => {});
+			}
+			return res.status(400).json({
+				message: "Ce signalement contient des propos inappropriés et a été refusé.",
+				reason: "moderation_blocked",
+			});
 		}
 		if (!estValide) {
 			return res.status(400).json({ message: "Ce signalement ne respecte pas les règles." });
 		}
 
 		let confiance = "basse";
+		let reporterDistanceKm = null;
 		if (latitude && longitude) {
-			const distance = distanceEntrePoints(latitudeParsed, longitudeParsed, arret.latitude, arret.longitude);
-			if (distance < 0.2) confiance = "haute";
-			else if (distance < 1) confiance = "moyenne";
+			reporterDistanceKm = distanceEntrePoints(latitudeParsed, longitudeParsed, arret.latitude, arret.longitude);
+			if (reporterDistanceKm < 0.2) confiance = "haute";
+			else if (reporterDistanceKm < 1) confiance = "moyenne";
 		}
 
 		const isAuthenticatedAuthor = Boolean(req.user?.userId);
@@ -365,6 +383,7 @@ exports.ajouterSignalement = async (req, res) => {
 			user: userDoc,
 			authorType,
 			reporterDeviceHash,
+			reporterDistanceKm,
 		});
 
 		const spamResult = await scoreSpam({
@@ -828,6 +847,24 @@ exports.voterSignalement = async (req, res) => {
 			signalement.votesNegatifs += 1;
 		}
 
+		// #1 — UNIFICATION DES VOTES. Avant, /vote (up/down) ne touchait que
+		// les compteurs et ne se propageait JAMAIS au système de clusters,
+		// alors que les actions communauté (still_blocked / resolved) le
+		// faisaient. Deux mécanismes pour la même intention utilisateur.
+		// Désormais : up = "toujours bloqué", down = "c'est résolu" — on
+		// applique l'action communauté ET on propage au cluster, exactement
+		// comme la mini-card. Les compteurs restent pour rétro-compat.
+		const mappedAction = vote === "up"
+			? COMMUNITY_ACTION.STILL_BLOCKED
+			: vote === "down"
+				? COMMUNITY_ACTION.RESOLVED
+				: null;
+
+		let communitySummary = null;
+		if (mappedAction) {
+			communitySummary = upsertCommunityAction(signalement, { userId }, mappedAction);
+		}
+
 		await signalement.save();
 
 		// Ajouter l'ID du signalement aux votes de l'utilisateur connecté
@@ -837,14 +874,31 @@ exports.voterSignalement = async (req, res) => {
 			});
 		}
 
+		// Propagation cluster (même logique que applyCommunityAction).
+		if (mappedAction && signalement.clusterIndex != null) {
+			try {
+				const { confirmStillBlocked, confirmResolved } = require("../services/clusterService");
+				if (mappedAction === COMMUNITY_ACTION.RESOLVED) {
+					await confirmResolved({ clusterIndex: signalement.clusterIndex, userId });
+				} else {
+					await confirmStillBlocked({ clusterIndex: signalement.clusterIndex, userId });
+				}
+			} catch (clusterErr) {
+				console.warn("[signalements] cluster vote propagation failed:", clusterErr.message);
+			}
+		}
+
 		// Si trop de votes négatifs → mise à jour de la confiance
 		if (signalement.votesNegatifs >= 5) {
 			await Signalement.findByIdAndUpdate(signalement._id, { confiance: "basse" });
 		}
 
+		emitSignalement(signalement.toObject());
+
 		res.json({
 			message: "Vote enregistré !",
 			signalement: serializeSignalement(signalement),
+			community: communitySummary ? buildCommunityMeta(signalement) : undefined,
 		});
 	} catch (error) {
 		res.status(500).json({ message: error.message });
@@ -914,29 +968,81 @@ exports.marquerToujoursBloque = async (req, res) =>
 exports.marquerResolu = async (req, res) =>
 	applyCommunityAction(req, res, COMMUNITY_ACTION.RESOLVED, "Signalement marqué comme résolu.");
 
+// #4 — Modération communautaire SOFT + PONDÉRÉE.
+// Avant : dédup IP, ≥3 flags → SUPPRESSION DURE (findByIdAndDelete), aucun
+// poids, route ouverte. Problèmes : un troll mass-flag, pas d'audit/appel,
+// un flag d'expert = un flag de bot. Désormais :
+//  - dédup par userId (fort) sinon IP,
+//  - poids selon la fiabilité du flagger (compte vérifié/ancien = 2),
+//  - seuil pondéré → MASQUAGE (moderationStatus="rejected") pas suppression,
+//  - pénalise le device de l'auteur quand masqué.
+const FALSE_FLAG_HIDE_THRESHOLD = 3;
+
 exports.signalerFauxSignalement = async (req, res) => {
 	try {
 		const ip = req.ip || req.headers["x-forwarded-for"]?.split(",")[0].trim() || "unknown";
+		const userId = req.user?.userId || null;
 		const signalement = await Signalement.findById(req.params.id);
 
 		if (!signalement) return res.status(404).json({ message: "Signalement introuvable" });
 
-		const alreadyReported = signalement.abuseReports?.some((r) => r.ip === ip);
+		// Un auteur ne peut pas flag son propre signalement.
+		if (userId && signalement.utilisateurId && String(signalement.utilisateurId) === String(userId)) {
+			return res.status(400).json({ message: "Tu ne peux pas signaler ton propre signalement." });
+		}
+
+		signalement.abuseReports = signalement.abuseReports || [];
+		const alreadyReported = signalement.abuseReports.some((r) =>
+			userId ? String(r.userId || "") === String(userId) : r.ip === ip
+		);
 		if (alreadyReported) {
 			return res.status(409).json({ message: "Vous avez déjà signalé ce signalement." });
 		}
 
-		signalement.abuseReports = signalement.abuseReports || [];
-		signalement.abuseReports.push({ ip });
-		signalement.signalements += 1;
+		// Poids du flag selon la fiabilité du flagger.
+		let weight = 1;
+		if (userId) {
+			const flagger = await Utilisateur.findById(userId).select("createdAt emailVerified isVerified").lean();
+			const trustedAge = flagger?.createdAt && Date.now() - new Date(flagger.createdAt).getTime() > 30 * 24 * 60 * 60 * 1000;
+			if (flagger?.emailVerified === true || flagger?.isVerified === true || trustedAge) {
+				weight = 2;
+			}
+		}
 
-		if (signalement.signalements >= 3) {
-			await Signalement.findByIdAndDelete(signalement._id);
-			return res.json({ message: "Ce signalement a été supprimé car trop de personnes l'ont signalé comme faux." });
+		signalement.abuseReports.push({ ip, userId, weight });
+		signalement.signalements = signalement.abuseReports.length;
+
+		const weightedScore = signalement.abuseReports.reduce((sum, r) => sum + (Number.isFinite(r.weight) ? r.weight : 1), 0);
+
+		if (weightedScore >= FALSE_FLAG_HIDE_THRESHOLD && signalement.moderationStatus !== "rejected") {
+			// Masquage doux (réversible par un admin) au lieu de suppression.
+			signalement.moderationStatus = "rejected";
+			signalement.flagged = true;
+			signalement.flagReason = "community_false_flags";
+			signalement.flaggedAt = new Date();
+			signalement.moderationReason = `Masqué après ${weightedScore} signalements communautaires pondérés.`;
+			signalement.moderatedAt = new Date();
+			await signalement.save();
+
+			// Pénalise le device de l'auteur (récidive).
+			if (signalement.reporterDeviceHash) {
+				await incrementSpamFlag(signalement.reporterDeviceHash, { reason: "community_false_flags" })
+					.catch(() => {});
+			}
+
+			emitSignalement(signalement.toObject());
+			return res.json({
+				message: "Merci. Ce signalement a été masqué en attendant une vérification.",
+				hidden: true,
+			});
 		}
 
 		await signalement.save();
-		res.json({ message: "Signalement signalé comme faux." });
+		res.json({
+			message: "Merci, ton signalement a été pris en compte.",
+			hidden: false,
+			weightedScore,
+		});
 	} catch (error) {
 		res.status(500).json({ message: error.message });
 	}

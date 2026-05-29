@@ -31,6 +31,10 @@ function serializeCluster(cluster) {
 		reportCount: cluster.reportCount,
 		aggregateTrust: cluster.aggregateTrust,
 		confidence: cluster.confidence,
+		// A1 / A6 — score unifié + statut + résumé IA exposés au client.
+		confidenceScore: cluster.confidenceScore ?? null,
+		confidenceStatus: cluster.confidenceStatus || "unverified",
+		summary: cluster.summary || null,
 		stillBlockedConfirmationCount: cluster.stillBlockedConfirmationCount || 0,
 		resolveConfirmationCount: cluster.resolveConfirmationCount || 0,
 		resolved: cluster.resolved || false,

@@ -29,6 +29,22 @@ const clusterSchema = new mongoose.Schema(
 			enum: ["low", "medium", "high"],
 			default: "low",
 		},
+		// A1 — Score de confiance UNIFIÉ 0–1 + statut bucketé (seuil ≥0.80
+		// = confirmé, ≥0.50 = probable, sinon à vérifier). Source de vérité
+		// unique qui agrège corroboration (K) + réputation/proximité (U) +
+		// récence (R) + officiel (O).
+		confidenceScore: { type: Number, default: 0.3, min: 0, max: 1 },
+		confidenceStatus: {
+			type: String,
+			enum: ["confirmed", "likely", "unverified"],
+			default: "unverified",
+		},
+		// A6 — Résumé IA structuré (wat / waarom / hoelang / wat nu).
+		summary: { type: String, default: null },
+		summaryUpdatedAt: { type: Date, default: null },
+		summaryReportCount: { type: Number, default: 0 },
+		// A3 — anti-spam de la re-sollicitation "toujours le cas ?".
+		lastStillHappeningPromptAt: { type: Date, default: null },
 
 		firstReportedAt: { type: Date, default: Date.now },
 		lastReportedAt: { type: Date, default: Date.now, index: true },

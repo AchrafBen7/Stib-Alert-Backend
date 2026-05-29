@@ -466,6 +466,29 @@ exports.modifierProfil = async (req, res) => {
 				.map((line) => String(line || "").trim().toUpperCase())
 				.filter(Boolean))];
 		}
+		// #3 — Favoris multi-opérateurs : on remplace l'ensemble (le client
+		// envoie la liste complète, idempotent). Dédup par op:stopId, opérateurs
+		// hors STIB uniquement, coordonnées validées.
+		if (req.body.operatorFavorites !== undefined) {
+			const allowedOps = new Set(["sncb", "delijn", "tec"]);
+			const seen = new Set();
+			update.operatorFavorites = (Array.isArray(req.body.operatorFavorites) ? req.body.operatorFavorites : [])
+				.map((f) => ({
+					op: String(f?.op || "").trim().toLowerCase(),
+					stopId: String(f?.stopId || "").trim(),
+					name: String(f?.name || "").trim().slice(0, 160),
+					lat: Number.isFinite(Number(f?.lat)) ? Number(f.lat) : null,
+					lng: Number.isFinite(Number(f?.lng)) ? Number(f.lng) : null,
+				}))
+				.filter((f) => {
+					if (!allowedOps.has(f.op) || !f.stopId) return false;
+					const key = `${f.op}:${f.stopId}`;
+					if (seen.has(key)) return false;
+					seen.add(key);
+					return true;
+				})
+				.slice(0, 100);
+		}
 		if (req.body.routine !== undefined) {
 			update.routine = {
 				enabled: Boolean(req.body.routine?.enabled),

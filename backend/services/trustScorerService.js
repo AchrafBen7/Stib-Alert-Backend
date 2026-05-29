@@ -12,6 +12,13 @@ const TRUST = {
 	BONUS_DEVICE_TRUSTED: 10,
 	BONUS_HISTORICAL_ACCURACY: 10,
 
+	// Facteur P (proximité) — un témoin SUR PLACE est bien plus fiable qu'un
+	// signalement posté à plusieurs km de l'arrêt. C'était le facteur de la
+	// formule de confiance documentée totalement absent du score jusqu'ici.
+	BONUS_PROXIMITY_ONSITE: 12,   // < 250 m : clairement à l'arrêt
+	BONUS_PROXIMITY_NEAR: 5,      // < 600 m : dans le coin
+	PENALTY_PROXIMITY_FAR: -12,   // > 3 km : ne peut pas témoigner directement
+
 	PENALTY_DEVICE_SUSPICIOUS: -15,
 	PENALTY_DEVICE_NEW: -10,
 	PENALTY_RECENT_REJECTION: -10,
@@ -19,6 +26,11 @@ const TRUST = {
 	MIN: 0,
 	MAX: 100,
 };
+
+// Seuils de distance (km) pour le facteur proximité.
+const PROXIMITY_ONSITE_KM = 0.25;
+const PROXIMITY_NEAR_KM = 0.6;
+const PROXIMITY_FAR_KM = 3;
 
 const NEW_DEVICE_AGE_MS = 24 * 60 * 60 * 1000;
 const TRUSTED_DEVICE_AGE_MS = 7 * 24 * 60 * 60 * 1000;
@@ -34,6 +46,8 @@ async function calculateTrust({
 	authorType = "anonymous",
 	reporterDeviceHash = null,
 	source = "community",
+	// Facteur P — distance témoin↔arrêt en km (null si inconnue).
+	reporterDistanceKm = null,
 }) {
 	const breakdown = {
 		baseScore: 0,
@@ -52,6 +66,20 @@ async function calculateTrust({
 
 	let trust = utilisateurId || user ? TRUST.BASE_USER : TRUST.BASE_GUEST;
 	breakdown.baseScore = trust;
+
+	// Facteur P (proximité) — appliqué dès qu'on connaît la distance.
+	if (Number.isFinite(reporterDistanceKm)) {
+		if (reporterDistanceKm <= PROXIMITY_ONSITE_KM) {
+			trust += TRUST.BONUS_PROXIMITY_ONSITE;
+			breakdown.bonuses.push(`proximity_onsite:${Math.round(reporterDistanceKm * 1000)}m`);
+		} else if (reporterDistanceKm <= PROXIMITY_NEAR_KM) {
+			trust += TRUST.BONUS_PROXIMITY_NEAR;
+			breakdown.bonuses.push(`proximity_near:${Math.round(reporterDistanceKm * 1000)}m`);
+		} else if (reporterDistanceKm >= PROXIMITY_FAR_KM) {
+			trust += TRUST.PENALTY_PROXIMITY_FAR;
+			breakdown.penalties.push(`proximity_far:${reporterDistanceKm.toFixed(1)}km`);
+		}
+	}
 
 	if (utilisateurId || user) {
 		breakdown.bonuses.push("logged_in");

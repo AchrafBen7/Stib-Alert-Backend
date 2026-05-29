@@ -61,7 +61,7 @@ router.post("/:id/vote", protect, validateVote, handleValidation, voterSignaleme
 router.post("/:id/confirm", protect.optional, validateMongoId, handleValidation, confirmerSignalement);
 router.post("/:id/still-blocked", protect.optional, validateMongoId, handleValidation, marquerToujoursBloque);
 router.post("/:id/resolved", protect.optional, validateMongoId, handleValidation, marquerResolu);
-router.post("/:id/signalement-faux", validateMongoId, handleValidation, signalerFauxSignalement);
+router.post("/:id/signalement-faux", protect.optional, validateMongoId, handleValidation, signalerFauxSignalement);
 router.post("/:id/flag", protect.optional, validateMongoId, handleValidation, require("../controllers/moderationController").userReport);
 router.get("/:id/traduire", validateMongoId, handleValidation, signalementController.traduireSignalement);
 

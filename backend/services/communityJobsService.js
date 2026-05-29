@@ -3,13 +3,26 @@ const Signalement = require("../models/Signalement");
 const Cluster = require("../models/Cluster");
 const DeviceLimit = require("../models/DeviceLimit");
 
+let sendStillHappeningPrompts = null;
+try {
+	sendStillHappeningPrompts = require("./communityClusterAlertService").sendStillHappeningPrompts;
+} catch (e) {
+	sendStillHappeningPrompts = null;
+}
+
 const CLUSTERING_INTERVAL_MS = parseInt(process.env.COMMUNITY_CLUSTERING_INTERVAL_MS, 10) || 30 * 1000;
 const EXPIRATION_INTERVAL_MS = parseInt(process.env.COMMUNITY_EXPIRATION_INTERVAL_MS, 10) || 60 * 1000;
 const CLEANUP_INTERVAL_MS = parseInt(process.env.COMMUNITY_CLEANUP_INTERVAL_MS, 10) || 60 * 60 * 1000;
+// A3 — re-sollicitation "toujours le cas ?".
+const STILL_HAPPENING_INTERVAL_MS = parseInt(process.env.COMMUNITY_STILL_HAPPENING_INTERVAL_MS, 10) || 5 * 60 * 1000;
+const STILL_HAPPENING_QUIET_MIN = 20;   // pas de nouvelle activité depuis 20 min
+const STILL_HAPPENING_MIN_AGE_MIN = 25;  // cluster vieux d'au moins 25 min
+const STILL_HAPPENING_REPROMPT_MIN = 30; // ne pas re-demander avant 30 min
 
 let clusteringTimer = null;
 let expirationTimer = null;
 let cleanupTimer = null;
+let stillHappeningTimer = null;
 
 async function clusteringTick() {
 	try {
@@ -100,6 +113,45 @@ async function cleanupTick() {
 	}
 }
 
+// A3 — Demande aux témoins proches si l'incident persiste, pour les clusters
+// actifs qui n'ont plus bougé. Garde le terrain à jour ("capteurs humains").
+async function stillHappeningTick() {
+	if (!sendStillHappeningPrompts) return;
+	const now = Date.now();
+	try {
+		const candidates = await Cluster.find({
+			status: "active",
+			isOfficial: { $ne: true },
+			resolved: { $ne: true },
+			firstReportedAt: { $lt: new Date(now - STILL_HAPPENING_MIN_AGE_MIN * 60 * 1000) },
+			lastReportedAt: { $lt: new Date(now - STILL_HAPPENING_QUIET_MIN * 60 * 1000) },
+			$or: [
+				{ lastStillHappeningPromptAt: null },
+				{ lastStillHappeningPromptAt: { $lt: new Date(now - STILL_HAPPENING_REPROMPT_MIN * 60 * 1000) } },
+			],
+		})
+			.sort({ lastReportedAt: 1 })
+			.limit(20);
+
+		let prompted = 0;
+		for (const cluster of candidates) {
+			try {
+				const result = await sendStillHappeningPrompts(cluster);
+				cluster.lastStillHappeningPromptAt = new Date();
+				await cluster.save();
+				if (result?.sent > 0) prompted += result.sent;
+			} catch (err) {
+				console.warn("[community-jobs] still-happening prompt failed:", err.message);
+			}
+		}
+		if (prompted > 0) {
+			console.log(`[community-jobs] still-happening: prompts sent=${prompted} clusters=${candidates.length}`);
+		}
+	} catch (error) {
+		console.error("[community-jobs] stillHappeningTick error:", error.message);
+	}
+}
+
 function startCommunityJobs() {
 	if (process.env.COMMUNITY_JOBS_ENABLED === "false") {
 		console.warn("⚠️ Community jobs disabled via COMMUNITY_JOBS_ENABLED=false");
@@ -122,11 +174,14 @@ function startCommunityJobs() {
 	cleanupTimer = setInterval(cleanupTick, CLEANUP_INTERVAL_MS);
 	cleanupTimer.unref?.();
 
+	stillHappeningTimer = setInterval(() => { stillHappeningTick().catch(() => {}); }, STILL_HAPPENING_INTERVAL_MS);
+	stillHappeningTimer.unref?.();
+
 	console.log(
-		`✅ Community jobs started (clustering=${CLUSTERING_INTERVAL_MS}ms, expiration=${EXPIRATION_INTERVAL_MS}ms, cleanup=${CLEANUP_INTERVAL_MS}ms)`
+		`✅ Community jobs started (clustering=${CLUSTERING_INTERVAL_MS}ms, expiration=${EXPIRATION_INTERVAL_MS}ms, cleanup=${CLEANUP_INTERVAL_MS}ms, stillHappening=${STILL_HAPPENING_INTERVAL_MS}ms)`
 	);
 
-	return { clusteringTimer, expirationTimer, cleanupTimer };
+	return { clusteringTimer, expirationTimer, cleanupTimer, stillHappeningTimer };
 }
 
 function stopCommunityJobs() {
@@ -142,6 +197,10 @@ function stopCommunityJobs() {
 		clearInterval(cleanupTimer);
 		cleanupTimer = null;
 	}
+	if (stillHappeningTimer) {
+		clearInterval(stillHappeningTimer);
+		stillHappeningTimer = null;
+	}
 }
 
 module.exports = {
@@ -150,4 +209,5 @@ module.exports = {
 	clusteringTick,
 	expirationTick,
 	cleanupTick,
+	stillHappeningTick,
 };
