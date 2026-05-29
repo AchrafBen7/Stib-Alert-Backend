@@ -103,8 +103,11 @@ async function sendAlertsForNewPerturbations(newSignalements) {
 		try {
 			users = await Utilisateur.find({
 				notifications:      true,
-				// "Alertes communauté" toggle — exclude users who turned it off.
-				communityClusterPushEnabled: { $ne: false },
+				// B2 — Perturbation OFFICIELLE STIB : ne PAS la gater par le
+				// toggle "Alertes communauté" (qui ne concerne que les
+				// signalements communautaires). Seul le master `notifications`
+				// + le suivi de la ligne décident. Le débit/règles par ligne
+				// restent appliqués par notificationPolicyService.evaluatePush.
 				oneSignalPlayerId:  { $exists: true, $ne: null },
 				favoriteLines:      ligne,
 			})

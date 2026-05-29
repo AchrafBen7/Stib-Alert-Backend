@@ -384,19 +384,30 @@ async function confirmStillBlocked({ clusterIndex, userId, actorHash }) {
 	};
 }
 
-async function resolutionThresholdForVoter({ userId } = {}) {
-	if (!userId) return CLUSTER.RESOLVE_THRESHOLD_DEFAULT;
-	try {
-		const Utilisateur = require("../models/Utilisateur");
-		const user = await Utilisateur.findById(userId).select("role createdAt").lean();
-		if (!user) return CLUSTER.RESOLVE_THRESHOLD_DEFAULT;
-
-		const accountAgeDays = (Date.now() - new Date(user.createdAt).getTime()) / 86_400_000;
-		const isTrusted = user.role === "Admin" || accountAgeDays > 30;
-		return isTrusted ? CLUSTER.RESOLVE_THRESHOLD_TRUSTED : CLUSTER.RESOLVE_THRESHOLD_DEFAULT;
-	} catch (e) {
-		return CLUSTER.RESOLVE_THRESHOLD_DEFAULT;
+// B3 — Le seuil de résolution doit être PROPORTIONNEL aux confirmations
+// "toujours bloqué" actives : sinon un seul vote d'un user trusted effaçait
+// une alerte massivement confirmée. Règle : threshold = max(base trust,
+// ceil(stillBlocked / 2)), avec un plancher absolu de 2 dès qu'au moins 3
+// personnes ont confirmé que c'est toujours bloqué.
+async function resolutionThresholdForVoter({ userId, stillBlocked = 0 } = {}) {
+	let base = CLUSTER.RESOLVE_THRESHOLD_DEFAULT;
+	if (userId) {
+		try {
+			const Utilisateur = require("../models/Utilisateur");
+			const user = await Utilisateur.findById(userId).select("role createdAt").lean();
+			if (user) {
+				const accountAgeDays = (Date.now() - new Date(user.createdAt).getTime()) / 86_400_000;
+				const isTrusted = user.role === "Admin" || accountAgeDays > 30;
+				base = isTrusted ? CLUSTER.RESOLVE_THRESHOLD_TRUSTED : CLUSTER.RESOLVE_THRESHOLD_DEFAULT;
+			}
+		} catch (e) { /* base par défaut */ }
 	}
+
+	const active = Number.isFinite(stillBlocked) ? Math.max(0, stillBlocked) : 0;
+	const proportional = Math.ceil(active / 2);
+	let threshold = Math.max(base, proportional);
+	if (active >= 3) threshold = Math.max(threshold, 2);
+	return threshold;
 }
 
 async function confirmResolved({ clusterIndex, userId, actorHash }) {
@@ -417,7 +428,10 @@ async function confirmResolved({ clusterIndex, userId, actorHash }) {
 
 	cluster.resolveConfirmationCount = (cluster.resolveConfirmationCount || 0) + 1;
 
-	const threshold = await resolutionThresholdForVoter({ userId });
+	const threshold = await resolutionThresholdForVoter({
+		userId,
+		stillBlocked: cluster.stillBlockedConfirmationCount || 0,
+	});
 
 	if (cluster.resolveConfirmationCount >= threshold) {
 		cluster.resolved = true;
