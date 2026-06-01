@@ -25,6 +25,12 @@ function writeSseDone(res) {
 	res.write("data: [DONE]\n\n");
 }
 
+function endSse(res) {
+	if (res.writableEnded) return;
+	writeSseDone(res);
+	res.end();
+}
+
 function startSse(res) {
 	res.status(200);
 	res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
@@ -32,6 +38,7 @@ function startSse(res) {
 	res.setHeader("Connection", "keep-alive");
 	res.setHeader("X-Accel-Buffering", "no");
 	if (typeof res.flushHeaders === "function") res.flushHeaders();
+	res.write(": connected\n\n");
 }
 
 function apiKey() {
@@ -70,6 +77,8 @@ const TEXT_CHAT_INSTRUCTION = [
 	"============================================",
 	"",
 	"L'app iOS a déjà résolu la destination + calculé l'itinéraire AVANT cet appel. Si une section TRAJET CALCULÉ est présente dans le contexte, c'est ta source de vérité absolue — tu DOIS la décrire en détail (format ## Meilleure option, badges [[L:NUM]], arrêts en **MAJUSCULES**), tu n'as PAS à la valider, ni demander confirmation.",
+	"Si l'option proposée est uniquement à pied, ne l'appelle pas alternative transport. Dis 'À pied uniquement' et compare brièvement avec les autres options calculées si elles existent.",
+	"Si plusieurs options existent, indique pourquoi tu recommandes l'une d'elles: plus rapide, moins risquée, moins de marche ou moins de correspondances. Ne choisis jamais une option qui ne correspond pas aux étapes calculées.",
 	"",
 	"⛔️ PHRASES STRICTEMENT INTERDITES (jamais) :",
 	"  - 'Je ne trouve pas de trajet' / 'Je n'ai pas de trajet calculé' QUAND un TRAJET CALCULÉ est présent (c'est factuellement faux)",
@@ -104,7 +113,7 @@ function geminiChunkText(payload) {
 		?.join("") || "";
 }
 
-async function streamGeminiNative({ gatewayUrl, model, key, messages, contextMessage, controller, req, res }) {
+async function streamGeminiNative({ gatewayUrl, model, key, messages, contextMessage, controller, res }) {
 	const body = JSON.stringify({
 		contents: geminiContents(messages, contextMessage),
 		generationConfig: {
@@ -158,13 +167,11 @@ async function streamGeminiNative({ gatewayUrl, model, key, messages, contextMes
 				? "L'assistant est saturé pour quelques secondes, réessaie tout de suite."
 				: "L'assistant IA est temporairement indisponible. Réessaie dans un instant.";
 		writeSseDelta(res, message);
-		writeSseDone(res);
-		return res.end();
+		return endSse(res);
 	}
 
 	if (!upstream.body) {
-		writeSseDone(res);
-		return res.end();
+		return endSse(res);
 	}
 
 	let buffer = "";
@@ -186,15 +193,13 @@ async function streamGeminiNative({ gatewayUrl, model, key, messages, contextMes
 		}
 	});
 	upstream.body.on("end", () => {
-		if (!req.destroyed && !res.writableEnded) writeSseDone(res);
-		res.end();
+		endSse(res);
 	});
 	upstream.body.on("error", (error) => {
 		logger.warn("stib_ai_gemini_stream_error", { message: error.message });
 		if (!res.writableEnded) {
 			writeSseDelta(res, "\n\nLe flux Gemini a été interrompu. Réessaie dans quelques secondes.");
-			writeSseDone(res);
-			res.end();
+			endSse(res);
 		}
 	});
 	return undefined;
@@ -221,8 +226,8 @@ exports.streamChat = async (req, res) => {
 	const model = modelForGateway(process.env.AI_MODEL || DEFAULT_MODEL, gatewayUrl);
 	const controller = new AbortController();
 
-	req.on("close", () => {
-		controller.abort();
+	res.on("close", () => {
+		if (!res.writableEnded) controller.abort();
 	});
 
 	try {
@@ -234,7 +239,6 @@ exports.streamChat = async (req, res) => {
 				messages,
 				contextMessage,
 				controller,
-				req,
 				res,
 			});
 		}
@@ -274,29 +278,27 @@ exports.streamChat = async (req, res) => {
 		}
 
 		if (!upstream.body) {
-			writeSseDone(res);
-			return res.end();
+			return endSse(res);
 		}
 
 		upstream.body.on("data", (chunk) => {
 			res.write(chunk);
 		});
 		upstream.body.on("end", () => {
-			res.end();
+			endSse(res);
 		});
 		upstream.body.on("error", (error) => {
 			logger.warn("stib_ai_stream_error", { message: error.message });
 			if (!res.writableEnded) {
 				writeSseDelta(res, "\n\nLe flux a été interrompu. Réessaie dans quelques secondes.");
-				writeSseDone(res);
-				res.end();
+				endSse(res);
 			}
 		});
 	} catch (error) {
 		if (error.name !== "AbortError") {
 			logger.warn("stib_ai_handler_error", { message: error.message });
 			writeSseDelta(res, "Impossible de joindre l'assistant IA pour le moment. Réessaie dans quelques secondes.");
-			writeSseDone(res);
+			endSse(res);
 		}
 		if (!res.writableEnded) res.end();
 	}

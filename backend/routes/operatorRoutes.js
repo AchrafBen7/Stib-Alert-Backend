@@ -124,6 +124,23 @@ router.get("/:op/stops/:stopId/realtime", validOp, async (req, res) => {
 	res.json(data);
 });
 
+// GET /api/operators/delijn/stops/:stopId/info
+// Infos arrêt De Lijn : lignes desservies quand l'API Kernel les expose.
+router.get("/:op/stops/:stopId/info", validOp, async (req, res) => {
+	if (req.params.op !== "delijn") {
+		return res.status(404).json({ message: "Endpoint disponible uniquement pour De Lijn." });
+	}
+	if (!delijnLive.isConfigured()) {
+		return res.status(503).json({
+			message: "Service De Lijn non configuré.",
+			live: false,
+			lines: [],
+		});
+	}
+	const data = await delijnLive.getStopInfo(req.params.stopId);
+	res.json(data);
+});
+
 // GET /api/operators/delijn/stops/:stopId/disruptions
 // Déviations (omleidingen) + pannes (storingen) qui touchent cet arrêt précis.
 router.get("/:op/stops/:stopId/disruptions", validOp, async (req, res) => {

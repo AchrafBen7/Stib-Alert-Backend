@@ -28,6 +28,46 @@ function normalizeLine(line) {
 	return String(Number.parseInt(digits, 10));
 }
 
+function displayLineName(line) {
+	const shortName = String(line?.short_name || "").trim();
+	const fullName = String(line?.name || "").trim();
+	if (detectTransitOperator(line) === "delijn" && shortName && !/[a-zA-Z]/.test(shortName)) {
+		const routeMatch = fullName.match(/\b([A-Z]{1,3}\d{1,3})\b/i);
+		if (routeMatch?.[1] && routeMatch[1].replace(/\D/g, "") === shortName.replace(/\D/g, "")) {
+			return routeMatch[1].toUpperCase();
+		}
+	}
+	return shortName || fullName;
+}
+
+function normalizeHexColor(value) {
+	const raw = String(value || "").trim().replace(/^#/, "");
+	if (!/^[0-9a-fA-F]{6}$/.test(raw)) return null;
+	return `#${raw.toUpperCase()}`;
+}
+
+function detectTransitOperator(line) {
+	const agency = String(line?.agencies?.[0]?.name || "").toLowerCase();
+	const name = String(line?.name || "").toLowerCase();
+	const shortName = String(line?.short_name || "").toLowerCase();
+	const combined = `${agency} ${name} ${shortName}`;
+	if (combined.includes("de lijn") || combined.includes("delijn")) return "delijn";
+	if (combined.includes("sncb") || combined.includes("nmbs") || combined.includes("belgian rail")) return "sncb";
+	if (combined.includes("tec")) return "tec";
+	if (combined.includes("stib") || combined.includes("mivb")) return "stib";
+	return null;
+}
+
+function routeColorForOperator(operatorId) {
+	switch (operatorId) {
+	case "delijn": return { routeColor: "#FFB612", routeTextColor: "#000000" };
+	case "sncb": return { routeColor: "#0055A4", routeTextColor: "#FFFFFF" };
+	case "tec": return { routeColor: "#E2001A", routeTextColor: "#FFFFFF" };
+	case "stib": return { routeColor: null, routeTextColor: null };
+	default: return { routeColor: null, routeTextColor: null };
+	}
+}
+
 function routeWalkDuration(route) {
 	return route.legs.reduce((sum, leg) => {
 		return sum + leg.steps
@@ -66,6 +106,15 @@ function extractTransitLines(route) {
 		leg.steps
 			.filter((step) => step.travel_mode === "TRANSIT")
 			.map((step) => normalizeLine(step.transit_details?.line?.short_name))
+			.filter(Boolean)
+	);
+}
+
+function extractTransitLineLabels(route) {
+	return route.legs.flatMap((leg) =>
+		leg.steps
+			.filter((step) => step.travel_mode === "TRANSIT")
+			.map((step) => displayLineName(step.transit_details?.line) || normalizeLine(step.transit_details?.line?.short_name))
 			.filter(Boolean)
 	);
 }
@@ -775,7 +824,13 @@ function buildRouteSteps(route, shapeIndex = new Map()) {
 
 			if (step.travel_mode === "TRANSIT") {
 				const details = step.transit_details || {};
-				const line = normalizeLine(details.line?.short_name);
+				const rawLine = displayLineName(details.line);
+				const normalizedLine = normalizeLine(details.line?.short_name || details.line?.name);
+				const line = rawLine || normalizedLine;
+				const operatorId = detectTransitOperator(details.line);
+				const fallbackColors = routeColorForOperator(operatorId);
+				const routeColor = normalizeHexColor(details.line?.color) || fallbackColors.routeColor;
+				const routeTextColor = normalizeHexColor(details.line?.text_color) || fallbackColors.routeTextColor;
 				const destination = details.headsign || details.arrival_stop?.name || null;
 				const departureStop = details.departure_stop?.name || null;
 				const arrivalStop = details.arrival_stop?.name || null;
@@ -798,7 +853,7 @@ function buildRouteSteps(route, shapeIndex = new Map()) {
 						? { lat: step.end_location.lat, lng: step.end_location.lng }
 						: null;
 				const googlePath = buildStepPathFromGoogle(step, startPoint, endPoint);
-				const shapePath = buildStepPathFromShape(line, startPoint, endPoint, shapeIndex);
+				const shapePath = buildStepPathFromShape(normalizedLine || line, startPoint, endPoint, shapeIndex);
 
 				steps.push({
 					order: order++,
@@ -806,6 +861,13 @@ function buildRouteSteps(route, shapeIndex = new Map()) {
 					instruction,
 					durationMinutes,
 					line,
+					displayLine: line,
+					normalizedLine,
+					operatorId,
+					routeColor,
+					routeTextColor,
+					lineName: details.line?.name || null,
+					agencyName: details.line?.agencies?.[0]?.name || null,
 					destination,
 					stopName: departureStop,
 					arrivalStopName: arrivalStop,
@@ -840,6 +902,7 @@ function scoreSingleRoute(route, context, weights = DEFAULT_WEIGHTS) {
 	const bikingDurationSeconds = routeBikeDuration(route);
 	const transfers = routeTransfers(route);
 	const lines = [...new Set(extractTransitLines(route))];
+	const displayLines = [...new Set(extractTransitLineLabels(route))];
 	const primaryMode = routePrimaryMode(route);
 	const stopNames = collectTransitStops(route);
 	const transferStops = collectTransferStops(route);
@@ -909,6 +972,7 @@ function scoreSingleRoute(route, context, weights = DEFAULT_WEIGHTS) {
 		bikingDurationSeconds,
 		transfers,
 		lines,
+		displayLines,
 		primaryMode,
 		incidents,
 		severity: severityInfo.severity,
@@ -1012,7 +1076,7 @@ function scoreRoutes({ routes, incidents, departures, lignesBloquees = [], shape
 		totalDurationMinutes: toMinutes(entry.data.totalDurationSeconds),
 		walkingMinutes: toMinutes(entry.data.walkingDurationSeconds),
 		transfers: entry.data.transfers,
-		lines: entry.data.lines,
+		lines: entry.data.displayLines?.length ? entry.data.displayLines : entry.data.lines,
 		severity: entry.data.severity,
 		confidence: entry.data.confidence,
 		explanation: buildExplanation(entry.data, entry.label),

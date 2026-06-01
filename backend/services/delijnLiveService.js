@@ -28,6 +28,7 @@ const USER_AGENT = "StibAlert/1.0 (TFE student project; +https://github.com/Achr
 
 const realtimeCache = new Map(); // halteKey -> { at, data }
 const stopDisruptionsCache = new Map();
+const stopInfoCache = new Map();
 let networkDisruptionsCache = { at: 0, data: null };
 
 function apiKey() {
@@ -97,6 +98,61 @@ function mapDoorkomst(d) {
 	};
 }
 
+function firstText(...values) {
+	for (const value of values) {
+		if (typeof value === "string" && value.trim()) return value.trim();
+	}
+	return "";
+}
+
+function normalizeLineCandidate(raw) {
+	if (!raw || typeof raw !== "object") return null;
+	const line = firstText(raw.lijnnummer, raw.lijnNummer, raw.lijn, raw.nummer, raw.shortName);
+	if (!line) return null;
+	const direction = raw.richting == null ? null : String(raw.richting);
+	const destination = firstText(
+		raw.bestemmingKortFrans,
+		raw.bestemmingKort,
+		raw.bestemming,
+		raw.omschrijving,
+		raw.lijnrichtingOmschrijving,
+		raw.destination
+	);
+	return { line, direction, destination };
+}
+
+function uniqueLines(lines) {
+	const seen = new Set();
+	return lines.filter((line) => {
+		const key = `${line.line}|${line.direction || ""}|${line.destination || ""}`;
+		if (seen.has(key)) return false;
+		seen.add(key);
+		return true;
+	});
+}
+
+function extractStopLines(json) {
+	const containers = [
+		json.lijnrichtingen,
+		json.lijnRichtingen,
+		json.lijnen,
+		json.lijninfo,
+		json.halte?.lijnrichtingen,
+		json.halte?.lijnen,
+		json.haltes?.[0]?.lijnrichtingen,
+		json.haltes?.[0]?.lijnen,
+	].filter(Array.isArray);
+
+	const lines = [];
+	for (const arr of containers) {
+		for (const item of arr) {
+			const normalized = normalizeLineCandidate(item);
+			if (normalized) lines.push(normalized);
+		}
+	}
+	return uniqueLines(lines);
+}
+
 async function fetchStopRealtime(parsed) {
 	const json = await getJSON(`/haltes/${parsed.entity}/${parsed.halte}/real-time`);
 	const groups = Array.isArray(json.halteDoorkomsten) ? json.halteDoorkomsten : [];
@@ -145,6 +201,42 @@ async function getStopRealtime(rawId) {
 			live: false,
 			fetchedAt: new Date().toISOString(),
 			passages: [],
+			error: err.message,
+		};
+	}
+}
+
+async function getStopInfo(rawId) {
+	const parsed = parseHalteId(rawId);
+	if (!parsed) {
+		return { error: "Identifiant De Lijn invalide.", live: false, lines: [] };
+	}
+
+	const cached = stopInfoCache.get(parsed.halte);
+	if (cached && nowMs() - cached.at < DISRUPTIONS_TTL_MS) {
+		return cached.data;
+	}
+
+	try {
+		const json = await getJSON(`/haltes/${parsed.entity}/${parsed.halte}`);
+		const data = {
+			stopId: parsed.halte,
+			entity: parsed.entity,
+			live: true,
+			fetchedAt: new Date().toISOString(),
+			lines: extractStopLines(json),
+		};
+		stopInfoCache.set(parsed.halte, { at: nowMs(), data });
+		return data;
+	} catch (err) {
+		logger.warn("delijn_stop_info_error", { stopId: parsed.halte, message: err.message });
+		if (cached) return { ...cached.data, live: false, fetchedAt: new Date(cached.at).toISOString() };
+		return {
+			stopId: parsed.halte,
+			entity: parsed.entity,
+			live: false,
+			fetchedAt: new Date().toISOString(),
+			lines: [],
 			error: err.message,
 		};
 	}
@@ -244,6 +336,7 @@ async function getStopDisruptions(rawId) {
 module.exports = {
 	parseHalteId,
 	getStopRealtime,
+	getStopInfo,
 	getNetworkDisruptions,
 	getStopDisruptions,
 	isConfigured: () => Boolean(apiKey()),
