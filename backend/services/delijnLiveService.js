@@ -218,7 +218,13 @@ async function getStopInfo(rawId) {
 	}
 
 	try {
-		const json = await getJSON(`/haltes/${parsed.entity}/${parsed.halte}`);
+		// FIX — on interroge /lijnrichtingen (qui liste les lignes + direction
+		// + destination desservant l'arrêt) au lieu de /haltes/:ent/:halte
+		// (base) qui ne renvoie QUE des liens, sans lignes inline → la section
+		// "Lignes à cet arrêt" restait vide. /lijnrichtingen fonctionne 24/7,
+		// indépendamment des horaires, donc l'utilisateur voit toujours quelles
+		// lignes passent + vers où, même la nuit quand le real-time est vide.
+		const json = await getJSON(`/haltes/${parsed.entity}/${parsed.halte}/lijnrichtingen`);
 		const data = {
 			stopId: parsed.halte,
 			entity: parsed.entity,
