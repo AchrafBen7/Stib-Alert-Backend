@@ -1,5 +1,5 @@
 const express = require("express");
-const { ajouterArret, ajouterLigne, synchroniserArretAvecLigne, ajouterLigneAArrêt, voirTousLesArrets, voirArretsParLigne, voirArretsParLigneFiltres, mettreAJourStopId, voirLignesPourArret, arretsProches } = require("../controllers/arretController");
+const { ajouterArret, ajouterLigne, synchroniserArretAvecLigne, ajouterLigneAArrêt, voirTousLesArrets, voirArretsParLigne, voirArretsParLigneFiltres, mettreAJourStopId, voirLignesPourArret, arretsProches, rechercheArrets } = require("../controllers/arretController");
 const router = express.Router();
 
 router.post("/ajouter-arret", ajouterArret); // ✅ Créer un arrêt
@@ -10,6 +10,7 @@ router.get("/", voirTousLesArrets);
 router.get("/par-ligne", voirArretsParLigne);
 router.get("/par-ligne-filtres", voirArretsParLigneFiltres);
 router.get("/nearby", arretsProches);
+router.get("/recherche", rechercheArrets); // 🔎 recherche réseau par nom/ligne
 router.get("/:id/lignes", voirLignesPourArret);
 
 module.exports = router;

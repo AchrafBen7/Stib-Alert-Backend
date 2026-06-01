@@ -54,6 +54,73 @@ exports.arretsProches = async (req, res) => {
 		res.status(500).json({ message: error.message });
 	}
 };
+// ✅ Recherche d'arrêts par nom OU numéro de ligne, sur TOUT le réseau.
+// Avant, l'ajout d'un favori ne montrait que les arrêts dans 1,5 km de
+// l'utilisateur (via /nearby) : impossible d'épingler un arrêt éloigné comme
+// "Paduwa" (bus 66). Cet endpoint répond avec la MÊME forme que /nearby pour
+// que le DTO client (ArretNearbyDTO) décode sans changement. distanceMeters
+// vaut 0 (pas de point d'origine).
+exports.rechercheArrets = async (req, res) => {
+	try {
+		const q = (req.query.q || "").trim();
+		if (q.length < 2) {
+			return res.json([]);
+		}
+
+		// Accent-insensible : on échappe la regex puis on tolère les variantes
+		// accentuées des voyelles (e≈éèêë, a≈àâ, …) pour que "paduwa" matche
+		// "Paduwa" et "metro" matche "Métro".
+		const escaped = q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+		const accentTolerant = escaped
+			.replace(/[eéèêë]/gi, "[eéèêë]")
+			.replace(/[aàâä]/gi, "[aàâä]")
+			.replace(/[iîï]/gi, "[iîï]")
+			.replace(/[oôö]/gi, "[oôö]")
+			.replace(/[uùûü]/gi, "[uùûü]")
+			.replace(/[cç]/gi, "[cç]");
+		const nameRegex = new RegExp(accentTolerant, "i");
+
+		// Match par nom d'arrêt OU par ligne desservie (ex: "66").
+		const arrets = await Arret.find({
+			$or: [{ nom: nameRegex }, { lignesDesservies: q.toUpperCase() }],
+		})
+			.limit(25)
+			.lean();
+
+		const enrichis = await Promise.all(
+			arrets.map(async (arret) => {
+				const lignes = await Ligne.find({ lineid: { $in: arret.lignesDesservies } }).lean();
+				return {
+					_id: arret._id,
+					nom: arret.nom,
+					latitude: arret.latitude,
+					longitude: arret.longitude,
+					distanceMeters: 0,
+					lignes: lignes.map((l) => ({
+						lineid: l.lineid,
+						typeTransport: l.typeTransport,
+						couleur: l.couleur,
+						destination: l.destination,
+					})),
+				};
+			})
+		);
+
+		// Les correspondances exactes de nom d'abord, puis alphabétique.
+		const qLower = q.toLowerCase();
+		enrichis.sort((a, b) => {
+			const aExact = a.nom.toLowerCase().startsWith(qLower) ? 0 : 1;
+			const bExact = b.nom.toLowerCase().startsWith(qLower) ? 0 : 1;
+			if (aExact !== bExact) return aExact - bExact;
+			return a.nom.localeCompare(b.nom);
+		});
+
+		res.json(enrichis);
+	} catch (error) {
+		res.status(500).json({ message: error.message });
+	}
+};
+
 // ✅ 1. Créer un nouvel arrêt (ex: Vanderkindere)
 exports.ajouterArret = async (req, res) => {
 	try {
