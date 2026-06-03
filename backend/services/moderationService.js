@@ -69,6 +69,7 @@ async function enqueueFlag({
 
 function deriveDefaultPriority(spamScore, flagReason) {
 	if (flagReason === "offensive") return 95;
+	if (flagReason === "sensitive_review") return 80; // type sensible (Agression) à valider
 	if (flagReason === "misinformation") return 85;
 	if (spamScore >= 85) return 80;
 	if (spamScore >= 70) return 60;

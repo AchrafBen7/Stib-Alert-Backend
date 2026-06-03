@@ -12,7 +12,7 @@ const moderationQueueSchema = new mongoose.Schema(
 
 		flagReason: {
 			type: String,
-			enum: ["spam", "offensive", "duplicate", "misinformation", "auto_aged", "url_detected", "rapid_fire", "geographic_outlier"],
+			enum: ["spam", "offensive", "duplicate", "misinformation", "auto_aged", "url_detected", "rapid_fire", "geographic_outlier", "sensitive_review"],
 			required: true,
 		},
 		flaggedBy: {

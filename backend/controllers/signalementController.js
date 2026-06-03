@@ -418,9 +418,28 @@ exports.ajouterSignalement = async (req, res) => {
 			});
 		}
 
-		const initialModerationStatus = spamResult.recommendation === "flag"
-			? "pending"
-			: (isAuthenticatedAuthor ? "approved" : "approved");
+		// B3 — Modération renforcée des types SENSIBLES (risque diffamation /
+		// contenu accusatoire). Une "Agression" peut nommer ou accuser une
+		// personne → on ne la publie pas aveuglément. Politique nuancée pour
+		// ne pas tuer la valeur "info sécurité temps réel" :
+		//   • spam "flag"                       → pending (inchangé)
+		//   • Agression par auteur ANONYME      → pending (review humaine)
+		//   • Agression à faible confiance      → pending
+		//   • Agression par utilisateur établi  → approved (valeur live)
+		// Le "Contrôle" reste approved (factuel, non nominatif), mais comme
+		// tout signalement il passe le spam scorer (insultes/offensif → flag).
+		const SENSITIVE_TYPES = new Set(["Agression"]);
+		const isSensitive = SENSITIVE_TYPES.has(typeProbleme);
+		const lowTrust = trustResult.score < 60;
+
+		let initialModerationStatus;
+		if (spamResult.recommendation === "flag") {
+			initialModerationStatus = "pending";
+		} else if (isSensitive && (!isAuthenticatedAuthor || lowTrust)) {
+			initialModerationStatus = "pending";
+		} else {
+			initialModerationStatus = "approved";
+		}
 
 		const signalement = await Signalement.create({
 			utilisateurId: req.user?.userId,
@@ -455,6 +474,16 @@ exports.ajouterSignalement = async (req, res) => {
 				flaggedBy: "system",
 				spamScore: spamResult.score,
 				spamReasons: spamResult.reasons,
+			});
+		} else if (initialModerationStatus === "pending" && isSensitive) {
+			// B3 — type sensible mis en attente (≠ spam) : on l'inscrit dans la
+			// file de modération pour qu'un humain le valide, sinon il resterait
+			// invisible et jamais publié.
+			await enqueueFlag({
+				signalement,
+				flagReason: "sensitive_review",
+				flaggedBy: "system",
+				priority: 80,
 			});
 		}
 
