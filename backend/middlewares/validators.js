@@ -33,6 +33,8 @@ exports.validateSignalement = [
 	body("nomArret").trim().isLength({ min: 1, max: 120 }),
 	body("ligne").trim().isLength({ min: 1, max: 10 }),
 	body("typeProbleme").isIn([
+		"Contrôle",
+		"Affluence",
 		"Retard",
 		"Accident",
 		"Panne",

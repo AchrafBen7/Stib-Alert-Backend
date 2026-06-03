@@ -104,7 +104,10 @@ exports.confirmStillBlocked = async (req, res) => {
 			return res.status(400).json({ message: "Identifiant cluster invalide." });
 		}
 
-		const userId = req.user?.id || null;
+		// FIX — le middleware d'auth pose `req.user.userId` (pas `.id`) : lire
+		// `.id` renvoyait toujours null → les utilisateurs connectés étaient
+		// dédupliqués par appareil seulement. On lit les deux par sécurité.
+		const userId = req.user?.userId || req.user?.id || null;
 		const actorHash = clientDeviceHash(req);
 
 		if (!userId && !actorHash) {
@@ -138,7 +141,10 @@ exports.confirmResolved = async (req, res) => {
 			return res.status(400).json({ message: "Identifiant cluster invalide." });
 		}
 
-		const userId = req.user?.id || null;
+		// FIX — le middleware d'auth pose `req.user.userId` (pas `.id`) : lire
+		// `.id` renvoyait toujours null → les utilisateurs connectés étaient
+		// dédupliqués par appareil seulement. On lit les deux par sécurité.
+		const userId = req.user?.userId || req.user?.id || null;
 		const actorHash = clientDeviceHash(req);
 
 		if (!userId && !actorHash) {

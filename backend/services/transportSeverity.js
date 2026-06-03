@@ -53,7 +53,8 @@ function severityFromSignalement(signalement) {
 	if (["accident", "agression"].includes(type)) severity = SEVERITY.CRITICAL;
 	else if (["panne"].includes(type)) severity = SEVERITY.MAJOR;
 	else if (["retard", "incivilité", "incivilite"].includes(type)) severity = SEVERITY.MAJOR;
-	else if (["propreté", "proprete", "autre"].includes(type)) severity = SEVERITY.MINOR;
+	// Contrôle / Affluence : infos utiles mais non bloquantes → MINOR (défaut).
+	else if (["contrôle", "controle", "affluence", "propreté", "proprete", "autre"].includes(type)) severity = SEVERITY.MINOR;
 
 	if (confidence < 0.5 && severityRank[severity] > severityRank[SEVERITY.MINOR]) {
 		severity = severity === SEVERITY.CRITICAL ? SEVERITY.MAJOR : SEVERITY.MINOR;

@@ -169,6 +169,19 @@ async function calculateUserAccuracy(utilisateurId) {
 	return moderationAccuracy * 0.6 + voteAccuracy * 0.4;
 }
 
+// Confiance agrégée d'un cluster = MOYENNE PONDÉRÉE PAR LE TRUST des témoins,
+// pas une moyenne simple.
+//
+// Pourquoi : avec une moyenne simple, 3 comptes douteux (trust 40) + 1 témoin
+// fiable sur place (trust 90) donnaient (40·3+90)/4 = 52 → le vrai témoin était
+// "noyé" par le bruit. En vie réelle, un signalement crédible ne devrait pas
+// être affaibli par des contributions faibles.
+//
+// Formule : Σ(tᵢ²) / Σ(tᵢ). Chaque témoin pèse proportionnellement à sa propre
+// fiabilité → le signal fort domine, le bruit faible tempère sans écraser.
+// Sur l'exemple ci-dessus : (3·40² + 90²)/(3·40 + 90) = 12900/210 ≈ 61.
+// La corroboration (nombre de témoins) reste gérée séparément par
+// deriveConfidence / les seuils de publication — on ne la double pas ici.
 async function calculateAggregateTrust(signalementIds) {
 	if (!Array.isArray(signalementIds) || signalementIds.length === 0) {
 		return TRUST.BASE_GUEST;
@@ -180,8 +193,16 @@ async function calculateAggregateTrust(signalementIds) {
 
 	if (reports.length === 0) return TRUST.BASE_GUEST;
 
-	const sum = reports.reduce((acc, r) => acc + (Number.isFinite(r.trust) ? r.trust : TRUST.BASE_GUEST), 0);
-	return Math.round(sum / reports.length);
+	let weightedSum = 0; // Σ(tᵢ²)
+	let weightTotal = 0; // Σ(tᵢ)
+	for (const r of reports) {
+		const t = Number.isFinite(r.trust) ? r.trust : TRUST.BASE_GUEST;
+		weightedSum += t * t;
+		weightTotal += t;
+	}
+
+	if (weightTotal <= 0) return TRUST.BASE_GUEST;
+	return clamp(Math.round(weightedSum / weightTotal));
 }
 
 module.exports = {

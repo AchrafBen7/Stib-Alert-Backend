@@ -13,7 +13,7 @@ const clusterSchema = new mongoose.Schema(
 		arretId: { type: mongoose.Schema.Types.ObjectId, ref: "Arret", required: true, index: true },
 		typeProbleme: {
 			type: String,
-			enum: ["Retard", "Accident", "Panne", "Propreté", "Agression", "Incivilité", "Travaux", "Déviation", "Interruption", "Arrêt non desservi", "Perturbation", "Information STIB", "Autre"],
+			enum: ["Contrôle", "Affluence", "Retard", "Accident", "Panne", "Propreté", "Agression", "Incivilité", "Travaux", "Déviation", "Interruption", "Arrêt non desservi", "Perturbation", "Information STIB", "Autre"],
 			required: true,
 		},
 

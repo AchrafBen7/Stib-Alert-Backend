@@ -1,7 +1,27 @@
 const Signalement = require("../models/Signalement");
 const Cluster = require("../models/Cluster");
+const ClusterVote = require("../models/ClusterVote");
 const { calculateAggregateTrust } = require("./trustScorerService");
 const logger = require("./logger");
+
+// Enregistre UN vote par acteur (user ou device) et par type sur un cluster.
+// Renvoie true si le vote est nouveau, false s'il est en double (déjà voté).
+// S'appuie sur l'index unique de ClusterVote : la duplicate-key (E11000) est
+// le signal "déjà voté", géré sans throw. Fail-open prudent : si l'écriture
+// échoue pour une autre raison, on autorise le vote (mieux vaut un compteur
+// imparfait qu'un blocage total du système communautaire).
+async function recordVoteOnce({ clusterIndex, voteType, userId, actorHash }) {
+	const actorKey = userId ? `u:${userId}` : actorHash ? `d:${actorHash}` : null;
+	if (!actorKey) return true; // pas d'identité → on ne peut pas dédupliquer
+	try {
+		await ClusterVote.create({ clusterIndex, voteType, actorKey });
+		return true;
+	} catch (err) {
+		if (err && err.code === 11000) return false; // déjà voté
+		logger.warn("[clusterService] vote dedup write failed", { error: err.message });
+		return true;
+	}
+}
 
 let emitClusterEvent = null;
 try {
@@ -368,6 +388,22 @@ async function confirmStillBlocked({ clusterIndex, userId, actorHash }) {
 		};
 	}
 
+	// Anti-double-vote : un acteur ne compte qu'une fois.
+	const isNewVote = await recordVoteOnce({
+		clusterIndex,
+		voteType: "still_blocked",
+		userId,
+		actorHash,
+	});
+	if (!isNewVote) {
+		return {
+			cluster,
+			message: "Tu as déjà confirmé cette alerte.",
+			alreadyVoted: true,
+			confirmationCount: cluster.stillBlockedConfirmationCount || 0,
+		};
+	}
+
 	cluster.stillBlockedConfirmationCount = (cluster.stillBlockedConfirmationCount || 0) + 1;
 	const newExpiry = new Date(Date.now() + CLUSTER.STILL_BLOCKED_EXTEND_MS);
 	const maxLifetime = new Date(cluster.firstReportedAt.getTime() + CLUSTER.CLUSTER_LIFETIME_MS);
@@ -423,6 +459,23 @@ async function confirmResolved({ clusterIndex, userId, actorHash }) {
 			cluster,
 			alreadyResolved: true,
 			message: "Cette alerte est déjà résolue.",
+		};
+	}
+
+	// Anti-double-vote : un acteur ne peut voter "résolu" qu'une fois.
+	const isNewVote = await recordVoteOnce({
+		clusterIndex,
+		voteType: "resolved",
+		userId,
+		actorHash,
+	});
+	if (!isNewVote) {
+		return {
+			cluster,
+			alreadyVoted: true,
+			resolved: cluster.resolved,
+			confirmationCount: cluster.resolveConfirmationCount || 0,
+			message: "Tu as déjà voté pour cette alerte.",
 		};
 	}
 

@@ -25,6 +25,8 @@ const signalementSchema = new mongoose.Schema(
 		typeProbleme: {
 			type: String,
 			enum: [
+				"Contrôle",   // contrôleurs — différenciateur communautaire #1
+				"Affluence",  // véhicule bondé — info "humaine" absente de la STIB
 				"Retard",
 				"Accident",
 				"Panne",
