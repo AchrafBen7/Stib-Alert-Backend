@@ -316,6 +316,12 @@ exports.voiceAsk = async (req, res) => {
 		return res.status(400).json({ message: "text requis." });
 	}
 
+	// Langue de réponse imposée par l'app (Profil → Langues). Le client envoie
+	// context.language = "fr" | "nl"; on répond STRICTEMENT dans cette langue.
+	const rawLang = String(req.body?.context?.language || "fr").toLowerCase();
+	const replyLang = rawLang.startsWith("nl") ? "nl" : "fr";
+	const replyLangName = replyLang === "nl" ? "NÉERLANDAIS (Nederlands)" : "FRANÇAIS";
+
 	const key = apiKey();
 	if (!key) {
 		return res.status(503).json({ message: "L'assistant IA n'est pas configuré." });
@@ -333,6 +339,9 @@ exports.voiceAsk = async (req, res) => {
 		"========================================================",
 		"MODE VOIX — RÈGLES SPÉCIFIQUES QUI ÉCRASENT LE PROMPT SYSTÈME",
 		"========================================================",
+		"",
+		`🌍 LANGUE DE RÉPONSE — RÈGLE ABSOLUE : tu réponds UNIQUEMENT en ${replyLangName}.`,
+		`spokenReply ET displayReply doivent être ENTIÈREMENT rédigés en ${replyLangName}, même si la question est posée dans une autre langue. Les exemples ci-dessous sont écrits en français : si la langue imposée est le néerlandais, traduis TOUT en néerlandais (titres, lignes, arrêts, durées, phrases).`,
 		"",
 		"Tu es l'assistant vocal d'une app de TRANSPORT EN COMMUN à Bruxelles. Deux cas :",
 		"  • Si la section TRAJET CALCULÉ est présente dans le contexte → tu DOIS décrire ce trajet en détail (lignes, arrêts, durée) avec les badges [[L:NUM]]. Pas de refus, pas de demande de précision.",
@@ -355,7 +364,7 @@ exports.voiceAsk = async (req, res) => {
 		"========================================================",
 		"",
 		"1) spokenReply (LU À VOIX HAUTE — la VOIX) :",
-		"   - Français parlé, naturel, ton amical (tu). Phrases complètes.",
+		"   - Dans la langue de réponse imposée ci-dessus, ton parlé naturel et amical (tutoiement). Phrases complètes.",
 		"   - Question simple (état, perturbations) : 1-2 phrases, ≤ 30 mots.",
 		"   - Demande de trajet SANS TRAJET CALCULÉ : 5-10 mots max, 'OK, je te cherche ça.'",
 		"   - Demande de trajet AVEC TRAJET CALCULÉ : 3-5 phrases parlées en clair,",
