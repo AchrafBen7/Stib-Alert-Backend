@@ -94,7 +94,18 @@ function buildPassJson({ user, pass, serialNumber }) {
 					value: subscription.toUpperCase(),
 				},
 			],
-			primaryFields: [
+			// Champ principal = la VALIDITÉ (info la plus utile, bien visible),
+			// PAS le nom en énorme. Le titulaire passe en secondaire (petit).
+			// S'il n'y a pas de date lue, le titulaire reprend la place.
+			primaryFields: expiry ? [
+				{
+					key: "validity",
+					label: "VALABLE JUSQU'AU",
+					value: expiry.toISOString(),
+					dateStyle: "PKDateStyleMedium",
+					timeStyle: "PKDateStyleNone",
+				},
+			] : [
 				{
 					key: "holder",
 					label: "TITULAIRE",
@@ -102,29 +113,32 @@ function buildPassJson({ user, pass, serialNumber }) {
 				},
 			],
 			secondaryFields: [
+				...(expiry ? [{
+					key: "holder",
+					label: "TITULAIRE",
+					value: holder,
+				}] : []),
 				{
 					key: "cardNumber",
 					label: "N° CARTE",
 					value: maskCardNumber(cardNumber),
 				},
-				...(expiry ? [{
-					key: "validity",
-					label: "VALABLE JUSQU'AU",
-					value: expiry.toISOString(),
-					dateStyle: "PKDateStyleMedium",
-					timeStyle: "PKDateStyleNone",
-				}] : []),
-			],
-			auxiliaryFields: [
 				{
 					key: "network",
 					label: "RÉSEAU",
 					value: "STIB-MIVB",
 				},
+			],
+			auxiliaryFields: [
 				{
 					key: "country",
 					label: "PAYS",
 					value: "Belgique",
+				},
+				{
+					key: "type",
+					label: "TYPE",
+					value: "Personnelle",
 				},
 			],
 			backFields: [
