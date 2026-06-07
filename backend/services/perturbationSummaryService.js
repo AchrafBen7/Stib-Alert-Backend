@@ -71,30 +71,88 @@ function localizedIncidentType(type) {
 	return normalized;
 }
 
-function severityLead(severity) {
+const LEAD = {
+	fr: { critical: "Perturbations fortes", major: "Réseau perturbé", minor: "Réseau sous surveillance", normal: "Réseau fluide" },
+	nl: { critical: "Sterke verstoringen", major: "Netwerk verstoord", minor: "Netwerk onder toezicht", normal: "Vlot netwerk" },
+};
+const HINT = {
+	fr: {
+		critical: "Des coupures ou blocages probables demandent une alternative immédiate.",
+		major: "Des retards ou incidents significatifs restent actifs.",
+		minor: "Quelques signaux faibles restent actifs, sans blocage généralisé.",
+		normal: "Aucune perturbation majeure n'est détectée pour le moment.",
+	},
+	nl: {
+		critical: "Onderbrekingen of blokkades zijn waarschijnlijk — neem meteen een alternatief.",
+		major: "Aanzienlijke vertragingen of incidenten blijven actief.",
+		minor: "Enkele zwakke signalen blijven actief, zonder algemene blokkade.",
+		normal: "Voorlopig geen grote verstoring gedetecteerd.",
+	},
+};
+
+function sevKey(severity) {
 	switch (severity) {
-	case SEVERITY.CRITICAL:
-		return "Perturbations fortes";
-	case SEVERITY.MAJOR:
-		return "Réseau perturbé";
-	case SEVERITY.MINOR:
-		return "Réseau sous surveillance";
-	default:
-		return "Réseau fluide";
+	case SEVERITY.CRITICAL: return "critical";
+	case SEVERITY.MAJOR: return "major";
+	case SEVERITY.MINOR: return "minor";
+	default: return "normal";
 	}
 }
 
-function severityHint(severity) {
-	switch (severity) {
-	case SEVERITY.CRITICAL:
-		return "Des coupures ou blocages probables demandent une alternative immédiate.";
-	case SEVERITY.MAJOR:
-		return "Des retards ou incidents significatifs restent actifs.";
-	case SEVERITY.MINOR:
-		return "Quelques signaux faibles restent actifs, sans blocage généralisé.";
-	default:
-		return "Aucune perturbation majeure n'est détectée pour le moment.";
+function severityLead(severity, lang = "fr") {
+	return (LEAD[lang] || LEAD.fr)[sevKey(severity)];
+}
+
+function severityHint(severity, lang = "fr") {
+	return (HINT[lang] || HINT.fr)[sevKey(severity)];
+}
+
+/// Compose titre + shortText + longText + bullets dans la langue demandée à
+/// partir des données déjà extraites. FR par défaut ; NL pour l'app néerlandaise.
+function composeNarrative(lang, { severity, affectedLines, affectedStops, departures, typeHighlights, officialDataStatus, officialDataMessage, crowdingRisk }) {
+	const fr = lang !== "nl";
+	const title = severityLead(severity, lang);
+	const departureHighlights = departures
+		.slice(0, 2)
+		.map((d) => fr ? `${compactLineLabel(d.line)} dans ${d.minutes} min` : `${compactLineLabel(d.line)} over ${d.minutes} min`)
+		.filter(Boolean);
+
+	const bullets = [];
+	if (affectedLines.length) {
+		if (fr) bullets.push(affectedLines.length === 1 ? `La ligne ${affectedLines[0]} concentre l'essentiel du risque.` : `Les lignes ${affectedLines.join(", ")} concentrent l'essentiel du risque.`);
+		else bullets.push(affectedLines.length === 1 ? `Lijn ${affectedLines[0]} draagt het grootste risico.` : `Lijnen ${affectedLines.join(", ")} dragen het grootste risico.`);
 	}
+	if (affectedStops.length) {
+		if (fr) bullets.push(affectedStops.length === 1 ? `Point sensible principal: ${affectedStops[0]}.` : `Zones les plus touchées: ${affectedStops.join(", ")}.`);
+		else bullets.push(affectedStops.length === 1 ? `Belangrijkste knelpunt: ${affectedStops[0]}.` : `Meest getroffen zones: ${affectedStops.join(", ")}.`);
+	}
+	if (departureHighlights.length) {
+		bullets.push(fr ? `Prochains passages encore lisibles: ${departureHighlights.join(" • ")}.` : `Volgende doorkomsten nog leesbaar: ${departureHighlights.join(" • ")}.`);
+	}
+	if (typeHighlights.length) {
+		if (fr) bullets.push(typeHighlights.length === 1 ? `Incident dominant: ${typeHighlights[0]}.` : `Incidents dominants: ${typeHighlights.join(", ")}.`);
+		else bullets.push(typeHighlights.length === 1 ? `Belangrijkste incident: ${typeHighlights[0]}.` : `Belangrijkste incidenten: ${typeHighlights.join(", ")}.`);
+	}
+	if (!bullets.length) bullets.push(severityHint(severity, lang));
+	if (crowdingRisk?.level && crowdingRisk.level !== "none") bullets.push(crowdingRisk.longText);
+	if (officialDataStatus === "limited" && officialDataMessage) {
+		bullets.push(fr ? "Les données officielles sont partielles, lecture basée sur le dernier état connu." : "De officiële gegevens zijn onvolledig; lezing op basis van de laatst bekende status.");
+	}
+	if (officialDataStatus === "unavailable" && officialDataMessage) {
+		bullets.push(fr ? "Les données officielles sont indisponibles, lecture basée sur les retours terrain." : "De officiële gegevens zijn niet beschikbaar; lezing op basis van meldingen op het terrein.");
+	}
+
+	let shortText = severityHint(severity, lang);
+	if (affectedLines.length && affectedStops.length) shortText = fr ? `${title} sur ${affectedLines.join(", ")} autour de ${affectedStops[0]}.` : `${title} op ${affectedLines.join(", ")} rond ${affectedStops[0]}.`;
+	else if (affectedLines.length) shortText = fr ? `${title} sur ${affectedLines.join(", ")}.` : `${title} op ${affectedLines.join(", ")}.`;
+	else if (affectedStops.length) shortText = fr ? `${title} autour de ${affectedStops[0]}.` : `${title} rond ${affectedStops[0]}.`;
+	else if (departureHighlights.length) shortText = fr ? `${title}. Prochains passages encore lisibles: ${departureHighlights.join(" • ")}.` : `${title}. Volgende doorkomsten nog leesbaar: ${departureHighlights.join(" • ")}.`;
+
+	const longText = [shortText, ...bullets.slice(0, 2).filter((bullet) => !shortText.includes(bullet))]
+		.join(" ")
+		.replace(/\s+/g, " ")
+		.trim();
+	return { title, shortText, longText, bullets: bullets.slice(0, 3) };
 }
 
 function buildSummaryKey(input) {
@@ -177,10 +235,6 @@ function buildPerturbationSummary({
 		3
 	).map((entry) => entry.value);
 
-	const departureHighlights = departures
-		.slice(0, 2)
-		.map((departure) => `${compactLineLabel(departure.line)} dans ${departure.minutes} min`)
-		.filter(Boolean);
 	const typeHighlights = topEntriesByCount(
 		uniqueStrings(
 			incidents.map((incident) => localizedIncidentType(incident.type))
@@ -193,74 +247,22 @@ function buildPerturbationSummary({
 		return accumulator;
 	}, { official: 0, community: 0, mixed: 0 });
 
-	const title = severityLead(severity);
-	const bullets = [];
-
-	if (affectedLines.length) {
-		bullets.push(
-			affectedLines.length === 1
-				? `La ligne ${affectedLines[0]} concentre l'essentiel du risque.`
-				: `Les lignes ${affectedLines.join(", ")} concentrent l'essentiel du risque.`
-		);
-	}
-
-	if (affectedStops.length) {
-		bullets.push(
-			affectedStops.length === 1
-				? `Point sensible principal: ${affectedStops[0]}.`
-				: `Zones les plus touchées: ${affectedStops.join(", ")}.`
-		);
-	}
-
-	if (departureHighlights.length) {
-		bullets.push(`Prochains passages encore lisibles: ${departureHighlights.join(" • ")}.`);
-	}
-
-	if (typeHighlights.length) {
-		bullets.push(
-			typeHighlights.length === 1
-				? `Incident dominant: ${typeHighlights[0]}.`
-				: `Incidents dominants: ${typeHighlights.join(", ")}.`
-		);
-	}
-
-	if (!bullets.length) {
-		bullets.push(severityHint(severity));
-	}
-
-	if (crowdingRisk?.level && crowdingRisk.level !== "none") {
-		bullets.push(crowdingRisk.longText);
-	}
-
-	if (officialDataStatus === "limited" && officialDataMessage) {
-		bullets.push("Les données officielles sont partielles, lecture basée sur le dernier état connu.");
-	}
-
-	if (officialDataStatus === "unavailable" && officialDataMessage) {
-		bullets.push("Les données officielles sont indisponibles, lecture basée sur les retours terrain.");
-	}
-
-	let shortText = severityHint(severity);
-	if (affectedLines.length && affectedStops.length) {
-		shortText = `${title} sur ${affectedLines.join(", ")} autour de ${affectedStops[0]}.`;
-	} else if (affectedLines.length) {
-		shortText = `${title} sur ${affectedLines.join(", ")}.`;
-	} else if (affectedStops.length) {
-		shortText = `${title} autour de ${affectedStops[0]}.`;
-	} else if (departureHighlights.length) {
-		shortText = `${title}. Prochains passages encore lisibles: ${departureHighlights.join(" • ")}.`;
-	}
-
-	const longText = [shortText, ...bullets.slice(0, 2).filter((bullet) => !shortText.includes(bullet))]
-		.join(" ")
-		.replace(/\s+/g, " ")
-		.trim();
+	// On compose le texte en FR (par défaut, enrichi par l'IA) ET en NL, pour
+	// que l'app néerlandaise n'affiche plus du français dans la carte « avis
+	// réseau ». Même règles, mêmes données — seuls les libellés changent.
+	const narrativeData = { severity, affectedLines, affectedStops, departures, typeHighlights, officialDataStatus, officialDataMessage, crowdingRisk };
+	const fr = composeNarrative("fr", narrativeData);
+	const nl = composeNarrative("nl", narrativeData);
 
 	const summary = {
-		title,
-		shortText,
-		longText,
-		bullets: bullets.slice(0, 3),
+		title: fr.title,
+		shortText: fr.shortText,
+		longText: fr.longText,
+		bullets: fr.bullets,
+		titleNl: nl.title,
+		shortTextNl: nl.shortText,
+		longTextNl: nl.longText,
+		bulletsNl: nl.bullets,
 		affectedLines,
 		affectedStops,
 		incidentTypes: typeHighlights,
