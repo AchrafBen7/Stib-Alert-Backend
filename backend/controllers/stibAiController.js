@@ -212,14 +212,26 @@ exports.streamChat = async (req, res) => {
 	}
 
 	const key = apiKey();
-	const contextMessage = req.body?.context ? buildContextMessage(req.body.context) : "";
 
+	// On démarre le flux SSE (HTTP 200) AVANT de construire le contexte. Avant,
+	// `buildContextMessage` tournait hors du try/catch et avant le 200 : la
+	// moindre donnée client inattendue (ex. une route/un step null au tout
+	// premier message) jetait une exception → 500 → le client affichait
+	// "Assistant indisponible" pile au 1er message. Désormais le contexte est
+	// best-effort : s'il échoue, on répond quand même (sans contexte).
 	startSse(res);
 
 	if (!key) {
 		writeSseDelta(res, "L'assistant IA n'est pas encore configuré côté serveur. Ajoute `LOVABLE_API_KEY` ou `OPENAI_API_KEY` sur le backend, puis réessaie.");
 		writeSseDone(res);
 		return res.end();
+	}
+
+	let contextMessage = "";
+	try {
+		contextMessage = req.body?.context ? buildContextMessage(req.body.context) : "";
+	} catch (error) {
+		logger.warn("stib_ai_context_build_error", { message: error.message });
 	}
 
 	const gatewayUrl = process.env.AI_GATEWAY_URL || DEFAULT_GATEWAY_URL;

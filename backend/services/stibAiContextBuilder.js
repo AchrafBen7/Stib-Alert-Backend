@@ -22,24 +22,22 @@ function lineTokenList(values, fallback = "—") {
 }
 
 function buildRouteSummary(route, index) {
+	if (!route || typeof route !== "object") return "";
 	const total = route.totalMin ?? route.totalDurationMinutes ?? route.durationMinutes;
 	const transfers = route.transfers ?? 0;
+	const safeSteps = Array.isArray(route.steps) ? route.steps.filter(Boolean) : [];
 	const lines = Array.isArray(route.lines)
 		? route.lines
-		: Array.isArray(route.steps)
-			? route.steps.map((step) => step.line).filter(Boolean)
-			: [];
+		: safeSteps.map((step) => step.line).filter(Boolean);
 	const header = `Option ${index + 1}${total ? ` — ${total} min` : ""}${transfers ? `, ${transfers} correspondance(s)` : ""}`;
-	const steps = Array.isArray(route.steps)
-		? route.steps.slice(0, 8).map((step) => {
-			const line = step.line ? `${lineToken(step.line)} ` : "";
-			const from = step.fromName || step.stopName || step.instruction || "?";
-			const to = step.toName || step.arrivalStopName || step.destination || "?";
-			const mins = step.minutes ?? step.durationMinutes;
-			const disrupted = step.disrupted || (Array.isArray(step.alerts) && step.alerts.length) ? " ⚠️" : "";
-			return `  - ${line}**${String(from).toUpperCase()}** → **${String(to).toUpperCase()}**${mins ? ` (${mins} min)` : ""}${disrupted}`;
-		})
-		: [];
+	const steps = safeSteps.slice(0, 8).map((step) => {
+		const line = step.line ? `${lineToken(step.line)} ` : "";
+		const from = step.fromName || step.stopName || step.instruction || "?";
+		const to = step.toName || step.arrivalStopName || step.destination || "?";
+		const mins = step.minutes ?? step.durationMinutes;
+		const disrupted = step.disrupted || (Array.isArray(step.alerts) && step.alerts.length) ? " ⚠️" : "";
+		return `  - ${line}**${String(from).toUpperCase()}** → **${String(to).toUpperCase()}**${mins ? ` (${mins} min)` : ""}${disrupted}`;
+	});
 	return [
 		`- ${header}`,
 		lines.length ? `  - Lignes: ${lineTokenList([...new Set(lines)])}` : null,
@@ -124,7 +122,7 @@ function buildContextMessage(ctx = {}) {
 	}
 
 	if (Array.isArray(ctx.proposedRoutes) && ctx.proposedRoutes.length) {
-		parts.push(`### 🎯 TRAJET CALCULÉ — SOURCE DE VÉRITÉ\n${ctx.proposedRoutes.slice(0, 3).map(buildRouteSummary).join("\n")}`);
+		parts.push(`### 🎯 TRAJET CALCULÉ — SOURCE DE VÉRITÉ\n${ctx.proposedRoutes.slice(0, 3).map(buildRouteSummary).filter(Boolean).join("\n")}`);
 	} else if (ctx.proposedDestination) {
 		parts.push("### TRAJET CALCULÉ\n- Aucun trajet calculé disponible. Ne donne pas de lignes précises inventées.");
 	}
