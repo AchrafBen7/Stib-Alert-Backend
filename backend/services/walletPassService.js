@@ -70,53 +70,46 @@ function buildPassJson({ user, pass, serialNumber }) {
 	const subscription = pass.subscriptionLabel || "Abonnement STIB";
 	const expiry = pass.expiryDate ? new Date(pass.expiryDate) : null;
 
-	// boardingPass layout is the cleanest fit for a transit subscription —
-	// Wallet renders it as a proper ticket (route bar + secondary row +
-	// stripe) rather than the storeCard's awkward giant primary text. We
-	// model the trip as "Bruxelles → Réseau STIB" which is semantically
-	// accurate for a network-wide pass.
+	// storeCard layout = carte de membre, le plus proche de la carte MoBIB
+	// affichée dans l'app (titre MoBIB, abonnement, titulaire, n°, validité).
+	// Couleurs = identité Blayse : orange STIB (la MÊME carte orange que
+	// dans Profil → Ma carte STIB), texte blanc, libellés crème chaud.
 	return {
 		formatVersion: 1,
 		passTypeIdentifier: passTypeId,
 		teamIdentifier: teamId,
-		organizationName: "StibAlert",
+		organizationName: "Blayse",
 		description: "Carte de transport MoBIB",
 		serialNumber,
 		logoText: "MoBIB · STIB-MIVB",
 		foregroundColor: "rgb(255, 255, 255)",
-		backgroundColor: "rgb(118, 173, 84)", // MoBIB green
-		labelColor: "rgb(255, 255, 255)",
+		backgroundColor: "rgb(250, 115, 26)", // orange STIB (identité Blayse)
+		labelColor: "rgb(255, 224, 196)", // crème chaud, lisible sur l'orange
 		expirationDate: expiry ? expiry.toISOString() : undefined,
-		boardingPass: {
-			transitType: "PKTransitTypeGeneric",
+		storeCard: {
 			headerFields: [
 				{
-					key: "type",
-					label: "TYPE",
+					key: "subscription",
+					label: "ABONNEMENT",
 					value: subscription.toUpperCase(),
 				},
 			],
 			primaryFields: [
 				{
-					key: "from",
-					label: "BRUXELLES",
-					value: "STIB",
-				},
-				{
-					key: "to",
-					label: "RÉSEAU",
-					value: "MIVB",
-				},
-			],
-			secondaryFields: [
-				{
 					key: "holder",
 					label: "TITULAIRE",
 					value: holder,
 				},
+			],
+			secondaryFields: [
+				{
+					key: "cardNumber",
+					label: "N° CARTE",
+					value: maskCardNumber(cardNumber),
+				},
 				...(expiry ? [{
-					key: "expiry",
-					label: "EXPIRATION",
+					key: "validity",
+					label: "VALABLE JUSQU'AU",
 					value: expiry.toISOString(),
 					dateStyle: "PKDateStyleMedium",
 					timeStyle: "PKDateStyleNone",
@@ -124,9 +117,14 @@ function buildPassJson({ user, pass, serialNumber }) {
 			],
 			auxiliaryFields: [
 				{
-					key: "cardNumber",
-					label: "N° CARTE",
-					value: maskCardNumber(cardNumber),
+					key: "network",
+					label: "RÉSEAU",
+					value: "STIB-MIVB",
+				},
+				{
+					key: "country",
+					label: "PAYS",
+					value: "Belgique",
 				},
 			],
 			backFields: [
@@ -137,7 +135,7 @@ function buildPassJson({ user, pass, serialNumber }) {
 				},
 				{
 					key: "linkedAccount",
-					label: "Compte StibAlert",
+					label: "Compte Blayse",
 					value: user?.email || "—",
 				},
 				{
@@ -148,7 +146,7 @@ function buildPassJson({ user, pass, serialNumber }) {
 				{
 					key: "support",
 					label: "Contact",
-					value: "support@stibalert.app",
+					value: "support@stib-alert.be",
 				},
 			],
 		},
