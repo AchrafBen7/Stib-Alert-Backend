@@ -165,16 +165,17 @@ function levelFromScore(score) {
 	return "none";
 }
 
-function levelLabel(level) {
+function levelLabel(level, lang = "fr") {
+	const nl = lang === "nl";
 	switch (level) {
 	case "high":
-		return "Affluence élevée probable";
+		return nl ? "Hoge drukte waarschijnlijk" : "Affluence élevée probable";
 	case "moderate":
-		return "Affluence renforcée probable";
+		return nl ? "Verhoogde drukte waarschijnlijk" : "Affluence renforcée probable";
 	case "low":
-		return "Affluence possible";
+		return nl ? "Drukte mogelijk" : "Affluence possible";
 	default:
-		return "Affluence stable";
+		return nl ? "Stabiele drukte" : "Affluence stable";
 	}
 }
 
@@ -248,20 +249,28 @@ function stopMatchScore({ event, stopNames = [] }) {
 	return impactedStops.some((stop) => normalizedStops.includes(stop)) ? 0.85 : 0;
 }
 
-function buildEventNarrative(event, level) {
-	const startText = new Intl.DateTimeFormat("fr-BE", {
+function buildEventNarrative(event, level, lang = "fr") {
+	const nl = lang === "nl";
+	const startText = new Intl.DateTimeFormat(nl ? "nl-BE" : "fr-BE", {
 		hour: "2-digit",
 		minute: "2-digit",
 		timeZone: BRUSSELS_TIME_ZONE,
 	}).format(event.startsAt);
+	const zone = event.zoneLabel || event.venue;
 
 	switch (level) {
 	case "high":
-		return `${event.title} autour de ${event.zoneLabel || event.venue}: affluence forte probable dès ${startText}.`;
+		return nl
+			? `${event.title} rond ${zone}: hoge drukte waarschijnlijk vanaf ${startText}.`
+			: `${event.title} autour de ${zone}: affluence forte probable dès ${startText}.`;
 	case "moderate":
-		return `${event.title} autour de ${event.zoneLabel || event.venue}: affluence renforcée probable dès ${startText}.`;
+		return nl
+			? `${event.title} rond ${zone}: verhoogde drukte waarschijnlijk vanaf ${startText}.`
+			: `${event.title} autour de ${zone}: affluence renforcée probable dès ${startText}.`;
 	default:
-		return `${event.title} autour de ${event.zoneLabel || event.venue}: surveiller la charge à partir de ${startText}.`;
+		return nl
+			? `${event.title} rond ${zone}: hou de drukte in de gaten vanaf ${startText}.`
+			: `${event.title} autour de ${zone}: surveiller la charge à partir de ${startText}.`;
 	}
 }
 
@@ -312,13 +321,17 @@ function buildCrowdingRisk({
 	const impactedLines = uniqueStrings(scoredEvents.flatMap((event) => event.impactedLines || []).map(compactLine)).slice(0, 6);
 	const impactedStops = uniqueStrings(scoredEvents.flatMap((event) => event.impactedStops || []).map(compactStopName)).slice(0, 6);
 	const eventNames = uniqueStrings(scoredEvents.map((event) => event.title)).slice(0, 3);
-	const longText = buildEventNarrative(strongest, level);
+	const longText = buildEventNarrative(strongest, level, "fr");
+	const longTextNl = buildEventNarrative(strongest, level, "nl");
 
 	return {
 		level,
-		title: levelLabel(level),
+		title: levelLabel(level, "fr"),
+		titleNl: levelLabel(level, "nl"),
 		shortText: longText,
+		shortTextNl: longTextNl,
 		longText,
+		longTextNl,
 		eventNames,
 		zoneLabel: strongest.zoneLabel || strongest.venue || null,
 		impactedLines,

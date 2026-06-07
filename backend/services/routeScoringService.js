@@ -620,110 +620,112 @@ function buildReasons({
 	walkingMinutes,
 	primaryMode,
 	totalDurationMinutes,
-}) {
+}, lang = "fr") {
+	const nl = lang === "nl";
 	const reasons = [];
 
 	if (primaryMode === "bike") {
-		reasons.push("Cette option evite les correspondances STIB et reste directe a velo.");
+		reasons.push(nl ? "Deze optie vermijdt MIVB-overstappen en blijft direct met de fiets." : "Cette option evite les correspondances STIB et reste directe a velo.");
 	}
 	if (primaryMode === "walk" && totalDurationMinutes <= 22) {
-		reasons.push("Le trajet reste faisable a pied sans dependre du reseau.");
+		reasons.push(nl ? "De rit blijft te voet haalbaar zonder van het net af te hangen." : "Le trajet reste faisable a pied sans dependre du reseau.");
 	}
 
 	if (blockedLines.length) {
-		reasons.push(`J’évite la ligne ${blockedLines[0]} car elle reste fortement perturbée.`);
+		reasons.push(nl ? `Ik vermijd lijn ${blockedLines[0]} want ze blijft sterk verstoord.` : `J’évite la ligne ${blockedLines[0]} car elle reste fortement perturbée.`);
 	}
 	if (corridorGeographicPenalty >= 10) {
-		reasons.push("Plusieurs incidents tombent directement sur le corridor emprunté.");
+		reasons.push(nl ? "Meerdere incidenten vallen rechtstreeks op het gevolgde traject." : "Plusieurs incidents tombent directement sur le corridor emprunté.");
 	}
 	if (corridorShapePenalty >= 10) {
-		reasons.push("Le tracé STIB officiel de cette ligne traverse une zone sous tension.");
+		reasons.push(nl ? "Het officiële MIVB-traject van deze lijn doorkruist een gespannen zone." : "Le tracé STIB officiel de cette ligne traverse une zone sous tension.");
 	}
 	if (incidentPenalty >= 18) {
-		reasons.push("Le corridor le plus rapide reste trop exposé à des incidents récents.");
+		reasons.push(nl ? "Het snelste traject blijft te blootgesteld aan recente incidenten." : "Le corridor le plus rapide reste trop exposé à des incidents récents.");
 	}
 	if (transferFragility >= 5) {
-		reasons.push("Cette option réduit une correspondance fragile.");
+		reasons.push(nl ? "Deze optie vermindert een kwetsbare overstap." : "Cette option réduit une correspondance fragile.");
 	}
 	if (stopFragility >= 4) {
-		reasons.push("Les arrêts de correspondance paraissent historiquement instables sur ce créneau.");
+		reasons.push(nl ? "De overstaphaltes lijken historisch onstabiel op dit tijdslot." : "Les arrêts de correspondance paraissent historiquement instables sur ce créneau.");
 	}
 	if (waitingStats.variance >= 5) {
-		reasons.push("Les temps d’attente paraissent instables sur les lignes concurrentes.");
+		reasons.push(nl ? "De wachttijden lijken onstabiel op de concurrerende lijnen." : "Les temps d’attente paraissent instables sur les lignes concurrentes.");
 	}
 	if (walkingMinutes <= 6) {
-		reasons.push("La marche reste contenue.");
+		reasons.push(nl ? "Het stuk te voet blijft beperkt." : "La marche reste contenue.");
 	}
 
 	return reasons.slice(0, 3);
 }
 
-function buildExplanationDetails(scoredRoute) {
+function buildExplanationDetails(scoredRoute, lang = "fr") {
+	const nl = lang === "nl";
 	const categories = [];
 
 	if (scoredRoute.primaryMode === "bike") {
 		categories.push({
 			key: "bike_route",
-			title: "Alternative velo",
+			title: nl ? "Fietsalternatief" : "Alternative velo",
 			impact: "positive",
-			detail: "Cette option s'appuie sur un trajet velo direct pour reduire la dependance au reseau STIB.",
+			detail: nl ? "Deze optie gebruikt een directe fietsrit om minder van het MIVB-net af te hangen." : "Cette option s'appuie sur un trajet velo direct pour reduire la dependance au reseau STIB.",
 		});
 	}
 	if (scoredRoute.primaryMode === "walk") {
 		categories.push({
 			key: "walk_route",
-			title: "Alternative a pied",
+			title: nl ? "Alternatief te voet" : "Alternative a pied",
 			impact: scoredRoute.totalDurationSeconds <= 20 * 60 ? "positive" : "medium",
-			detail: "Cette option peut etre realisee a pied si tu preferes eviter les perturbations du reseau.",
+			detail: nl ? "Deze optie kan te voet als je de verstoringen op het net liever vermijdt." : "Cette option peut etre realisee a pied si tu preferes eviter les perturbations du reseau.",
 		});
 	}
 
 	if (scoredRoute.blockedLines?.length) {
 		categories.push({
 			key: "blocked_line",
-			title: "Ligne bloquée",
+			title: nl ? "Geblokkeerde lijn" : "Ligne bloquée",
 			impact: "high",
-			detail: `La ligne ${scoredRoute.blockedLines[0]} est actuellement pénalisée fortement.`,
+			detail: nl ? `Lijn ${scoredRoute.blockedLines[0]} wordt momenteel sterk afgestraft.` : `La ligne ${scoredRoute.blockedLines[0]} est actuellement pénalisée fortement.`,
 		});
 	}
 	if (scoredRoute.corridorShapePenalty >= 10 || scoredRoute.corridorGeographicPenalty >= 10) {
 		categories.push({
 			key: "corridor_risk",
-			title: "Corridor à risque",
+			title: nl ? "Risicovol traject" : "Corridor à risque",
 			impact: scoredRoute.corridorShapePenalty >= 16 ? "high" : "medium",
-			detail: "Le corridor réel emprunté recoupe une zone avec incidents récents et confirmations terrain.",
+			detail: nl ? "Het werkelijk gevolgde traject doorkruist een zone met recente incidenten en bevestigingen op het terrein." : "Le corridor réel emprunté recoupe une zone avec incidents récents et confirmations terrain.",
 		});
 	}
 	if (scoredRoute.transferFragility >= 5) {
 		categories.push({
 			key: "transfer_fragility",
-			title: "Correspondance fragile",
+			title: nl ? "Kwetsbare overstap" : "Correspondance fragile",
 			impact: "medium",
-			detail: "Cette option dépend d’une correspondance plus sensible aux perturbations.",
+			detail: nl ? "Deze optie hangt af van een overstap die gevoeliger is voor verstoringen." : "Cette option dépend d’une correspondance plus sensible aux perturbations.",
 		});
 	}
 	if (scoredRoute.waitingVariance >= 5) {
 		categories.push({
 			key: "waiting_instability",
-			title: "Attente instable",
+			title: nl ? "Onstabiele wachttijd" : "Attente instable",
 			impact: "medium",
-			detail: "Les prochains passages disponibles varient fortement sur cette option.",
+			detail: nl ? "De volgende beschikbare doorkomsten variëren sterk op deze optie." : "Les prochains passages disponibles varient fortement sur cette option.",
 		});
 	}
 	if (scoredRoute.stopFragility >= 4) {
 		categories.push({
 			key: "stop_fragility",
-			title: "Arrêt fragile",
+			title: nl ? "Kwetsbare halte" : "Arrêt fragile",
 			impact: "medium",
-			detail: "Les arrêts de ce trajet montrent une instabilité récurrente sur ce créneau horaire.",
+			detail: nl ? "De haltes op deze rit vertonen terugkerende instabiliteit in dit tijdslot." : "Les arrêts de ce trajet montrent une instabilité récurrente sur ce créneau horaire.",
 		});
 	}
 	if (scoredRoute.walkingDurationSeconds <= 6 * 60) {
 		categories.push({
 			key: "walking",
-			title: "Marche contenue",
+			title: nl ? "Beperkt te voet" : "Marche contenue",
 			impact: "positive",
-			detail: "La marche reste limitée sur cette alternative.",
+			detail: nl ? "Het stuk te voet blijft beperkt op dit alternatief." : "La marche reste limitée sur cette alternative.",
 		});
 	}
 
@@ -733,10 +735,13 @@ function buildExplanationDetails(scoredRoute) {
 				: scoredRoute.score <= 95 ? "elevated"
 					: "high";
 
+	const reasons = (nl ? scoredRoute.reasonsNl : scoredRoute.reasons) || [];
+	const fallbackSummary = nl ? "Deze route blijft het beste beschikbare compromis." : "Cet itinéraire reste le meilleur compromis disponible.";
+
 	return {
 		riskLevel,
-		summary: scoredRoute.reasons[0] || "Cet itinéraire reste le meilleur compromis disponible.",
-		highlights: scoredRoute.reasons.slice(0, 3),
+		summary: reasons[0] || fallbackSummary,
+		highlights: reasons.slice(0, 3),
 		categories: categories.slice(0, 4),
 	};
 }
@@ -950,7 +955,7 @@ function scoreSingleRoute(route, context, weights = DEFAULT_WEIGHTS) {
 		activeModePenalty;
 
 	const severityInfo = summarizeSeverity(incidents);
-	const reasons = buildReasons({
+	const reasonOpts = {
 		incidentPenalty,
 		corridorGeographicPenalty,
 		corridorShapePenalty,
@@ -961,7 +966,9 @@ function scoreSingleRoute(route, context, weights = DEFAULT_WEIGHTS) {
 		walkingMinutes,
 		primaryMode,
 		totalDurationMinutes,
-	});
+	};
+	const reasons = buildReasons(reasonOpts, "fr");
+	const reasonsNl = buildReasons(reasonOpts, "nl");
 	const steps = buildRouteSteps(route, shapeIndex);
 
 	return {
@@ -986,6 +993,7 @@ function scoreSingleRoute(route, context, weights = DEFAULT_WEIGHTS) {
 		blockedLines,
 		activeModePenalty,
 		reasons,
+		reasonsNl,
 		steps,
 	};
 }
@@ -1080,8 +1088,10 @@ function scoreRoutes({ routes, incidents, departures, lignesBloquees = [], shape
 		severity: entry.data.severity,
 		confidence: entry.data.confidence,
 		explanation: buildExplanation(entry.data, entry.label),
-		explanationDetails: buildExplanationDetails(entry.data),
+		explanationDetails: buildExplanationDetails(entry.data, "fr"),
+		explanationDetailsNl: buildExplanationDetails(entry.data, "nl"),
 		reasons: entry.data.reasons,
+		reasonsNl: entry.data.reasonsNl,
 		steps: entry.data.steps,
 	}));
 

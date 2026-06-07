@@ -12,6 +12,14 @@ function haversineMeters(lat1, lng1, lat2, lng2) {
 	return 2 * R * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
+// Filtre défensif : des arrêts de test (« Test Stop 12 », créés en dev) peuvent
+// traîner dans la base et polluaient l'onboarding + la recherche côté app. On
+// ne les renvoie jamais dans les endpoints de lecture.
+const TEST_STOP_REGEX = /\btest\b/i;
+function isTestStop(nom) {
+	return TEST_STOP_REGEX.test(String(nom || ""));
+}
+
 exports.arretsProches = async (req, res) => {
 	try {
 		const lat = parseFloat(req.query.lat);
@@ -22,7 +30,7 @@ exports.arretsProches = async (req, res) => {
 			return res.status(400).json({ message: "lat et lng sont requis." });
 		}
 
-		const arrets = await Arret.find().lean();
+		const arrets = (await Arret.find().lean()).filter((a) => !isTestStop(a.nom));
 
 		const avecDistance = arrets
 			.map((a) => ({ ...a, distance: haversineMeters(lat, lng, a.latitude, a.longitude) }))
@@ -81,8 +89,12 @@ exports.rechercheArrets = async (req, res) => {
 		const nameRegex = new RegExp(accentTolerant, "i");
 
 		// Match par nom d'arrêt OU par ligne desservie (ex: "66").
+		// On exclut les arrêts de test directement dans la requête.
 		const arrets = await Arret.find({
-			$or: [{ nom: nameRegex }, { lignesDesservies: q.toUpperCase() }],
+			$and: [
+				{ $or: [{ nom: nameRegex }, { lignesDesservies: q.toUpperCase() }] },
+				{ nom: { $not: TEST_STOP_REGEX } },
+			],
 		})
 			.limit(25)
 			.lean();
@@ -291,7 +303,8 @@ exports.ajouterLigneAArrêt = async (req, res) => {
 };
 exports.voirTousLesArrets = async (req, res) => {
 	try {
-		const arrets = await Arret.find();
+		// Exclut les arrêts de test (sinon ils entrent dans le catalogue client).
+		const arrets = await Arret.find({ nom: { $not: TEST_STOP_REGEX } });
 		res.json(arrets);
 	} catch (error) {
 		res.status(500).json({ message: error.message });

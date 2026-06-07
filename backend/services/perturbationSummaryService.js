@@ -134,7 +134,7 @@ function composeNarrative(lang, { severity, affectedLines, affectedStops, depart
 		else bullets.push(typeHighlights.length === 1 ? `Belangrijkste incident: ${typeHighlights[0]}.` : `Belangrijkste incidenten: ${typeHighlights.join(", ")}.`);
 	}
 	if (!bullets.length) bullets.push(severityHint(severity, lang));
-	if (crowdingRisk?.level && crowdingRisk.level !== "none") bullets.push(crowdingRisk.longText);
+	if (crowdingRisk?.level && crowdingRisk.level !== "none") bullets.push(fr ? crowdingRisk.longText : (crowdingRisk.longTextNl || crowdingRisk.longText));
 	if (officialDataStatus === "limited" && officialDataMessage) {
 		bullets.push(fr ? "Les données officielles sont partielles, lecture basée sur le dernier état connu." : "De officiële gegevens zijn onvolledig; lezing op basis van de laatst bekende status.");
 	}
