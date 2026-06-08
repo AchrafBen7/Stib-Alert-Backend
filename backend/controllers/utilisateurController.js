@@ -7,7 +7,7 @@ const sendMail = require("../config/Mail");
 const { predireTendances } = require("../config/openai");
 const crypto = require("crypto");
 const { getWaitingTimes } = require("../services/belgianMobility");
-const { registerDevice } = require("../services/oneSignalService");
+const { registerDevice, sendNotificationToUser } = require("../services/oneSignalService");
 const { verifyAppleIdentityToken } = require("../services/appleSignInService");
 
 const REFRESH_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
@@ -626,6 +626,42 @@ exports.enregistrerTokenFCM = async (req, res) => {
 		res.status(500).json({ message: error.message });
 	}
 };
+// Diagnostic : envoie une notification de test à l'utilisateur courant pour
+// vérifier TOUTE la chaîne push (permission iOS → external_user_id OneSignal →
+// REST API → appareil). `recipients: 0` = aucun appareil abonné pour ce compte
+// (permission refusée, ou OneSignal.login pas encore propagé) ; `success:false`
+// = clés OneSignal manquantes côté serveur (Render).
+exports.testPush = async (req, res) => {
+	try {
+		const userId = String(req.user.userId);
+		const result = await sendNotificationToUser({
+			userId,
+			titles: { fr: "Blayse — test ✅", nl: "Blayse — test ✅", en: "Blayse — test ✅" },
+			messages: {
+				fr: "Tes notifications fonctionnent. Tu recevras les alertes de tes lignes et arrêts favoris.",
+				nl: "Je meldingen werken. Je ontvangt waarschuwingen voor je favoriete lijnen en haltes.",
+				en: "Your notifications work. You'll get alerts for your favourite lines and stops.",
+			},
+			data: { type: "test" },
+		});
+
+		if (result && result.success === false) {
+			const reason = result.reason || "Service push indisponible.";
+			return res.status(503).json({ ok: false, reason, message: reason });
+		}
+
+		const recipients = typeof result?.recipients === "number" ? result.recipients : null;
+		return res.json({
+			ok: true,
+			recipients,
+			notificationId: result?.id || null,
+		});
+	} catch (error) {
+		// Erreur renvoyée par l'API OneSignal (clé invalide, app id, etc.).
+		return res.status(502).json({ ok: false, reason: error.message, message: error.message });
+	}
+};
+
 exports.supprimerCompte = async (req, res) => {
 	try {
 		const userId = req.params.id;

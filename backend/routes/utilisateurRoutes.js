@@ -72,4 +72,7 @@ router.delete("/:id", protect, validateMongoId, handleValidation, requireSelf(),
 
 router.post("/enregistrer-token", protect, validatePushToken, handleValidation, enregistrerTokenFCM);
 
+// Diagnostic : envoie une push de test à l'utilisateur connecté.
+router.post("/test-push", protect, utilisateurController.testPush);
+
 module.exports = router;
