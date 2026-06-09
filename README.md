@@ -1,165 +1,211 @@
 # Blayse — Backend
 
-Backend de **Blayse** (anciennement *StibAlert*) : une app de mobilité bruxelloise
-qui transforme les voyageurs en **source d'information temps réel**. Contrairement
-aux apps classiques (modèle à sens unique opérateur → voyageur), Blayse est
-**bidirectionnel** : les voyageurs signalent, confirment et reçoivent l'info,
-fusionnée avec les données officielles et enrichie par l'IA.
+Backend van **Blayse** (voorheen *StibAlert*): een Brusselse mobiliteitsapp die
+reizigers omvormt tot een **realtime informatiebron**. In tegenstelling tot
+klassieke apps (eenrichtingsmodel operator → reiziger) is Blayse
+**tweerichting**: reizigers melden, bevestigen én ontvangen info, samengevoegd
+met officiële data en verrijkt door AI.
 
-> API REST + SSE en Node/Express, MongoDB, Redis. Sert l'app iOS (SwiftUI).
+> REST + SSE API in Node/Express, MongoDB, Redis. Bedient de iOS-app (SwiftUI).
 
 ---
 
-## ✨ Ce que fait le backend
+## ✨ Wat doet de backend
 
-- **Signalements communautaires** — création, vote (confirmé / résolu), modération.
-- **Score de confiance** (`trustScorerService`) — chaque signalement est pondéré
-  (source, proximité, réputation, appareil) ; les signalements proches sont
-  agrégés en **clusters** avec une confiance combinée (moyenne pondérée `Σt²/Σt`).
-- **Blayse AI** (`/api/stib-ai`) — assistant en streaming (SSE) sur **Gemini**,
-  nourri du contexte live (arrêts, lignes favorites, signalements, trajet calculé)
-  et bridé contre l'hallucination.
-- **Multi-opérateur** — STIB/MIVB, **SNCB** (iRail + GTFS), **De Lijn** & **TEC**
-  (catalogues + perturbations officielles, temps réel par arrêt pour De Lijn).
-- **Calcul d'itinéraires** (`routeScoringService`) — alternatives scorées (durée,
-  correspondances, risque, fiabilité) avec re-routage autour des lignes perturbées.
-- **Notifications push** (OneSignal) — alertes cluster, brief pré-trajet, mercis,
-  digest, avec préférences fines (fréquence, heures silencieuses, règles par ligne).
-- **Apple Wallet** (`/api/wallet`) — génération d'un pass MoBIB signé (PassKit).
-- **Comptes & RGPD** — auth JWT + Sign in with Apple, export/suppression de données,
-  logs structurés, rate-limiting.
+- **Communitymeldingen** — aanmaken, stemmen (bevestigd / opgelost), moderatie.
+- **Vertrouwensscore** (`trustScorerService`) — elke melding wordt gewogen
+  (bron, nabijheid, reputatie, toestel); meldingen dichtbij elkaar worden
+  gebundeld tot **clusters** met een gecombineerde betrouwbaarheid (gewogen
+  gemiddelde `Σt²/Σt`).
+- **Blayse AI** (`/api/stib-ai`) — streaming-assistent (SSE) op **Gemini**,
+  gevoed met de live context (haltes, favoriete lijnen, meldingen, berekende
+  route) en beveiligd tegen verzinsels.
+- **Multi-operator** — STIB/MIVB, **SNCB** (iRail + GTFS), **De Lijn** & **TEC**
+  (catalogi + officiële verstoringen; realtime per halte voor De Lijn).
+- **Routeberekening** (`routeScoringService`) — alternatieven gescoord (duur,
+  overstappen, risico, betrouwbaarheid) met omleiding rond verstoorde lijnen.
+- **Pushmeldingen** (OneSignal) — clusterwaarschuwingen, pre-trip briefing,
+  bedankjes, digest, met fijne voorkeuren (frequentie, stille uren, regels per
+  lijn).
+- **Apple Wallet** (`/api/wallet`) — genereert een gesigneerde MoBIB-pas (PassKit).
+- **Accounts & GDPR** — JWT-auth + Sign in with Apple, export/verwijdering van
+  gegevens, gestructureerde logging, rate-limiting.
 
 ---
 
 ## 🧱 Stack
 
-| Domaine | Techno |
+| Domein | Technologie |
 |---|---|
 | Runtime | Node.js + Express |
-| Base de données | MongoDB (Mongoose) |
-| Cache / temps réel | Redis (ioredis), Socket.io |
-| IA | Google Gemini (défaut), OpenAI (compat.) |
+| Database | MongoDB (Mongoose) |
+| Cache / realtime | Redis (ioredis), Socket.io |
+| AI | Google Gemini (standaard), OpenAI (compatibel) |
 | Push | OneSignal (REST) |
 | Wallet | passkit-generator (Apple PassKit) |
-| Images | Cloudinary |
+| Afbeeldingen | Cloudinary |
 | Mail | Nodemailer (SMTP) / Resend |
-| Sécurité | helmet, cors, express-rate-limit, express-mongo-sanitize |
-| Observabilité | Winston, Sentry (optionnel) |
+| Beveiliging | helmet, cors, express-rate-limit, express-mongo-sanitize |
+| Observability | Winston, Sentry (optioneel) |
 | Tests | Jest + supertest + mongodb-memory-server |
 
 ---
 
-## 🚀 Démarrage
+## 🚀 Aan de slag
 
-> L'application vit dans le dossier **`backend/`**.
+> De applicatie staat in de map **`backend/`**.
 
 ```bash
 cd backend
 npm install
-cp .env.example .env   # puis remplis les variables (voir ci-dessous)
-npm run dev            # démarrage avec nodemon (ou `npm start`)
+cp .env.example .env   # vul daarna de variabelen in (zie hieronder)
+npm run dev            # start met nodemon (of `npm start`)
 ```
 
-Le serveur écoute sur `PORT` (défaut **4000**).
+De server luistert op `PORT` (standaard **4000**).
 
 ### Scripts (`backend/package.json`)
-| Script | Rôle |
+| Script | Rol |
 |---|---|
-| `npm start` | Démarrage production (`node server.js`) |
-| `npm run dev` | Démarrage dev (nodemon) |
-| `npm run worker:assistant` | Worker des jobs assistant (push proactives) |
-| `npm run seed:stib-static` | Importe le catalogue statique STIB |
-| `npm run seed:sncb` | Importe les gares SNCB |
+| `npm start` | Productie-start (`node server.js`) |
+| `npm run dev` | Dev-start (nodemon) |
+| `npm run worker:assistant` | Worker voor assistent-taken (proactieve push) |
+| `npm run seed:stib-static` | Importeert de statische STIB-catalogus |
+| `npm run seed:sncb` | Importeert de SNCB-stations |
 | `npm test` | Tests (Jest, in-band) |
 
 ---
 
-## 🔑 Variables d'environnement
+## 🔑 Omgevingsvariabelen
 
-Les essentielles (voir `backend/.env.example` pour la liste complète) :
+De belangrijkste (zie `backend/.env.example` voor de volledige lijst):
 
-**Cœur**
-- `MONGO_URI` — connexion MongoDB *(requis)*
-- `REDIS_URL` — connexion Redis
-- `JWT_SECRET`, `ACTIVATION_SECRET` — auth / activation de compte
-- `PORT` — port HTTP (défaut 4000)
-- `CORS_ORIGINS` — origines autorisées
+**Kern**
+- `MONGO_URI` — MongoDB-connectie *(vereist)*
+- `REDIS_URL` — Redis-connectie
+- `JWT_SECRET`, `ACTIVATION_SECRET` — auth / accountactivatie
+- `PORT` — HTTP-poort (standaard 4000)
+- `CORS_ORIGINS` — toegelaten origins
 
-**IA (Blayse AI)**
-- `AI_GATEWAY_URL` (défaut `https://generativelanguage.googleapis.com/v1beta`)
-- `AI_MODEL` (défaut `gemini-2.5-flash`)
-- `GEMINI_API_KEY` *(ou `OPENAI_API_KEY` selon le gateway)*
+**AI (Blayse AI)**
+- `AI_GATEWAY_URL` (standaard `https://generativelanguage.googleapis.com/v1beta`)
+- `AI_MODEL` (standaard `gemini-2.5-flash`)
+- `GEMINI_API_KEY` *(of `OPENAI_API_KEY` afhankelijk van de gateway)*
 
-**Notifications push (OneSignal)**
+**Pushmeldingen (OneSignal)**
 - `ONESIGNAL_APP_ID`
-- `ONESIGNAL_REST_API_KEY` *(legacy → schéma `Basic`, v2 `os_v2_…` → `Key`, géré automatiquement)*
+- `ONESIGNAL_REST_API_KEY` *(legacy → `Basic`-schema, v2 `os_v2_…` → `Key`; automatisch gedetecteerd)*
 
-**Transport / cartes**
-- `GOOGLE_API_KEY` — géocodage + directions
-- `BELGIAN_MOBILITY_API_BASE_URL`, `BELGIAN_MOBILITY_API_KEY` — temps réel STIB / TEC
-- `DELIJN_API_KEY` — temps réel De Lijn (Kernel API)
+**Vervoer / kaarten**
+- `GOOGLE_API_KEY` — geocoding + directions
+- `BELGIAN_MOBILITY_API_BASE_URL`, `BELGIAN_MOBILITY_API_KEY` — realtime STIB / TEC
+- `DELIJN_API_KEY` — realtime De Lijn (Kernel API)
 
-**Apple Wallet** *(optionnel — pass MoBIB)*
+**Apple Wallet** *(optioneel — MoBIB-pas)*
 - `WALLET_PASS_TYPE_ID`, `WALLET_TEAM_ID`
 - `WALLET_SIGNER_CERT_PATH`, `WALLET_SIGNER_KEY_PATH`, `WALLET_SIGNER_KEY_PASS`, `WALLET_WWDR_PATH`
 
-**Apple Sign-In** — `APPLE_TEAM_ID`, `APPLE_BUNDLE_ID`, `APPLE_SIGN_IN_AUDIENCE`
-**Images** — `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET`
-**Mail** — `SMTP_HOST`, `SMTP_PORT`, `SMTP_MAIL`, `SMTP_PASSWORD` *(ou `RESEND_API_KEY`)*
-**RGPD / vie privée** — `SIGNALEMENT_PRIVACY_SALT`, `SIGNALEMENT_TTL_DAYS`, `PRIVACY_CONTACT_EMAIL`
-**Jobs communautaires** — `COMMUNITY_JOBS_ENABLED`, `COMMUNITY_*_INTERVAL_MS`, `PRE_TRIP_*`, `MERCIS_*`, `STIB_OFFICIAL_SEED_*`
+**Sign in with Apple** — `APPLE_TEAM_ID`, `APPLE_BUNDLE_ID`, `APPLE_SIGN_IN_AUDIENCE`
+**Afbeeldingen** — `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET`
+**Mail** — `SMTP_HOST`, `SMTP_PORT`, `SMTP_MAIL`, `SMTP_PASSWORD` *(of `RESEND_API_KEY`)*
+**GDPR / privacy** — `SIGNALEMENT_PRIVACY_SALT`, `SIGNALEMENT_TTL_DAYS`, `PRIVACY_CONTACT_EMAIL`
+**Achtergrondtaken** — `COMMUNITY_JOBS_ENABLED`, `COMMUNITY_*_INTERVAL_MS`, `PRE_TRIP_*`, `MERCIS_*`, `STIB_OFFICIAL_SEED_*`
 
 ---
 
-## 🌐 Aperçu de l'API
+## 🌐 API-overzicht
 
-| Préfixe | Domaine |
+| Prefix | Domein |
 |---|---|
-| `/api/utilisateurs` | Comptes, auth, favoris, tokens push, `POST /test-push` |
-| `/api/signalements` | Signalements communautaires (créer / voter) |
-| `/api/clusters` | Clusters de perturbations + confirmations |
-| `/api/arrets` | Arrêts STIB (proximité, recherche) |
-| `/api/lignes` | Lignes STIB |
-| `/api/stib` · `/api/lines/:line/realtime` | Temps réel STIB |
-| `/api/sncb` | Gares SNCB (horaires théoriques + temps réel iRail) |
-| `/api/operators/:op` | De Lijn / TEC (arrêts, lignes, perturbations, temps réel) |
-| `/api/transport` | Calcul d'itinéraires + recommandations |
-| `/api/stib-ai` | Blayse AI (chat streaming SSE) |
-| `/api/assistant` | Push pré-trajet / proactives |
-| `/api/wallet` | Génération du pass Apple Wallet (MoBIB) |
-| `/api/geocode` | Géocodage d'adresses |
-| `/admin/moderation` | File de modération (admin) |
+| `/api/utilisateurs` | Accounts, auth, favorieten, push-tokens, `POST /test-push` |
+| `/api/signalements` | Communitymeldingen (aanmaken / stemmen) |
+| `/api/clusters` | Clusters van verstoringen + bevestigingen |
+| `/api/arrets` | STIB-haltes (nabijheid, zoeken) |
+| `/api/lignes` | STIB-lijnen |
+| `/api/stib` · `/api/lines/:line/realtime` | STIB realtime |
+| `/api/sncb` | SNCB-stations (theoretische dienstregeling + realtime iRail) |
+| `/api/operators/:op` | De Lijn / TEC (haltes, lijnen, verstoringen, realtime) |
+| `/api/transport` | Routeberekening + aanbevelingen |
+| `/api/stib-ai` | Blayse AI (streaming chat, SSE) |
+| `/api/assistant` | Pre-trip / proactieve push |
+| `/api/wallet` | Apple Wallet-pas genereren (MoBIB) |
+| `/api/geocode` | Adressen geocoderen |
+| `/admin/moderation` | Moderatiewachtrij (admin) |
 
 ---
 
-## ⚙️ Jobs en arrière-plan
+## 🗂️ Databronnen
 
-Lancés au démarrage si `COMMUNITY_JOBS_ENABLED` est actif :
-- **Clustering** des signalements récents.
-- **Expiration / archivage** des perturbations résolues.
-- **Brief pré-trajet** (15 min avant le départ habituel).
-- **Mercis** (quand un signalement a aidé d'autres voyageurs).
-- **Seed officiel STIB** (synchro des perturbations officielles).
+Blayse **fuseert** officiële data + community + AI tot één betrouwbaar beeld:
 
-Le worker assistant peut tourner séparément : `npm run worker:assistant`.
+| Bron | Wat | Hoe |
+|---|---|---|
+| **STIB/MIVB** | Haltes, lijnen, verstoringen, doorkomsten | Open data (statische catalogus) + Belgian Mobility (realtime/officieel) |
+| **SNCB/NMBS** | Stations, dienstregeling, storingen | iRail (realtime + storingen) + ingebedde GTFS-dienstregeling |
+| **De Lijn** | Haltes, realtime doorkomsten, omleidingen | Kernel Open Data API (per halte) + ingebedde catalogus |
+| **TEC** | Lijnen, verstoringen | GTFS-RT via Belgian Mobility + ingebedde lijncatalogus |
+| **Community** | Meldingen van reizigers | De app zelf — *het tweerichtingsverschil* |
+| **Google** | Geocoding + directions | Adressen opzoeken + fallback-routes |
+
+De statische catalogi (haltes/lijnen) staan in `backend/data/` en worden
+geseed via de `seed:*`-scripts; de realtime data wordt live opgehaald en
+in-memory gecachet om de externe API's te ontlasten.
 
 ---
 
-## 🗂️ Structure
+## 🤖 Hoe AI gebruikt wordt
+
+AI is een **integratie**, geen black box die alles verzint — de logica bouwt de
+feiten op, de AI verwoordt ze.
+
+- **Blayse AI** (`/api/stib-ai`) draait op **Google Gemini** (`gemini-2.5-flash`,
+  met fallback `gemini-1.5-flash` bij overbelasting).
+- **Grounded (RAG-aanpak):** vóór elke vraag bouwt de backend een
+  **contextbericht** (nabije haltes, favoriete lijnen, actieve meldingen, en de
+  **berekende route** — gemarkeerd als *"bron van waarheid"*). Een strikte
+  **systeemprompt** verbiedt de AI iets te citeren dat niet in die context staat
+  → geen verzonnen lijnen of haltes.
+- **Streaming (SSE):** het antwoord komt woord per woord binnen → directe respons.
+- **Tweetalig:** de app stuurt `lang` mee; antwoorden én foutmeldingen komen in
+  FR / NL / EN terug.
+- **AI-samenvattingen van verstoringen** (`perturbationSummaryService`): regels +
+  optioneel OpenAI produceren een leesbaar *wat / waarom / hoelang / wat nu*,
+  in FR én NL.
+- **Bestemming-extractie** uit vrije tekst: snelle regex client-side, met
+  AI-fallback voor exotische formuleringen.
+
+> Kort: de AI **duidt** de échte data die Blayse al heeft — ze vervangt ze niet.
+
+---
+
+## ⚙️ Achtergrondtaken
+
+Gestart bij opstart wanneer `COMMUNITY_JOBS_ENABLED` actief is:
+- **Clustering** van recente meldingen.
+- **Verval / archivering** van opgeloste verstoringen.
+- **Pre-trip briefing** (15 min vóór het gebruikelijke vertrek).
+- **Bedankjes** (wanneer een melding andere reizigers heeft geholpen).
+- **Officiële STIB-seed** (synchronisatie van officiële verstoringen).
+
+De assistent-worker kan apart draaien: `npm run worker:assistant`.
+
+---
+
+## 🗂️ Structuur
 
 ```
 backend/
-├── server.js            # point d'entrée (connexion DB + listen)
-├── app.js               # app Express + montage des routes
-├── routes/              # définitions des endpoints
-├── controllers/         # logique des requêtes
-├── services/            # logique métier (trust, clustering, IA, push, wallet…)
-├── models/              # schémas Mongoose
-├── middlewares/         # auth, ownership, validation
+├── server.js            # entry point (DB-connectie + listen)
+├── app.js               # Express-app + routes mounten
+├── routes/              # endpoint-definities
+├── controllers/         # request-logica
+├── services/            # businesslogica (trust, clustering, AI, push, wallet…)
+├── models/              # Mongoose-schema's
+├── middlewares/         # auth, ownership, validatie
 ├── config/              # db, redis, mail, openai
-├── workers/             # jobs hors-requête (assistant)
-├── scripts/             # seed catalogues, load test, admin
-└── data/                # catalogues embarqués (De Lijn/TEC stops & lignes…)
+├── workers/             # taken buiten requests (assistent)
+├── scripts/             # catalogi seeden, load test, admin
+└── data/                # ingebedde catalogi (De Lijn/TEC haltes & lijnen…)
 ```
 
 ---
@@ -170,19 +216,19 @@ backend/
 cd backend
 npm test
 ```
-Jest + base en mémoire (`mongodb-memory-server`), sans dépendances externes.
+Jest + in-memory database (`mongodb-memory-server`), zonder externe afhankelijkheden.
 
 ---
 
-## ☁️ Déploiement
+## ☁️ Deployment
 
-Déployé sur **Render** (root du service = `backend/`, start = `node server.js`).
-Toutes les variables d'environnement ci-dessus sont à configurer côté Render.
-Penser à **redéployer** après un push pour appliquer les changements.
+Gehost op **Render** (root van de service = `backend/`, start = `node server.js`).
+Alle bovenstaande omgevingsvariabelen worden aan de Render-kant geconfigureerd.
+Vergeet niet **opnieuw te deployen** na een push om wijzigingen toe te passen.
 
 ---
 
-## 📱 App iOS
+## 📱 iOS-app
 
-L'app cliente (SwiftUI) vit dans un repo séparé. Ce backend expose toute l'API
-qu'elle consomme (REST + SSE pour Blayse AI).
+De client-app (SwiftUI) staat in een aparte repo. Deze backend levert de
+volledige API die ze gebruikt (REST + SSE voor Blayse AI).
