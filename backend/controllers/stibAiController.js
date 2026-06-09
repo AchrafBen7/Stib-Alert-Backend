@@ -6,6 +6,49 @@ const logger = require("../services/logger");
 const DEFAULT_GATEWAY_URL = "https://generativelanguage.googleapis.com/v1beta";
 const DEFAULT_MODEL = "gemini-2.5-flash";
 
+// Messages d'erreur utilisateur LOCALISÉS (l'app envoie `lang`). Avant, ces
+// textes étaient codés en dur en français et streamés tels quels → l'erreur
+// s'affichait en FR même dans une app NL/EN.
+const AI_ERRORS = {
+	rate_limit: {
+		fr: "L'assistant reçoit trop de demandes pour le moment. Réessaie dans quelques secondes.",
+		nl: "De assistent krijgt momenteel te veel aanvragen. Probeer over enkele seconden opnieuw.",
+		en: "The assistant is getting too many requests right now. Try again in a few seconds.",
+	},
+	saturated: {
+		fr: "L'assistant est saturé pour quelques secondes, réessaie tout de suite.",
+		nl: "De assistent is enkele seconden overbelast, probeer meteen opnieuw.",
+		en: "The assistant is overloaded for a few seconds, try again right away.",
+	},
+	unavailable: {
+		fr: "L'assistant IA est temporairement indisponible. Réessaie dans un instant.",
+		nl: "De AI-assistent is tijdelijk niet beschikbaar. Probeer zo dadelijk opnieuw.",
+		en: "The AI assistant is temporarily unavailable. Try again in a moment.",
+	},
+	stream_interrupted: {
+		fr: "\n\nLe flux a été interrompu. Réessaie dans quelques secondes.",
+		nl: "\n\nDe stream werd onderbroken. Probeer over enkele seconden opnieuw.",
+		en: "\n\nThe stream was interrupted. Try again in a few seconds.",
+	},
+	not_configured: {
+		fr: "L'assistant IA n'est pas encore configuré côté serveur.",
+		nl: "De AI-assistent is nog niet geconfigureerd op de server.",
+		en: "The AI assistant is not configured on the server yet.",
+	},
+};
+
+function pickLang(raw) {
+	const l = String(raw || "").toLowerCase();
+	if (l.startsWith("nl")) return "nl";
+	if (l.startsWith("en")) return "en";
+	return "fr";
+}
+
+function aiError(key, lang) {
+	const dict = AI_ERRORS[key] || AI_ERRORS.unavailable;
+	return dict[pickLang(lang)];
+}
+
 function sanitizeMessages(messages) {
 	if (!Array.isArray(messages)) return [];
 	return messages
@@ -113,7 +156,7 @@ function geminiChunkText(payload) {
 		?.join("") || "";
 }
 
-async function streamGeminiNative({ gatewayUrl, model, key, messages, contextMessage, controller, res }) {
+async function streamGeminiNative({ gatewayUrl, model, key, messages, contextMessage, controller, res, lang = "fr" }) {
 	const body = JSON.stringify({
 		contents: geminiContents(messages, contextMessage),
 		generationConfig: {
@@ -160,12 +203,12 @@ async function streamGeminiNative({ gatewayUrl, model, key, messages, contextMes
 			status: upstream.status,
 			body: errBody.slice(0, 500),
 		});
-		// Message aligné avec voiceAsk pour cohérence STIB·AI texte vs voix.
+		// Message localisé (l'app envoie `lang`) : avant c'était du FR codé en dur.
 		const message = upstream.status === 429
-			? "L'assistant reçoit trop de demandes pour le moment. Réessaie dans quelques secondes."
+			? aiError("rate_limit", lang)
 			: upstream.status === 503
-				? "L'assistant est saturé pour quelques secondes, réessaie tout de suite."
-				: "L'assistant IA est temporairement indisponible. Réessaie dans un instant.";
+				? aiError("saturated", lang)
+				: aiError("unavailable", lang);
 		writeSseDelta(res, message);
 		return endSse(res);
 	}
@@ -198,7 +241,7 @@ async function streamGeminiNative({ gatewayUrl, model, key, messages, contextMes
 	upstream.body.on("error", (error) => {
 		logger.warn("stib_ai_gemini_stream_error", { message: error.message });
 		if (!res.writableEnded) {
-			writeSseDelta(res, "\n\nLe flux Gemini a été interrompu. Réessaie dans quelques secondes.");
+			writeSseDelta(res, aiError("stream_interrupted", lang));
 			endSse(res);
 		}
 	});
@@ -211,6 +254,7 @@ exports.streamChat = async (req, res) => {
 		return res.status(400).json({ message: "messages array required." });
 	}
 
+	const lang = pickLang(req.body?.lang);
 	const key = apiKey();
 
 	// On démarre le flux SSE (HTTP 200) AVANT de construire le contexte. Avant,
@@ -222,7 +266,7 @@ exports.streamChat = async (req, res) => {
 	startSse(res);
 
 	if (!key) {
-		writeSseDelta(res, "L'assistant IA n'est pas encore configuré côté serveur. Ajoute `LOVABLE_API_KEY` ou `OPENAI_API_KEY` sur le backend, puis réessaie.");
+		writeSseDelta(res, aiError("not_configured", lang));
 		writeSseDone(res);
 		return res.end();
 	}
@@ -252,6 +296,7 @@ exports.streamChat = async (req, res) => {
 				contextMessage,
 				controller,
 				res,
+				lang,
 			});
 		}
 
@@ -281,9 +326,7 @@ exports.streamChat = async (req, res) => {
 				status: upstream.status,
 				body: body.slice(0, 500),
 			});
-			const message = upstream.status === 429
-				? "L'assistant reçoit trop de demandes pour le moment. Réessaie dans quelques secondes."
-				: "L'assistant IA est temporairement indisponible. Les données réseau restent disponibles dans l'app.";
+			const message = upstream.status === 429 ? aiError("rate_limit", lang) : aiError("unavailable", lang);
 			writeSseDelta(res, message);
 			writeSseDone(res);
 			return res.end();
@@ -302,7 +345,7 @@ exports.streamChat = async (req, res) => {
 		upstream.body.on("error", (error) => {
 			logger.warn("stib_ai_stream_error", { message: error.message });
 			if (!res.writableEnded) {
-				writeSseDelta(res, "\n\nLe flux a été interrompu. Réessaie dans quelques secondes.");
+				writeSseDelta(res, aiError("stream_interrupted", lang));
 				endSse(res);
 			}
 		});
