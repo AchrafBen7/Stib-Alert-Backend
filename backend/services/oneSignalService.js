@@ -1,7 +1,9 @@
 const fetch = require("node-fetch");
 
-const ONESIGNAL_APP_ID = process.env.ONESIGNAL_APP_ID;
-const ONESIGNAL_REST_API_KEY = process.env.ONESIGNAL_REST_API_KEY;
+// .trim() : une variable d'env copiée-collée sur Render traîne souvent un
+// espace / retour de ligne invisible qui faisait échouer l'auth OneSignal.
+const ONESIGNAL_APP_ID = process.env.ONESIGNAL_APP_ID?.trim();
+const ONESIGNAL_REST_API_KEY = process.env.ONESIGNAL_REST_API_KEY?.trim();
 const IS_ONESIGNAL_CONFIGURED = Boolean(ONESIGNAL_APP_ID && ONESIGNAL_REST_API_KEY);
 let hasLoggedMissingConfig = false;
 
@@ -25,20 +27,31 @@ function getDeviceType(platform) {
 
 async function oneSignalRequest(path, body) {
 	ensureConfigured();
-	const response = await fetch(`https://onesignal.com/api/v1${path}`, {
-		method: "POST",
-		headers: {
-			"Content-Type": "application/json",
-			// New-format OneSignal keys (os_v2_app_…) use the "Key" scheme.
-			// "Basic" was the legacy REST-API-key scheme; sending a v2 key with
-			// Basic gets rejected, so push never leaves the backend.
-			Authorization: `Key ${ONESIGNAL_REST_API_KEY}`,
-		},
-		body: JSON.stringify({
-			app_id: ONESIGNAL_APP_ID,
-			...body,
-		}),
-	});
+	const payload = JSON.stringify({ app_id: ONESIGNAL_APP_ID, ...body });
+
+	// OneSignal a DEUX générations de clés REST avec des schémas d'en-tête
+	// différents : les nouvelles (`os_v2_…`) → `Key`, les anciennes → `Basic`.
+	// Envoyer le mauvais schéma renvoie "Access denied". On détecte le format,
+	// et on RETENTE avec l'autre schéma si l'auth échoue (401/403) → robuste
+	// quelle que soit la clé configurée sur Render.
+	const detectedScheme = ONESIGNAL_REST_API_KEY.startsWith("os_v2_") ? "Key" : "Basic";
+	const fallbackScheme = detectedScheme === "Key" ? "Basic" : "Key";
+
+	const attempt = (scheme) =>
+		fetch(`https://onesignal.com/api/v1${path}`, {
+			method: "POST",
+			headers: {
+				"Content-Type": "application/json",
+				Authorization: `${scheme} ${ONESIGNAL_REST_API_KEY}`,
+			},
+			body: payload,
+		});
+
+	let response = await attempt(detectedScheme);
+	if (response.status === 401 || response.status === 403) {
+		// Mauvais schéma deviné → on tente l'autre avant d'abandonner.
+		response = await attempt(fallbackScheme);
+	}
 
 	if (!response.ok) {
 		const text = await response.text();
